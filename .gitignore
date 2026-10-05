@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.scratch/
+
+# Throwaway spike outputs
+spikes/*.webm
+spikes/*.mp4
+spikes/*.png
+spikes/desktop/results.json

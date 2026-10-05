@@ -1,0 +1,91 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { getGuide } from "../core";
+import { run } from "./run";
+
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+async function host(files: Record<string, string> = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "flick-cli-"));
+  roots.push(root);
+  for (const [name, content] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), content);
+  }
+  return root;
+}
+async function flick(cwd: string, ...args: string[]) {
+  const out: string[] = [], err: string[] = [];
+  const code = await run(args, { cwd, out: (text) => out.push(text), err: (text) => err.push(text), version: "9.9.9" });
+  return { code, out: out.join("\n"), err: err.join("\n") };
+}
+const VITE = {
+  "package.json": JSON.stringify({ dependencies: { react: "19", "react-dom": "19", vite: "8" } }),
+  "src/main.jsx": 'createRoot(document.getElementById("root")).render(<App />);\n',
+};
+
+describe("flick cli", () => {
+  it("prints help, the version, and rejects unknown commands and flags", async () => {
+    const cwd = await host();
+    expect((await flick(cwd, "--help")).out).toContain("flick <command>");
+    expect(await flick(cwd, "--version")).toMatchObject({ code: 0, out: "9.9.9" });
+    expect((await flick(cwd)).code).toBe(1);
+    expect(await flick(cwd, "frobnicate")).toMatchObject({ code: 1 });
+    expect((await flick(cwd, "scenes", "--nope")).err).toContain("flick <command>");
+  });
+
+  it("prints the guide as prose and as JSON", async () => {
+    const cwd = await host();
+    expect((await flick(cwd, "guide")).out).toContain("# Flick authoring guide");
+    expect(JSON.parse((await flick(cwd, "guide", "--json")).out)).toEqual(JSON.parse(JSON.stringify(getGuide())));
+  });
+
+  it("initialises a project and reports the same result in both formats", async () => {
+    const cwd = await host(VITE);
+    const human = await flick(cwd, "init");
+    expect(human.code).toBe(0);
+    expect(human.out).toContain("Connected Flick (vite).");
+    expect(human.out).toContain("wrapped  src/main.jsx");
+    const json = JSON.parse((await flick(cwd, "init", "--json")).out);
+    expect(json.ok && json.data.entry.status).toBe("already");
+    expect(await flick(cwd, "init", "--adapter", "angular")).toMatchObject({ code: 1 });
+  });
+
+  it("explains failures on stderr with a non-zero exit, and as a result object with --json", async () => {
+    const cwd = await host();
+    const human = await flick(cwd, "init");
+    expect(human).toMatchObject({ code: 1, out: "" });
+    expect(human.err).toContain("No package.json here");
+    const json = await flick(cwd, "init", "--json");
+    expect(json.code).toBe(1);
+    expect(JSON.parse(json.out)).toMatchObject({ ok: false, issues: [{ code: "no-project" }] });
+  });
+
+  it("lists scenes and exits non-zero while any scene file is broken", async () => {
+    const guide = getGuide();
+    const cwd = await host({ ...VITE, [guide.example.recipePath]: JSON.stringify(guide.example.recipe), [guide.example.componentPath]: guide.example.component });
+    expect(await flick(cwd, "scenes")).toMatchObject({ code: 0 });
+    expect((await flick(cwd, "scenes")).out).toContain("page-survey");
+    await writeFile(path.join(cwd, "src/flick/scenes/half.scene.json"), JSON.stringify({ ...guide.example.recipe, id: "half" }));
+    const broken = await flick(cwd, "scenes");
+    expect(broken.code).toBe(1);
+    expect(broken.out).toContain("needs a component next to it");
+  });
+
+  it("asks for what is missing before rendering", async () => {
+    const cwd = await host(VITE);
+    expect((await flick(cwd, "export")).err).toContain("export needs --scene");
+    expect((await flick(cwd, "snapshot", "--scene", "a")).err).toContain("npx flick init");
+    await flick(cwd, "init");
+    expect((await flick(cwd, "export", "--scene", "a", "--size", "big")).err).toContain("--size must look like");
+    expect(await flick(cwd, "open", "--scene", "missing", "--no-launch")).toMatchObject({ code: 1 });
+    const opened = await flick(cwd, "open", "--url", "http://127.0.0.1:9", "--no-launch");
+    expect(opened.out).toContain("http://127.0.0.1:9/?flick=1");
+    expect(opened.out).toContain("Nothing is answering there yet");
+    expect((await flick(cwd, "sync")).out).toContain("Vite discovers scenes automatically");
+  });
+});

@@ -1,0 +1,82 @@
+<!doctype html><meta charset=utf8><title>Flick spike: depth-of-field performance</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;font:15px system-ui}
+  #stage{position:fixed;inset:0;perspective:1400px;display:grid;place-items:center}
+  .surface{width:1400px;height:980px;background:#f6f7f9;color:#111;display:grid;grid-template-columns:220px 1fr;position:absolute;will-change:transform}
+  .side{background:#1d2330;color:#cfd6e4;padding:20px} .side div{padding:9px 0;border-bottom:1px solid #333c4e}
+  .main{padding:24px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-content:start}
+  .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 3px #0002} .card b{font-size:26px;display:block}
+  .wide{grid-column:span 4;display:grid;grid-template-columns:repeat(6,1fr);gap:4px 16px;font-size:13px}
+  #hud{position:fixed;left:12px;top:12px;background:#111d;color:#eee;padding:14px;border-radius:8px;max-width:520px;z-index:5}
+  #hud button{font:inherit;padding:8px 14px} pre{white-space:pre-wrap;font-size:12px;margin:8px 0 0}
+</style>
+<svg width=0 height=0 style="position:absolute"><defs id=defs></defs></svg>
+<div id=stage></div>
+<div id=hud><b>Depth-of-field performance test</b><br>Leave this tab focused and do not move the window. Takes about 40 seconds.<br><br>
+  <button id=go>Start</button> <span id=status></span><pre id=log></pre></div>
+<script>
+const W = 1400, H = 980, NS = 'http://www.w3.org/2000/svg', $ = id => document.getElementById(id);
+const surfaceHtml = `<div class=side><h3>Orbit</h3>${['Overview', 'Revenue', 'Customers', 'Invoices', 'Reports', 'Team', 'Settings'].map(t => `<div>${t}</div>`).join('')}</div>
+<div class=main>${Array.from({ length: 8 }, (_, i) => `<div class=card>Metric ${i + 1}<b>${(i * 7919 % 900) + 100}</b><small>+${i + 2}.4% this week</small></div>`).join('')}
+<div class="card wide">${Array.from({ length: 150 }, (_, i) => `<span>Row ${i} · ${(i * 104729) % 9973}</span>`).join('')}</div></div>`;
+
+// A horizontal alpha ramp stands in for per-pixel depth across the tilted surface.
+const ramp = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 1; const g = c.getContext('2d');
+  const d = g.createImageData(256, 1); for (let x = 0; x < 256; x++) { d.data[x * 4 + 3] = x; } g.putImageData(d, 0, 0); return c.toDataURL(); })();
+const el = (name, attrs, parent) => { const e = document.createElementNS(NS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); parent?.append(e); return e; };
+// Weight of blur level k at ramp position a when the focal plane sits at p: hat functions that sum to 1.
+const table = (k, levels, p) => Array.from({ length: 33 }, (_, i) => {
+  const blur = Math.min(levels - 1, Math.abs(i / 32 - p) * 2.2 * (levels - 1));
+  return Math.max(0, 1 - Math.abs(blur - k)).toFixed(3); }).join(' ');
+// One filter: the source at several Gaussian strengths, each masked by its depth weight, then summed.
+function buildFilter(id, levels, maxBlur) {
+  const f = el('filter', { id, x: 0, y: 0, width: W, height: H, filterUnits: 'userSpaceOnUse', 'color-interpolation-filters': 'sRGB' }, $('defs'));
+  el('feImage', { href: ramp, x: 0, y: 0, width: W, height: H, preserveAspectRatio: 'none', result: 'ramp' }, f);
+  const funcs = [];
+  for (let k = 0; k < levels; k++) {
+    const t = el('feComponentTransfer', { in: 'ramp', result: 'm' + k }, f);
+    funcs.push(el('feFuncA', { type: 'table', tableValues: table(k, levels, 0.5) }, t));
+    if (k) el('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: (maxBlur * k / (levels - 1)).toFixed(2), result: 'b' + k }, f);
+    el('feComposite', { in: k ? 'b' + k : 'SourceGraphic', in2: 'm' + k, operator: 'in', result: 'l' + k }, f);
+    if (k) el('feComposite', { in: k === 1 ? 'l0' : 's' + (k - 1), in2: 'l' + k, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result: 's' + k }, f);
+  }
+  return p => funcs.forEach((fn, k) => fn.setAttribute('tableValues', table(k, levels, p)));
+}
+
+const variants = [
+  { name: 'baseline, no blur', surfaces: 1 },
+  { name: 'uniform CSS blur 3px', surfaces: 1, css: 'blur(3px)' },
+  { name: 'depth blur, 3 levels, fixed focus', surfaces: 1, levels: 3 },
+  { name: 'depth blur, 3 levels, moving focus', surfaces: 1, levels: 3, rack: true },
+  { name: 'depth blur, 5 levels, moving focus', surfaces: 1, levels: 5, rack: true },
+  { name: 'depth blur, 5 levels, moving focus, 3 surfaces', surfaces: 3, levels: 5, rack: true },
+];
+async function run(v, index, ms) {
+  const stage = $('stage'); stage.innerHTML = ''; $('defs').innerHTML = '';
+  const setFocus = [], surfaces = [];
+  for (let s = 0; s < v.surfaces; s++) {
+    const d = document.createElement('div'); d.className = 'surface'; d.innerHTML = surfaceHtml; stage.append(d); surfaces.push(d);
+    if (v.css) d.style.filter = v.css;
+    if (v.levels) { setFocus.push(buildFilter('f' + index + '_' + s, v.levels, 6)); d.style.filter = `url(#f${index}_${s})`; }
+  }
+  const times = []; let prev, start;
+  await new Promise(done => { const frame = now => {
+    start ??= now; const t = (now - start) / ms;
+    surfaces.forEach((d, s) => d.style.transform = `translate3d(${-120 + 240 * t + s * 90}px, ${s * 40}px, ${-s * 260}px) rotateY(${-26 + 8 * t}deg) rotateX(10deg)`);
+    if (v.rack) setFocus.forEach(f => f(0.2 + 0.6 * t));
+    if (prev !== undefined && now - start > 600) times.push(now - prev);   // skip warm-up
+    prev = now; t < 1 ? requestAnimationFrame(frame) : done(); }; requestAnimationFrame(frame); });
+  times.sort((a, b) => a - b);
+  const mean = times.reduce((a, b) => a + b, 0) / times.length;
+  return { name: v.name, fps: +(1000 / mean).toFixed(1), medianMs: +times[times.length >> 1].toFixed(1), p95Ms: +times[Math.floor(times.length * 0.95)].toFixed(1), worstMs: +times.at(-1).toFixed(1), frames: times.length };
+}
+const gpu = () => { try { const g = document.createElement('canvas').getContext('webgl'); const x = g.getExtension('WEBGL_debug_renderer_info'); return g.getParameter(x.UNMASKED_RENDERER_WEBGL); } catch { return 'unknown'; } };
+$('go').onclick = async () => {
+  $('go').disabled = true; const ms = Number(new URLSearchParams(location.search).get('ms') ?? 5000);
+  const out = { test: 'dof', ua: navigator.userAgent, dpr: devicePixelRatio, viewport: innerWidth + 'x' + innerHeight, gpu: gpu(), results: [] };
+  for (const [i, v] of variants.entries()) { $('status').textContent = `${i + 1}/${variants.length}: ${v.name}`; out.results.push(await run(v, i, ms)); $('log').textContent = out.results.map(r => `${r.fps} fps  p95 ${r.p95Ms} ms  ${r.name}`).join('\n'); }
+  $('status').textContent = 'Done. Result sent.';
+  fetch('/result', { method: 'POST', body: JSON.stringify(out) }).catch(() => {});
+};
+if (new URLSearchParams(location.search).has('auto')) $('go').click();
+</script>

@@ -1,0 +1,8 @@
+{
+  "name": "flick-example-vite-app",
+  "private": true,
+  "type": "module",
+  "description": "Development host for Flick. Dependencies resolve from the repository root.",
+  "dependencies": { "react": "*", "react-dom": "*", "@flickjs/record": "*" },
+  "devDependencies": { "vite": "*", "@vitejs/plugin-react": "*" }
+}

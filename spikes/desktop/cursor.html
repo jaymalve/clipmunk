@@ -1,0 +1,78 @@
+<!doctype html><meta charset=utf8><title>Flick spike: cursor capture</title>
+<style>
+  html,body{margin:0;height:100%;font:15px system-ui}
+  #app{position:fixed;inset:0;isolation:isolate;background:rgb(0,0,255)}
+  #app.nocursor,#app.nocursor *{cursor:none!important}
+  #hud{position:fixed;left:0;top:0;bottom:0;width:440px;background:#111;color:#eee;padding:20px;box-sizing:border-box;overflow:auto;z-index:10}
+  #hud button{font:inherit;padding:10px 16px} #step{font-size:19px;color:#ffd866;min-height:3em}
+  #crops canvas{border:1px solid #555;margin:4px 8px 0 0;image-rendering:pixelated} pre{white-space:pre-wrap;font-size:12px}
+  .fake{position:fixed;width:14px;height:14px;background:#fff;border:2px solid #000;pointer-events:none;display:none;z-index:20}
+</style>
+<div id=app><i id=tick></i><div id=inner class=fake style="position:absolute"></div></div>
+<div id=hud>
+  <h2>Cursor capture test</h2>
+  <p>Click Start. If Chrome shows a picker, choose <b>this tab</b> and allow. Then follow the yellow instruction.</p>
+  <button id=go>Start</button>
+  <p id=step></p><div id=crops></div><pre id=log></pre>
+</div>
+<div id=outer class=fake></div>
+<script>
+const $ = id => document.getElementById(id), app = $('app'), HUD_W = 440;
+const step = t => $('step').textContent = t;
+let last = { x: 0, y: 0, t: 0 };
+addEventListener('mousemove', e => last = { x: e.clientX, y: e.clientY, t: performance.now() });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Resolves once the mouse has moved after this call, sits in the blue area, and has been still for 900 ms.
+const waitStill = async () => { const from = performance.now();
+  for (;;) { await sleep(100); if (last.t > from && last.x > HUD_W + 60 && performance.now() - last.t > 900) return; } };
+let video;
+const sample = async label => {
+  // Tab capture only emits frames when something repaints, so nudge one pixel a few times.
+  for (let i = 0; i < 5; i++) {
+    $('tick').style.cssText = 'position:absolute;right:0;bottom:0;width:2px;height:2px;background:rgb(0,0,' + (250 + i) + ')';
+    await Promise.race([new Promise(r => video.requestVideoFrameCallback(r)), sleep(300)]);
+  }
+  const s = video.videoWidth / app.clientWidth, size = Math.round(44 * s);
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(video, Math.round((last.x - 6) * s), Math.round((last.y - 6) * s), size, size, 0, 0, size, size);
+  const d = g.getImageData(0, 0, size, size).data; let n = 0;
+  for (let i = 0; i < d.length; i += 4) if (!(d[i] < 70 && d[i + 1] < 70 && d[i + 2] > 170)) n++;
+  c.style.width = c.style.height = '88px'; c.title = label; $('crops').append(c);
+  return n;
+};
+$('go').onclick = async () => {
+  $('go').disabled = true; const out = { test: 'cursor', ua: navigator.userAgent, dpr: devicePixelRatio, platform: navigator.userAgentData?.platform ?? navigator.platform };
+  try {
+    out.apis = { RestrictionTarget: typeof RestrictionTarget, cursorConstraint: !!navigator.mediaDevices.getSupportedConstraints().cursor };
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 60 }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const track = stream.getVideoTracks()[0]; out.settings = track.getSettings();
+    if (out.settings.displaySurface !== 'browser') throw new Error('You shared a ' + out.settings.displaySurface + ', not this tab. Reload and choose this tab.');
+    await track.restrictTo(await RestrictionTarget.fromElement(app));
+    video = document.createElement('video'); video.srcObject = stream; video.muted = true; await video.play(); await sleep(800);
+    out.frame = video.videoWidth + 'x' + video.videoHeight; out.viewport = innerWidth + 'x' + innerHeight;
+
+    step('1 of 2: move the mouse into the blue area, then hold it completely still.');
+    await waitStill(); out.nativeCursorPixels = await sample('native cursor');
+
+    app.classList.add('nocursor');
+    step('2 of 2: wiggle the mouse a little inside the blue area, then hold it still again.');
+    await waitStill(); out.cssNonePixels = await sample('cursor:none');
+
+    step('Finishing, keep the mouse still...');
+    const o = $('outer'); o.style.display = 'block'; o.style.left = last.x + 'px'; o.style.top = last.y + 'px';
+    await sleep(300); out.overlayCursorPixels = await sample('fake cursor outside app'); o.style.display = 'none';
+    const i = $('inner'); i.style.display = 'block'; i.style.left = last.x + 'px'; i.style.top = last.y + 'px';
+    await sleep(300); out.controlPixels = await sample('control: square inside app'); i.style.display = 'none';
+    stream.getTracks().forEach(t => t.stop()); app.classList.remove('nocursor');
+
+    out.verdict = out.controlPixels === 0 ? 'INVALID: the control square was not detected, so the sampling is broken.'
+      : (out.nativeCursorPixels > 0 ? 'Chrome bakes the native cursor into tab capture. ' : 'Chrome did not draw the native cursor into the capture. ')
+      + (out.cssNonePixels === 0 ? 'cursor:none gives a cursor-free recording. ' : 'cursor:none did NOT remove it. ')
+      + (out.overlayCursorPixels === 0 ? 'A fake cursor outside the app root is not captured.' : 'A fake cursor outside the app root WAS captured.');
+    step('Done. ' + out.verdict);
+  } catch (e) { out.error = e.name + ': ' + e.message; step('Failed: ' + out.error); }
+  $('log').textContent = JSON.stringify(out, null, 1);
+  fetch('/result', { method: 'POST', body: JSON.stringify(out) }).catch(() => {});
+};
+</script>

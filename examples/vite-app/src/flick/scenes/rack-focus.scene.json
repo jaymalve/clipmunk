@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "rack-focus",
+  "title": "Rack focus",
+  "description": "Focus pulls from a metric card in front to the customer table behind it.",
+  "definition": {
+    "width": 1000,
+    "height": 600,
+    "scene": {
+      "camera": { "perspective": 1400 },
+      "focus": { "distance": 1200, "fStop": 1.4, "focalLength": 100, "maxBlur": 8 },
+      "nodes": [
+        { "id": "table", "transform": { "x": 120, "z": -300 } },
+        { "id": "card", "transform": { "x": -250, "y": 60, "z": 200 } }
+      ]
+    },
+    "motion": {
+      "durationMs": 1500,
+      "tracks": [
+        { "target": { "kind": "focus" }, "property": "distance", "keyframes": [{ "timeMs": 0, "value": 1200 }, { "timeMs": 1500, "value": 1700 }] },
+        { "target": { "kind": "camera" }, "property": "x", "keyframes": [{ "timeMs": 0, "value": -40 }, { "timeMs": 1500, "value": 40 }] }
+      ]
+    }
+  }
+}
