@@ -9,6 +9,9 @@ const Studio =
     ? lazy(() => import("@flickjs/record/studio").then((module) => ({ default: module.FlickStudio })))
     : null;
 
+// The recorder loads in development only: Alt+Shift+R on any page of the app.
+if (import.meta.env.DEV && typeof window !== "undefined") void import("@flickjs/record/recorder").then((module) => module.bootRecorder());
+
 /** Wrap the app with this, inside the providers scenes should share. */
 export function FlickStudioHost({ children }: { children?: ReactNode }) {
   if (!Studio) return <>{children}</>;

@@ -2,6 +2,7 @@ import { EXPORT_FPS } from "./export";
 import { EASINGS, MotionSchema, SceneTrackSchema } from "./motion";
 import { HANDOFF_FILE, PACKAGE_NAME, SCENES_DIR, SCENE_PARAM, STUDIO_PARAM } from "./project";
 import { SceneRecipeSchema, type SceneRecipe } from "./recipe";
+import { SEQUENCES_DIR, SequenceSchema } from "./sequence";
 import { DEFAULT_CAMERA, DEFAULT_FOCUS, DEFAULT_TRANSFORM, SCENE_BACKGROUND } from "./scene";
 
 /** The authoring guide a coding agent reads before composing a scene.
@@ -156,7 +157,19 @@ export function getGuide() {
       "flick snapshot --scene <id> [--url <origin>] [--time <ms>]": "Save a thumbnail into the recipe. The dev server must be running.",
       [`flick export --scene <id> [--url <origin>] [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]`]:
         "Render an MP4. Needs FFmpeg and Playwright's Chromium. Never overwrites a file.",
+      "flick takes": "List recorded takes.",
+      "flick zoom <take> [--write]": "Show a take's automatic zooms, or store them as editable keyframes in take.json.",
+      "flick export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]": "Render a take with cursor, zoom, camera and voice.",
+      "flick sequences": "List sequences and every validation issue.",
+      "flick export --sequence <id> [--output file.mp4]": "Render every clip of a sequence and join them.",
       "flick doctor": "Check Node, FFmpeg, Chromium and the project connection.",
+    },
+    sequences: {
+      what: "A sequence joins scenes and takes into one video. It is a JSON file a person, the studio or an agent can write.",
+      path: `${SEQUENCES_DIR}/<id>.sequence.json`,
+      shape: "{ version: 1, id, title, width?, height?, fps?: 30 | 60, items: [{ clip: { kind: \"scene\" | \"take\", id }, transition?: { kind: \"cut\" | \"fade\", ms? } }], audio?: [{ file, offsetMs?, gain? }] }. `transition` says how an item arrives from the one before it; a fade overlaps the two clips. `audio` files live in .flick/audio and play over the whole sequence.",
+      example: SequenceSchema.parse({ version: 1, id: "launch", title: "Launch video", items: [{ clip: { kind: "scene", id: "page-survey" } }, { clip: { kind: "take", id: "take-20261005-142233" }, transition: { kind: "fade", ms: 600 } }] }),
+      narration: "A scene's recipe may carry `audio: [{ file, offsetMs?, gain? }]`. The studio's Narrate button records the microphone while the scene plays and fills this in.",
     },
     limits: [
       "React DOM only. Scenes are client components: in Next.js do not import server-only modules into a scene.",
@@ -182,6 +195,7 @@ export function formatGuide(guide: Guide = getGuide()): string {
     lines.push(`- target { kind: "${track.target}"${track.needsId ? ", id" : ""} }: ${track.properties.join(", ")}`);
   lines.push("", "## Example", guide.example.note, "", guide.example.recipePath, JSON.stringify(guide.example.recipe, null, 2), "", guide.example.componentPath, guide.example.component, "## Commands");
   for (const [command, purpose] of Object.entries(guide.commands)) lines.push(`- ${command}: ${purpose}`);
+  lines.push("", "## Sequences", guide.sequences.what, `Path: ${guide.sequences.path}`, guide.sequences.shape, JSON.stringify(guide.sequences.example, null, 2), guide.sequences.narration);
   lines.push("", "## Limits", ...guide.limits.map((limit) => `- ${limit}`), "");
   return lines.join("\n");
 }
@@ -198,6 +212,10 @@ This app has [Flick](https://www.npmjs.com/package/${PACKAGE_NAME}) installed. F
 2. Scenes live in \`${SCENES_DIR}/\` as a pair: \`<id>.scene.json\` and \`<id>.tsx\`.
 3. Validate with \`npx flick scenes\`, then look at the result in the studio: open the running dev server with \`?${STUDIO_PARAM}=1\`.
 4. Do not redesign the app's UI for a scene. Import the existing components and providers.
+
+## Recording the app
+
+\`npx flick dev\` starts a local daemon and prints a link. Open the link once, then press Alt+Shift+R on any page of the running app to record it. Takes are saved in \`.flick/takes/\`.
 
 ## Example prompt
 

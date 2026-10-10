@@ -46,6 +46,8 @@ describe("init", () => {
     expect(main).toContain('import { FlickStudioHost } from "./flick/Studio";');
     expect(main.match(/<FlickStudioHost>/g)).toHaveLength(1);
     expect(await read(root, "src/flick/Studio.tsx")).toContain("import.meta.glob");
+    expect(await read(root, "src/flick/Studio.tsx")).toMatch(/import\.meta\.env\.DEV && typeof window !== "undefined"\) void import\("@flickjs\/record\/recorder"\)/);
+    expect(first.data.recorder).toEqual({ status: "automatic" });
     expect(await read(root, "FLICK.md")).toContain("npx flick guide");
 
     const snapshot = await Promise.all(["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)));
@@ -76,6 +78,13 @@ describe("init", () => {
     expect(page).toContain("notFound()");
     expect(await read(root, "src/flick/Studio.tsx")).toMatch(/^"use client";/);
     expect(await read(root, "src/flick/catalog.ts")).toContain('"./scenes/page-survey.tsx": () => import("./scenes/page-survey")');
+    // Recording needs one line in the root layout; init generates the component and says where it goes.
+    expect(await read(root, "src/flick/Recorder.tsx")).toContain("bootRecorder");
+    expect(result.data.recorder.status).toBe("manual");
+    expect(result.data.recorder.instruction).toContain('import { FlickRecorder } from "../src/flick/Recorder";');
+    await writeFile(path.join(root, "app/layout.tsx"), `import { FlickRecorder } from "../src/flick/Recorder";\n${layout}`);
+    const wired = await initProject({}, { root });
+    expect(wired.ok && wired.data.recorder).toEqual({ status: "automatic" });
   });
 
   it("uses the pages router when there is no app directory", async () => {

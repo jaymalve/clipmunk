@@ -24,6 +24,10 @@
       "types": "./dist/types/studio/index.d.ts",
       "import": "./dist/studio.js"
     },
+    "./recorder": {
+      "types": "./dist/types/recorder/index.d.ts",
+      "import": "./dist/recorder.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -42,9 +46,14 @@
     "verify": "npm run lint:boundaries && npm run typecheck && npm test",
     "build": "node scripts/build.mjs",
     "test:installed": "node scripts/check-installed.mjs",
-    "test:export": "vitest run tests/export"
+    "test:export": "vitest run tests/export",
+    "test:daemon": "vitest run tests/daemon",
+    "test:recorder": "xvfb-run -a -s \"-screen 0 1600x1000x24\" vitest run tests/recorder",
+    "test:take": "vitest run tests/take",
+    "test:sequence": "vitest run tests/sequence"
   },
   "dependencies": {
+    "mediabunny": "^1.61.3",
     "zod": "^4.3.6"
   },
   "peerDependencies": {

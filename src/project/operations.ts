@@ -12,6 +12,7 @@ import {
   ok,
   studioUrl,
   type Adapter,
+  type CatalogScene,
   type Issue,
   type ProjectFile,
   type Result,
@@ -117,6 +118,8 @@ export type InitResult = {
   adapter: Adapter;
   files: { path: string; status: FileStatus }[];
   entry: { status: "wrapped" | "already" | "manual" | "route"; path?: string; instruction?: string };
+  /** How the recorder reaches the app's pages: through the wrapper, or by one line the host adds. */
+  recorder: { status: "automatic" | "manual"; instruction?: string };
   studioUrl: string;
   handoff: string;
   prompt: string;
@@ -143,6 +146,15 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
     }
     await own(studioFile, host.adapter === "vite" ? templates.viteStudio(host.typed) : isNext ? templates.nextStudio() : templates.reactStudio(host.typed));
 
+    let recorder: InitResult["recorder"] = { status: "automatic" };
+    if (isNext) {
+      const recorderFile = `${FLICK_DIR}/Recorder.${extension}`;
+      await own(recorderFile, templates.nextRecorder());
+      const layout = host.adapter === "next-app" ? `${host.appDir}/layout.${extension}` : `${host.pagesDir}/_app.${extension}`;
+      const wired = (await readText(root, layout))?.includes("FlickRecorder");
+      if (!wired)
+        recorder = { status: "manual", instruction: `To record your app, add the recorder once to ${layout}:\n\n  import { FlickRecorder } from "${relativeImport(layout, recorderFile)}";\n\n  <FlickRecorder />   // anywhere inside the layout; it renders nothing` };
+    }
     let entry: InitResult["entry"];
     let entryPath = previous?.entry;
     if (host.adapter === "next-app") {
@@ -166,7 +178,10 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
       } else if (edit.status === "already") {
         entryPath = candidate;
         entry = { status: "already", path: candidate };
-      } else entry = { status: "manual", path: candidate, instruction: `Flick did not edit your entry file because ${edit.reason}.\n${instruction}` };
+      } else {
+        entry = { status: "manual", path: candidate, instruction: `Flick did not edit your entry file because ${edit.reason}.\n${instruction}` };
+        recorder = { status: "manual", instruction: "The recorder becomes available once FlickStudioHost wraps your app." };
+      }
     }
 
     const project: ProjectFile = {
@@ -184,6 +199,7 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
       adapter: host.adapter,
       files,
       entry,
+      recorder,
       studioUrl: studioUrl(project.devUrl, project.studioPath),
       handoff: HANDOFF_FILE,
       prompt: "Read FLICK.md and run `npx flick guide`. Inspect this app's main page and create a cinematic Flick scene from its existing components. Verify it in the studio, save a snapshot, and give me the scene URL.",
@@ -243,7 +259,7 @@ export async function syncProject(context: Context): Promise<Result<SyncResult>>
 export type OpenResult = { url: string; reachable: boolean };
 
 /** Resolve the studio URL for this project, remember the dev server origin, and check it answers. */
-export async function resolveStudio(input: { url?: string; sceneId?: string }, context: Context): Promise<Result<OpenResult & { project: ProjectFile }>> {
+export async function resolveStudio(input: { url?: string; sceneId?: string }, context: Context): Promise<Result<OpenResult & { project: ProjectFile; scene?: CatalogScene }>> {
   try {
     const project = await requireProject(context.root);
     let origin = project.devUrl;
@@ -253,13 +269,15 @@ export async function resolveStudio(input: { url?: string; sceneId?: string }, c
       origin = parsed.data;
       if (origin !== project.devUrl) await writeText(context.root, PROJECT_FILE, `${JSON.stringify({ ...project, devUrl: origin }, null, 2)}\n`);
     }
+    let scene: CatalogScene | undefined;
     if (input.sceneId) {
       const catalog = await discoverScenes(context, input.sceneId);
       if (!catalog.selected) return fail(catalog.issues.length ? catalog.issues : [{ code: "unknown-scene", message: `No scene named "${input.sceneId}".` }]);
+      scene = catalog.selected;
     }
     const url = studioUrl(origin, project.studioPath, input.sceneId);
     const reachable = await fetch(url, { signal: AbortSignal.timeout(4000) }).then((response) => response.ok, () => false);
-    return ok({ url, reachable, project: { ...project, devUrl: origin } });
+    return ok({ url, reachable, project: { ...project, devUrl: origin }, scene });
   } catch (error) {
     return fail(toIssues(error, "open-failed"));
   }

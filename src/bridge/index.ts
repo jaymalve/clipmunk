@@ -16,7 +16,14 @@ export interface FlickBridge {
   ready(): Promise<void>;
   /** Resolves when the frame at `timeMs` is fully applied. Rejects if the clip has unresolved issues. */
   seek(timeMs: number): Promise<void>;
+  /** Canvas clips only: render and encode every frame in the page. File bytes go to the
+   * `__FLICK_WRITE__(base64, position)` binding and progress to `__FLICK_PROGRESS__(done, total)`.
+   */
+  encode?(job: { fps: number; width?: number; height?: number }): Promise<EncodedClip>;
 }
+export type EncodedClip = { codec: string; frames: number; width: number; height: number; durationMs: number };
+export const WRITE_BINDING = "__FLICK_WRITE__";
+export const PROGRESS_BINDING = "__FLICK_PROGRESS__";
 
 export const BRIDGE_KEY = "__FLICK__";
 export const CAPTURE_SELECTOR = '[data-flick-capture="scene"]';

@@ -1,9 +1,11 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { CAPTURE_SELECTOR, installBridge } from "../bridge";
-import { motionDuration, validateDefinition, type Issue, type SceneDefinition } from "../core";
+import { motionDuration, validateDefinition, type AudioClip, type Issue, type SceneDefinition } from "../core";
 import { Scene, createClock } from "../react";
 import { Chrome } from "./Chrome";
+import { ExportPanel, type DaemonState } from "./daemon";
+import { useNarration } from "./narration";
 import { useClipSession } from "./session";
 
 /** The shared player for one scene: validates the recipe definition, fits the authored
@@ -15,14 +17,18 @@ export type ScenePreviewProps = {
   title?: string;
   /** Link back to the library, if any. */
   backHref?: string;
-  /** Enables the export command in the controls. */
+  /** Enables export in the controls. */
   sceneId?: string;
+  /** When connected, export runs here with progress; otherwise the CLI command is shown. */
+  daemon?: DaemonState;
+  /** The recipe's sound clips: narration and anything else attached to the scene. */
+  audio?: AudioClip[];
   children?: ReactNode;
 };
 
 const formatTime = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
 
-export function ScenePreview({ definition, title, backHref, sceneId, children }: ScenePreviewProps) {
+export function ScenePreview({ definition, title, backHref, sceneId, daemon, audio, children }: ScenePreviewProps) {
   const result = useMemo(() => validateDefinition(definition), [definition]);
   // Keep the last valid definition on screen while the source is broken.
   const accepted = useRef<SceneDefinition | null>(null);
@@ -38,7 +44,7 @@ export function ScenePreview({ definition, title, backHref, sceneId, children }:
   const session = useClipSession(clock, durationMs, valid);
   const width = current?.width ?? 1400, height = current?.height ?? 980;
   const [exporting, setExporting] = useState(false);
-  const command = sceneId ? `npx flick export --scene ${sceneId} --url ${location.origin}` : "";
+  const narration = useNarration({ sceneId, audio, client: daemon?.client, clock, durationMs, playing: session.playing, seek: session.seek, toggle: session.toggle });
 
   // The exporter drives this same clock. Capture refuses a scene with unresolved issues.
   const validRef = useRef(valid);
@@ -127,15 +133,10 @@ export function ScenePreview({ definition, title, backHref, sceneId, children }:
           </div>
         )}
         {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
-        {exporting && (
-          <div className="command">
-            <span>Run in your project:</span>
-            <code>{command}</code>
-            <button type="button" onClick={() => void navigator.clipboard?.writeText(command)}>Copy</button>
-          </div>
-        )}
+        {exporting && sceneId && <ExportPanel clip={{ sceneId }} daemon={daemon} frame={{ width, height }} />}
+        {narration.state.phase === "error" && <div className="issues" role="alert">{narration.state.message}</div>}
         <Controls clock={clock} durationMs={durationMs} title={title} backHref={backHref} disabled={!valid} {...session}
-          onExport={sceneId ? () => setExporting((value) => !value) : undefined} />
+          onExport={sceneId ? () => setExporting((value) => !value) : undefined} narration={narration} />
       </Chrome>
     </div>
   );
@@ -151,6 +152,7 @@ function Controls(props: {
   toggle: () => void;
   seek: (timeMs: number) => void;
   onExport?: () => void;
+  narration?: ReturnType<typeof useNarration>;
 }) {
   const { clock, durationMs, disabled } = props;
   // Only this small component re-renders per frame; the scene itself is updated imperatively.
@@ -174,6 +176,18 @@ function Controls(props: {
         onChange={(event) => props.seek(Number(event.currentTarget.value))}
       />
       <span className="time">{still ? "Still" : `${formatTime(timeMs)} / ${formatTime(durationMs)}`}</span>
+      {props.narration?.available && (
+        <>
+          {props.narration.state.phase === "recording" ? (
+            <button type="button" onClick={props.narration.stop}>Stop narrating</button>
+          ) : (
+            <button type="button" onClick={() => void props.narration!.start()} disabled={disabled || props.playing || props.narration.state.phase === "saving"} title="Plays the scene from the start and records your microphone over it">
+              {props.narration.state.phase === "saving" ? "Saving…" : props.narration.hasNarration ? "Re-record narration" : "Narrate"}
+            </button>
+          )}
+          {props.narration.hasNarration && props.narration.state.phase === "idle" && <button type="button" onClick={() => void props.narration!.remove()} disabled={props.playing}>Remove narration</button>}
+        </>
+      )}
       {props.onExport && <button type="button" onClick={props.onExport} disabled={disabled}>Export</button>}
     </div>
   );

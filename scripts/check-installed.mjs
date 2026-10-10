@@ -83,6 +83,15 @@ async function waitFor(url, child, log) {
   throw new Error(`dev server never answered at ${url}:\n${log()}`);
 }
 
+async function stopGroup(child) {
+  if (child.exitCode !== null) return;
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill("SIGTERM"); }
+  const timer = setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch {} }, 5000);
+  await exited;
+  clearTimeout(timer);
+}
+
 async function checkHost(name, tarball) {
   const host = HOSTS[name];
   const root = mkdtempSync(path.join(os.tmpdir(), `flick-installed-${name}-`));
@@ -108,7 +117,10 @@ async function checkHost(name, tarball) {
     check(scenes.ok && scenes.data.scenes.length === 1 && scenes.data.issues.length === 0, "the authored scene validates");
     if (host.typecheck) { sh(root, "npx", ["tsc", "--noEmit"]); check(true, "the host type-checks with the generated files and the scene"); }
 
-    server = spawn(host.dev[0], host.dev[1], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    // A server left over from an interrupted run would answer for a directory that no longer exists.
+    if (await fetch(origin).then(() => true, () => false)) throw new Error(`Port ${host.port} is already in use. Stop whatever is listening there and run this again.`);
+    // Own process group, so stopping it also stops the server that npx starts underneath.
+    server = spawn(host.dev[0], host.dev[1], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
     for (const stream of [server.stdout, server.stderr]) stream.on("data", (chunk) => (serverLog = (serverLog + chunk).slice(-3000)));
     await waitFor(origin, server, () => serverLog);
     const home = await fetch(origin).then((response) => response.text());
@@ -122,19 +134,31 @@ async function checkHost(name, tarball) {
     const stderr = spawnSyncStderr(root, exported.data.output);
     check(/frame=\s*30\b/.test(stderr) && /700x420/.test(stderr), "the MP4 has 30 frames at 700x420");
 
+    // The daemon starts from the installed binary, answers with its token, and cleans up when stopped.
+    // Started directly so the interrupt reaches it, as Ctrl+C in a terminal does.
+    const dev = spawn(path.join(root, "node_modules/.bin/flick"), ["dev", "--port", "0", "--json"], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    const started = JSON.parse(await new Promise((resolve, reject) => { dev.stdout.once("data", (chunk) => resolve(String(chunk))); dev.once("exit", () => reject(new Error("flick dev exited early"))); }));
+    if (!started.ok) throw new Error(`flick dev did not start: ${JSON.stringify(started.issues)}`);
+    const daemonStatus = await fetch(`http://127.0.0.1:${started.data.port}/v1/status`, { headers: { authorization: `Bearer ${started.data.token}` } }).then((response) => response.json());
+    check(daemonStatus.ok && daemonStatus.data.ffmpeg, "flick dev starts the daemon and it sees FFmpeg");
+    check((await fetch(`http://127.0.0.1:${started.data.port}/v1/status`)).status === 401, "the daemon refuses requests without the token");
+    dev.kill("SIGINT");
+    await new Promise((resolve) => dev.once("exit", resolve));
+    check(!existsSync(path.join(root, ".flick/daemon.json")), "stopping the daemon removes its address file");
+    check(JSON.parse(flick("takes", "--json")).data.takes.length === 0, "takes lists nothing before the first recording");
+
     const again = JSON.parse(flick("init", "--json"));
     check(again.ok && again.data.files.every((file) => file.status === "verified"), "running init again changes nothing");
     check(before.length > 200 && generated() === before, "generated files are byte-for-byte unchanged");
 
-    server.kill("SIGTERM");
-    await new Promise((resolve) => server.once("exit", resolve));
+    await stopGroup(server);
     server = undefined;
     sh(root, host.build[0], host.build[1]);
     const shipped = walk(path.join(root, host.output)).filter((file) => /\.(js|html|css)$/.test(file)).map((file) => readFileSync(file, "utf8")).join("\n");
     check(shipped.length > 1000 && !/data-flick|FlickStudio|flick-scene/.test(shipped), "the production build contains no Flick code");
     return true;
   } finally {
-    server?.kill("SIGKILL");
+    if (server) await stopGroup(server);
     if (!process.env.FLICK_KEEP) rmSync(root, { recursive: true, force: true });
   }
 }

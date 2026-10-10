@@ -28,6 +28,9 @@
       ],
       "@flickjs/record/studio": [
         "./src/studio/index.ts"
+      ],
+      "@flickjs/record/recorder": [
+        "./src/recorder/index.ts"
       ]
     }
   },

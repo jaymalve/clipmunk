@@ -7,3 +7,8 @@ export * from "./project";
 export * from "./catalog";
 export * from "./export";
 export * from "./guide";
+export * from "./take";
+export * from "./autozoom";
+export * from "./cursor";
+export * from "./audio";
+export * from "./sequence";

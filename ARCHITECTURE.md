@@ -85,10 +85,10 @@ Browser modules never import Node modules and the reverse. `scripts/check-bounda
 | `@flickjs/record` | `Scene`, `Surface`, `useSceneTime`, core types and helpers | Browser |
 | `@flickjs/record/core` | Everything in `core` | Any |
 | `@flickjs/record/studio` | `FlickStudio`, `ScenePreview` | Browser, dev only |
-| `@flickjs/record/recorder` | `createRecorder`, `mountRecorderHud` | Browser, dev only |
+| `@flickjs/record/recorder` | `bootRecorder`, `mountRecorderHud`, `createRecorder`, the daemon client | Browser, dev only |
 | `flick` binary | CLI | Node |
 
-Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Optional peer: `playwright` (export, snapshots). System prerequisite for export: FFmpeg on `PATH` (or its location in `FLICK_FFMPEG`). `mediabunny` is added with the take compositor in Phase 4.
+Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Optional peer: `playwright` (export, snapshots). System prerequisite for saving recordings and for export: FFmpeg. It is looked up as `FLICK_FFMPEG`, then the `ffmpeg-static` package if the project has it installed, then `ffmpeg` on `PATH`. `flick dev` warns at startup when none is found, and the recorder refuses to start a recording the daemon could not save.
 
 ---
 
@@ -106,8 +106,10 @@ src/flick/sequences/<id>.sequence.json  Sequence (committed).
 .flick/takes/<id>/take.json           Take manifest and edit (committed).
 .flick/takes/<id>/screen.webm         Screen recording (ignored).
 .flick/takes/<id>/cam.webm            Camera + microphone (ignored).
+.flick/takes/<id>/audio.wav           Voice track extracted at ingest (ignored).
 .flick/takes/<id>/events.jsonl        Pointer and interaction log (ignored).
-.flick/audio/<file>                   Voiceover recordings (ignored).
+.flick/takes/<id>/recorder.log        Recorder breadcrumbs for diagnosis (ignored).
+.flick/audio/<file>                   Narration recordings and any music or voiceover files (ignored).
 .flick/exports/                       Default output directory (ignored).
 .flick/daemon.json                    Port, pid and session token of a running daemon (ignored).
 ```
@@ -187,7 +189,7 @@ type Take = {
   edit: {                                      // everything the user or agent changes
     trim:   { startMs: number; endMs: number };
     canvas: { width: number; height: number; background: string; padding: number; radius: number; shadow: number };
-    zoom:   { mode: "auto"; params: AutoZoomParams } | { mode: "manual"; tracks: Track[] } | { mode: "off" };
+    zoom:   { mode: "auto"; params: AutoZoomParams } | { mode: "manual"; tracks: ZoomTrack[] } | { mode: "off" };
     cursor: { visible: boolean; size: number; smoothing: number; clickEffect: "ripple" | "none"; hideWhenIdleMs?: number };
     cam:    { visible: boolean; shape: "circle" | "rounded"; corner: "tl" | "tr" | "bl" | "br"; size: number; mirror: boolean; tracks?: Track[] };
     audio:  { muted: boolean; gain: number; normalize: boolean };
@@ -217,12 +219,17 @@ The log never contains typed text, element text or attribute values.
 
 ```ts
 type Sequence = {
-  version: 1; id: string; title: string; width: number; height: number; fps: 30 | 60;
-  items: { clip: { kind: "scene" | "take"; id: string }; trim?: { startMs: number; endMs: number };
-           transition?: { kind: "cut" | "fade"; ms: number } }[];
-  audio?: { file: string; offsetMs: number; gain: number }[];
+  version: 1; id: string; title: string;
+  width: number; height: number; fps: 30 | 60;          // defaults 1920 x 1080 at 60
+  items: { clip: { kind: "scene" | "take"; id: string };
+           transition: { kind: "cut" | "fade"; ms: number } }[];   // how the item arrives from the one before
+  audio?: { file: string; offsetMs: number; gain: number }[];      // laid over the whole sequence
 };
 ```
+
+A fade overlaps two clips, so it shortens the total by its length, and it is capped at half of the shorter neighbour. `planSequence(items, durations)` in `core/sequence.ts` computes each item's start, each fade and the total; the exporter and the tests use the same function. The first item's transition is ignored. Items have no trim of their own: a take is trimmed in its own edit.
+
+Sound files are named by plain file name and live in `.flick/audio`. The same `{ file, offsetMs, gain }` shape attaches sound to a scene (`recipe.audio`) and to a sequence.
 
 ### 5.6 Results and errors
 
@@ -267,7 +274,8 @@ The depth-varying filter uses two tiny alpha-ramp images (one per axis) blended 
 
 - `quality="full"`: 6 bands. Always used by export and snapshots, where frame time does not matter.
 - `quality="preview"`: 3 bands.
-- `quality="auto"` (studio default): starts at `preview`; if the measured frame time stays over budget for half a second, varying surfaces fall back to a single uniform blur sampled at the surface centre until playback pauses. Pausing always re-renders the current frame at `full`.
+- The studio currently uses `preview` while playing and `full` when paused.
+- `quality="auto"` (planned, not built): starts at `preview`; if the measured frame time stays over budget for half a second, varying surfaces fall back to a single uniform blur sampled at the surface centre until playback pauses. Pausing always re-renders the current frame at `full`.
 
 ### 6.3 React binding
 
@@ -299,12 +307,12 @@ interface FlickBridge {
   selector: string;                        // the element to screenshot, for DOM clips
   ready(): Promise<void>;                  // fonts, images, media metadata loaded
   seek(timeMs: number): Promise<void>;     // resolves when that frame is fully applied
-  encode?(job: EncodeJob): AsyncIterable<EncodedChunk>;   // canvas clips: render and encode in-page
+  encode?(job: { fps; width?; height? }): Promise<EncodedClip>;   // canvas clips: render and encode in-page
 }
 ```
 
 - Scenes implement `seek` and are captured by screenshot.
-- Takes implement `encode`, because their frames are already on a canvas and in-page encoding measured roughly ten times faster than screenshots.
+- Takes implement `encode`, because their frames are already on a canvas and in-page encoding measured roughly ten times faster than screenshots. File bytes leave the page through a `__FLICK_WRITE__(base64, position)` binding the exporter provides, and progress through `__FLICK_PROGRESS__`.
 - Studio chrome is marked `data-flick-chrome` and hidden by the exporter in its own private page only.
 
 ---
@@ -320,63 +328,76 @@ Runs in the developer's own tab, in Chromium. Verified in spikes on Chromium 153
 3. **Background shim.** A page background set on `html` or `body` is painted on the canvas, not inside `body`, so it is missing from a restricted capture. While recording, the recorder inserts a fixed, full-viewport element at the lowest z-index inside `body` carrying the computed page background, and also stores that colour in `source.background`.
 4. **Cursor.** Chrome draws the native cursor into tab capture and has no capture option to turn it off. The recorder applies `cursor: none !important` to everything in `body` while recording, and the HUD draws a stand-in cursor on `<html>` so the developer can still see where they point. The recording is cursor-free.
 5. **Camera and microphone.** One `getUserMedia` stream recorded by one `MediaRecorder`, so picture and voice stay in sync. If the camera is off, the microphone is recorded alone.
-6. **Events.** Listeners on `window` in the capture phase write the event log (5.4).
+6. **Events.** Listeners on `window` in the capture phase write the event log (5.4). Events that originate in the HUD are skipped. To log the cursor shape an element asks for, the recorder switches its own `cursor: none` rule off for the instant of the style read; nothing is painted in between.
 
 ### 8.2 Clocks
 
-The take clock is `performance.now()` minus the moment the screen `MediaRecorder` fires `start`. Camera and microphone store their own start offset on that clock.
+The take clock is `performance.now()` minus the moment `start()` is called on the screen `MediaRecorder`. The recorder's `start` *event* is not used: it was measured firing 220 to 300 ms after recording had really begun, which put every logged event that far ahead of the picture. Camera and microphone store their own `start()` time as an offset on the same clock.
 
-Screen frames arrive later than the DOM paints. At the start of a recording the recorder flashes a small sync marker inside `body` and watches the captured stream (a hidden `<video>` plus `requestVideoFrameCallback`) for the frame where it appears. The measured delay is stored as `source.screen.latencyMs` and applied when the compositor maps event time to video time.
+The file's own clock begins at the first frame that follows `start()`, and a tab capture emits a frame only when the page repaints. So the recorder repaints one pixel on every frame for the first 800 ms of a recording. The first frame then shows the page at take time zero, and because each later frame is delayed by the same capture latency, the picture at video time `t` is the page at take time `t`. A test clicks after 1.8 seconds of a still page and checks that the click is visible in the video within a few frames of its logged time (measured: +58, -9 and +17 ms).
+
+`source.screen.latencyMs` is still measured, by flashing a marker between two colours before recording and timing paint to capture, but it is informational. Takes recorded before this fix (5 October 2026) can show the cursor a quarter of a second ahead of the picture.
 
 ### 8.3 Storage
 
-Each `MediaRecorder` emits a chunk every second. The recorder uploads chunks to the daemon as they arrive (`PUT …/media/<track>?seq=n`), so a crashed tab loses at most a second. The event log is uploaded in batches the same way. `finalize` triggers ingest.
+Each `MediaRecorder` emits a chunk every second. The recorder uploads chunks to the daemon as they arrive (`PUT …/media/<track>?seq=n`), so a crashed tab loses at most a second. The event log is uploaded in batches the same way. `finalize` triggers ingest. If ingest fails, the uploaded files stay in place and the HUD offers to retry the save.
 
-Without a daemon the HUD refuses to start and shows the command to run. Recording into browser downloads is not supported.
+Chunks of a track must arrive in order: the daemon rejects any other sequence number, and the recorder retries a chunk before sending the next. Without a daemon the HUD refuses to start and shows the command to run. Recording into browser downloads is not supported.
 
-### 8.4 Ingest (daemon)
+Take ids read as a timestamp (`take-20261005-142233`), so listings sort by time.
 
-Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions and duration, extracts microphone audio to 48 kHz WAV, and writes `take.json` with a default `edit`. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
+### 8.4 Stopping, interruptions and diagnosis
+
+- **Stopping.** The HUD's Stop button, `Alt+Shift+R`, and the browser's own "Stop sharing" control all end a recording the same way.
+- **Full page loads end a tab capture.** Client-side route changes are fine; a reload or a real navigation is not. While recording, the recorder keeps the take id and timing in `sessionStorage`. When the page loads again, the HUD reopens by itself, says what happened and offers to save the part the daemon already holds, or to discard it.
+- **The studio is not recordable.** Its pages navigate with full page loads, so the HUD declines to record on any URL with `?flick`.
+- **Upload failures stop the recording** at once and offer to save what was uploaded. The daemon accepts a retried chunk whose response was lost without writing it twice.
+- **No step can hang.** The HUD shows which start step is in progress. The capture restriction has a timeout, and the latency measurement never waits on `video.play()`, which stays pending on a still page because a tab capture emits no frame until something repaints.
+- **Diagnosis.** The recorder sends breadcrumbs (start parameters, page unload, script errors, visibility changes, track events, upload failures, stop) to `PUT /v1/takes/:id/log`; the daemon appends them to `.flick/takes/<id>/recorder.log`.
+
+### 8.5 Ingest (daemon)
+
+Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` with a default `edit`. `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
 
 ---
 
 ## 9. Take compositor (`compositor`, `core/autozoom`, `core/cursor`)
 
-A canvas renderer: `renderTake(ctx, take, derived, frames, timeMs)`.
+`drawTake(ctx, width, height, take, frame)` draws one frame and is a pure function of its arguments. `createTakeRenderer` wraps it with media and derived data, and exposes `renderAt(clipMs)` for the preview and `encode(job, write, progress)` for export; both draw through the same function. Clip time starts at zero at the trim start.
 
 ### 9.1 Frame sources
 
-`mediabunny` demuxes and decodes screen and camera video with WebCodecs. A frame is fetched by timestamp. Spikes confirmed exact frames for VP9 and H.264 in headless Chromium (120 of 120, random order). Preview and export use the same decoder path, so they match.
+`mediabunny` demuxes and decodes the screen and camera files with WebCodecs. Because recordings have a variable frame rate, "the frame at time t" is the latest frame whose timestamp is not after `t`. Playback and export ask for increasing times, served by one forward decode; a request that goes backwards or jumps more than 1.5 seconds ahead restarts decoding from the nearest keyframe. A real `MediaRecorder` take (remuxed, variable frame rate) is decoded, composited and exported in the recorder test suite.
 
 ### 9.2 Layers, bottom to top
 
 1. Canvas background (`edit.canvas.background`).
-2. Screen frame over `source.background`, inset by `padding`, with rounded corners and a shadow, transformed by the zoom at `timeMs`.
-3. Click effects, in screen space.
-4. Synthetic cursor, in screen space, so it zooms with the content.
-5. Camera bubble, in canvas space.
+2. The screen frame over `source.background`, inset by `padding`, with rounded corners and a shadow, moved by the zoom at that time.
+3. Click ripples, in screen space.
+4. The synthetic cursor, in screen space, so it grows with the zoom. Arrow, hand and text-beam shapes are vector paths.
+5. The camera bubble, in canvas space: a circle or rounded square in a chosen corner, cover-cropped and optionally mirrored.
+
+Pixel-valued settings (corner radius, cursor size, margins) are authored against the edit's canvas size and scaled for any other output size, so a half-size export looks the same.
 
 ### 9.3 Auto-zoom
 
 `generateZoomTracks(events, source, params)` in `core/autozoom.ts` is pure and deterministic:
 
-1. **Activity.** Collect clicks, drags and typing bursts with their element rectangles. Hovering and scrolling are not activity.
-2. **Segments.** Merge activity closer together than `mergeGapMs` (default 2500) into one zoom segment.
-3. **Target.** For each segment, take the padded union of its element rectangles. Scale is `clamp(fit × fill, minScale, maxScale)` (defaults 1.25 and 2.2). The centre is clamped so the zoomed view never leaves the screen recording.
-4. **Follow.** Inside a segment, when the cursor leaves the inner safe area of the current view, add a pan to re-centre on it.
-5. **Timing.** Ease in over `easeMs` (default 700), finishing `leadMs` (default 300) before the first activity. Hold `holdMs` (default 1500) after the last activity, then ease out.
+1. **Activity.** Clicks and keystrokes, each with its element's box. A click whose box is nearly the whole page (the background) aims at the pointer instead. Hovering and scrolling are not activity.
+2. **Segments.** Activity closer together than `mergeGapMs` (default 2500) forms one zoom segment.
+3. **Scale.** One magnification per segment: half of what would make its largest target fill the frame, clamped to `minScale` and `maxScale` (defaults 1.25 and 2.2).
+4. **Follow.** Inside a segment the view stays put while the action remains in the inner 62% of the view, and pans when it leaves.
+5. **Timing.** Ease in over `easeMs` (default 700), arriving `leadMs` (default 300) before the first activity. Hold `holdMs` (default 1500) after the last, then ease out. A segment that starts before the previous one has finished easing out pans straight to it.
 
-The output is three ordinary tracks on `{ kind: "zoom" }`. `edit.zoom.mode = "auto"` regenerates them on load from `params`; `flick zoom <take> --write` converts them to `manual` tracks in `take.json` for hand editing.
+The view is clamped so it never shows anything outside the recording; a property test checks this at every 50 ms. The output is three ordinary tracks (`x`, `y`, `scale`) on `{ kind: "zoom" }`. With `edit.zoom.mode = "auto"` they are regenerated from `params`; `flick zoom <take> --write` stores them as `manual` tracks in `take.json` for hand editing.
 
 ### 9.4 Cursor
 
-`smoothCursor(events, smoothing)` in `core/cursor.ts` resamples `move` events to a fixed rate and applies a zero-phase smoothing filter, producing a path that is a pure function of the log. Clicks pin the path to the exact click position so the cursor never appears to miss its target. The cursor shape follows `cursor` events (arrow, hand, text beam), drawn from vector paths at any size.
+`prepareCursor(events, smoothing)` in `core/cursor.ts` resamples the pointer path at 120 Hz and smooths it with a forward-then-backward exponential filter, so the smoothed cursor does not lag the real pointer. The path is then pulled back toward each click within 140 ms either side, so it passes through the click position exactly, and it is held past the last event so it settles on the true final position. Cursor shape follows the logged `cursor` events; `pressed` shrinks it slightly between `down` and `up`. The cursor is not drawn before the pointer first moves.
 
 ### 9.5 Audio
 
-Audio is never handled in the page. The exporter passes offsets, trim, gain and the normalize flag to FFmpeg, which mixes the microphone track and any voiceover files into the final MP4.
-
----
+The preview plays the extracted voice track alongside the clock. Export never handles audio in the page: FFmpeg receives the voice file with its offset, the trim, the gain and the loudness flag, and writes AAC into the final MP4.
 
 ## 10. Studio (`studio`)
 
@@ -394,7 +415,7 @@ The studio runs inside the host app's dev server, in the host's React tree, so s
 </ExistingProviders>
 ```
 
-- Without `?flick` in the URL the wrapper returns `children` and imports nothing, so the app is unaffected.
+- Without `?flick` in the URL the wrapper returns `children`, so the app is unaffected. In development the generated module also calls `bootRecorder()` from `@flickjs/record/recorder`, which remembers a daemon link in the URL and registers the recorder shortcut; nothing is shown until it is used.
 - `?flick=1` renders the studio instead of the app. `&flick-scene=<id>` opens a scene (`&flick-take=<id>` will open a take). Navigation is by plain links, so back, forward and reload resolve the same URL.
 - The wrapper lazy-loads `FlickStudio` from `@flickjs/record/studio` behind the bundler's compile-time development condition (`import.meta.env.DEV` or `process.env.NODE_ENV`), so a production build contains no Flick code. The installed-package check greps the production output to prove it.
 - `FlickStudio` receives `scenes`: a map from module path to lazy loader for every recipe and component. It loads the recipes to build the library and loads a component only when its scene is opened.
@@ -406,9 +427,10 @@ The studio runs inside the host app's dev server, in the host's React tree, so s
 |---|---|
 | **Library** | Grid of scenes (cached snapshot thumbnails) and takes. Shows validation issues per item. |
 | **Scene player** | The authored frame fitted inside the viewport and clipped to its edges, so the preview shows exactly what export renders. Play, scrub, replay and export. Shows diagnostics and hot-reload status. |
-| **Take editor** | Preview canvas, timeline with trim handles and zoom segments, controls for canvas, cursor, camera and audio. Edits save to `take.json` through the daemon. |
-| **Recorder HUD** | Start, stop, pause, camera and microphone toggles, elapsed time, viewport size. Opened by shortcut (`Alt+Shift+R`) on any app route. |
-| **Export panel** | Resolution, frame rate, output name; runs a daemon job and shows progress. Without a daemon it shows the equivalent CLI command. |
+| **Take editor** | The composited preview on a canvas; play and scrub; a timeline showing the kept range, zoom segments and playhead; trim from the playhead; controls for zoom, cursor, camera, frame and voice. Edits apply to the preview at once and are saved to `take.json` through the daemon half a second later, against a revision hash. |
+| **Recorder HUD** | Record, stop, camera and microphone toggles, elapsed time, viewport size, a stand-in cursor and a live camera preview. A plain-DOM custom element on `<html>`; opened by `Alt+Shift+R` or `?flick-record=1` on any app route. There is no pause. |
+| **Sequence builder** | Create a sequence by name, add scenes and takes, reorder and remove them, choose a cut or a fade and its length, and set the shape and frame rate. Saved to the sequence file through the daemon. There is no live preview of a whole sequence; it is seen by exporting. |
+| **Export panel** | Resolution (the clip's own size, 720p, 1080p, 1440p or 4K, always in the clip's own shape and never over 3840 pixels a side) and frame rate where the clip allows a choice; runs a daemon job and shows progress. Without a daemon it shows the equivalent CLI command, including the chosen size. A sequence's resolution is set in its builder, because it is stored in the sequence file. |
 
 ### 10.3 Playback session
 
@@ -422,7 +444,8 @@ Started by `flick dev`. It binds `127.0.0.1` only and writes `.flick/daemon.json
 
 ### 11.1 Security
 
-- Every request must carry the session token (`Authorization: Bearer …`). The token is random per start and reaches the studio in the URL fragment of the link `flick dev` prints, then lives in `sessionStorage`.
+- Every request must carry the session token (`Authorization: Bearer …`). The token is random per start and reaches the studio in the URL fragment of the link `flick dev` prints, then lives in `localStorage` for that origin so every tab of the app can reach the daemon. A restarted daemon has a new token; the stale one fails the status check and the HUD asks for the new link.
+- `GET` requests may pass the token as `?token=` instead, because media elements and `EventSource` cannot set headers. Writes never accept it.
 - The `Origin` must be a loopback origin and the `Host` header must be the daemon's own address, which blocks cross-site requests and DNS rebinding.
 - All paths are resolved inside the project root; traversal, absolute paths and symlinks that leave the root are rejected.
 - The daemon never executes project code.
@@ -435,15 +458,20 @@ Started by `flick dev`. It binds `127.0.0.1` only and writes `.flick/daemon.json
 | `GET /v1/takes`, `GET /v1/takes/:id` | List and read takes |
 | `POST /v1/takes` | Create a take, returns its id |
 | `PUT /v1/takes/:id/media/:track?seq=n` | Append an uploaded chunk |
+| `PUT /v1/takes/:id/log` | Append a recorder breadcrumb to `recorder.log` |
 | `POST /v1/takes/:id/finalize` | Start ingest |
 | `PATCH /v1/takes/:id` | Save `edit`; requires the revision hash it was read at |
 | `DELETE /v1/takes/:id` | Delete a take and its media |
 | `GET /v1/takes/:id/files/:name` | Serve media with range requests |
-| `POST /v1/audio` | Store a voiceover recording |
-| `POST /v1/exports` | Start an export job |
+| `GET /v1/scenes` | List validated scenes |
+| `PUT /v1/scenes/:id/narration?offset=ms` | Store a narration recording and point the scene's recipe at it |
+| `DELETE /v1/scenes/:id/narration` | Remove a scene's narration and its file |
+| `GET /v1/audio/:file` | Serve a sound from `.flick/audio`, for the preview |
+| `GET /v1/sequences`, `GET /v1/sequences/:id` | List and read sequences |
+| `PUT /v1/sequences/:id`, `DELETE /v1/sequences/:id` | Save (only when every clip exists) or delete a sequence |
+| `POST /v1/exports` | Start an export job for `{ sceneId }`, `{ takeId }` or `{ sequenceId }` |
 | `GET /v1/jobs/:id/events` | Server-sent progress events |
 | `DELETE /v1/jobs/:id` | Cancel a job |
-| `GET /render/…` | The standalone take render page used by export |
 
 The daemon is a thin adapter: each route validates input with a `core` schema and calls the same operation the CLI calls.
 
@@ -461,19 +489,33 @@ The daemon is a thin adapter: each route validates input with a `core` schema an
 
 Capture uses the DevTools protocol directly (`Page.captureScreenshot` with `optimizeForSpeed`), which measured about twice as fast as Playwright's PNG screenshot at 1080p. `--draft` switches to JPEG for roughly another 25%. Because every frame is a pure function of time, `--workers N` splits the frame range across N pages, encodes one segment per page and joins the segments without re-encoding. The default is half the CPU cores, capped at four.
 
-Headless Chromium rasterises SVG filters on the CPU where no GPU is available. On a two-core cloud VM the six-band depth filter took about 4.6 seconds per 1280x896 frame, while scenes that only need uniform blur rendered at roughly ten frames per second. Export time on a real workstation has not been measured yet.
+Headless Chromium rasterises SVG filters on the CPU where no GPU is available. On a two-core cloud VM the six-band depth filter took about 4.6 seconds per 1280x896 frame, while scenes that only need uniform blur rendered at roughly ten frames per second. On an Apple M5 with the default four workers, the same depth-filter scene exported at 4K (3086x2160, 30 fps, 210 frames) in 18.3 seconds, about 87 ms per frame, and a uniform-blur scene at 3600x2160 in 5.6 seconds for 45 frames. Scene export at 4K is therefore practical on a workstation; the slow figures above are specific to machines without a GPU.
 
 Host CSS animations and timers run on wall-clock time and are frozen during capture. Host components that should animate with the scene read `useSceneTime()`.
 
 ### 12.2 Takes (canvas)
 
-1. Launch headless Chromium and open the daemon's render page for the take.
-2. Call `bridge.encode({ fps, width, height })`. The page decodes, composites and encodes with `VideoEncoder`, streaming chunks back to Node.
-3. Node muxes the chunks and FFmpeg adds audio. If the browser cannot encode H.264, it encodes VP9 and FFmpeg transcodes.
+1. Start a private daemon for the export (it serves the take and its media) and launch headless Chromium.
+2. Open the studio's take editor on the dev server, with the private daemon's address in the URL fragment. There is no separate render page: export runs the same editor code as the preview.
+3. Call `bridge.encode({ fps, width, height })`. The page decodes, draws and encodes every frame with `VideoEncoder`, muxes with `mediabunny`, and passes file bytes to Node through a page binding.
+4. FFmpeg adds the voice track and moves the index to the front. The picture is copied untouched when the browser encoded H.264; otherwise (VP9 or AV1) FFmpeg re-encodes it.
+
+Size defaults to the edit's canvas; giving a width or height scales the other to match. Frame rate is 30 or 60.
 
 ### 12.3 Sequences
 
-Each item is exported to an intermediate file at the sequence's size and frame rate, then FFmpeg joins them with cuts or cross-fades and lays the sequence audio over the result.
+1. Read the sequence and check that every clip it names exists.
+2. Render each distinct clip once, at the sequence's size and frame rate, with the ordinary scene and take exporters. A clip whose shape differs from the sequence's is fitted inside the frame.
+3. Join the results in one FFmpeg filter graph: `xfade` and `acrossfade` for a fade, `concat` for a cut. A clip without sound contributes silence so every join is uniform.
+4. Mix the sequence's own audio over the result and write H.264 and AAC.
+
+Intermediate files live in a temporary directory under `.flick/exports` and are removed whether the export succeeds or not.
+
+### 12.3a Sound on scenes
+
+A scene's `audio` clips are mixed into its export after the picture is encoded (the picture is copied, not re-encoded). A file that has gone missing does not fail the export; the result carries a warning naming it.
+
+**Narration.** In the scene player, Narrate plays the scene from the start while recording the microphone, and stops when the scene ends. The daemon stores the recording as 48 kHz mono WAV in `.flick/audio`, named `<scene>-narration-<timestamp>.wav`, and rewrites the recipe's `audio` to point at it with the measured offset between the microphone starting and playback starting. A new narration replaces the previous one and deletes its file; other sounds on the scene are kept.
 
 ### 12.4 Output rules
 
@@ -492,7 +534,7 @@ Outputs are project-relative `.mp4` paths. Existing files are never overwritten.
 | Host | What `init` does |
 |---|---|
 | Vite + React | Generates `src/flick/Studio.tsx` with a lazy `import.meta.glob` of the scenes directory. Wraps the root render in the entry file when it matches the standard `createRoot(...).render(...)` form; otherwise prints the one-line wiring instruction. |
-| Next.js App or Pages Router | Adds a development-only `/flick` route that loads the studio with SSR disabled. Does not touch layouts or config. Prints the one line that adds the recorder loader to the root layout. |
+| Next.js App or Pages Router | Adds a development-only `/flick` route that loads the studio with SSR disabled. Does not touch layouts or config. Generates `src/flick/Recorder.tsx` and prints the one line that adds `<FlickRecorder />` to the root layout; `init` reports the recorder as connected once that line is present. |
 | Any other React DOM host | Generates the wrapper and a static scene catalog (`src/flick/catalog.ts`); prints wiring instructions. `flick sync` regenerates the catalog after scene files are added or removed. |
 
 Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`) that finds the single `.render(...)` call and wraps its JSX argument. It declines anything it cannot read with certainty (several render calls, a non-JSX argument, unbalanced text) and `init` then prints the instruction instead. The TypeScript compiler API is not used: TypeScript 7 no longer ships one, and JavaScript hosts have no TypeScript at all. Every `init` step is idempotent, so re-running it completes an interrupted run; there is no journal.
@@ -510,15 +552,16 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | Command | Purpose |
 |---|---|
 | `flick init [--adapter vite\|next\|react]` | Connect the host app |
-| `flick dev [--port]` | Start the daemon and print the studio link |
+| `flick dev [--port]` | Start the daemon and print the link that connects the browser to it |
 | `flick guide [--json]` | Print the agent authoring guide |
 | `flick scenes [--json]` | List validated scenes |
 | `flick takes [--json]` | List takes |
 | `flick sync` | Regenerate the static scene catalog |
 | `flick open [--scene id \| --take id] --url <origin>` | Open the studio in the browser |
 | `flick snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |
-| `flick zoom <take> [--write] [params]` | Preview or materialise auto-zoom tracks |
-| `flick export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4 |
+| `flick zoom <take> [--write]` | List a take's zoom segments, or store them as manual keyframes |
+| `flick sequences [--json]` | List sequences and their validation issues |
+| `flick export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4. A sequence takes its size and frame rate from its file. |
 | `flick doctor` | Check Node, FFmpeg, Chromium and the project connection |
 
 Every command accepts `--json` and then prints only the operation result. Human output is a separate formatter over the same result.
@@ -533,7 +576,9 @@ Every command accepts `--json` and then prints only the operation result. Human 
 | `react`, `studio` | Vitest + jsdom | Registration, diagnostics, session behaviour, recovery |
 | Renderer pixels | Playwright | Real-browser focus (equal depth is equally sharp, tilt produces a gradient), transforms, cover framing |
 | Export | Playwright + FFmpeg | Frame count, duration and cadence of real MP4s; no-overwrite; cancellation |
-| Recorder | Headed Chromium with `--auto-accept-this-tab-capture` | HUD excluded, cursor-free capture, event log shape, chunk upload and ingest |
+| Recorder | Headed Chromium with `--auto-accept-this-tab-capture` | HUD excluded, cursor-free capture, event log shape, video-to-event sync, keyboard stop, reload recovery, chunk upload and ingest, and a real take edited and exported |
+| Takes | Playwright + FFmpeg on a synthetic take with known pixels | Layout, zoom, cursor and camera pixels; editor controls and saving; trim; exported MP4 frames, size and voice track |
+| Sequences and narration | Playwright + FFmpeg on the example app | Narration stored, replaced, removed and recorded through the studio; a scene and a take joined by fade and by cut, checked for length, frames, sound and the mixed picture mid-fade; the sequence builder saving a valid file |
 | Installed package | Packed tarball in a temporary Vite, Next and plain React host | `init` idempotency, studio loads, production build contains no Flick code |
 | Boundaries | `scripts/check-boundaries.mjs` | Import rules in section 3 |
 
@@ -544,7 +589,7 @@ Every command accepts `--json` and then prints only the operation result. Human 
 ## 16. Build and release
 
 - TypeScript strict, ES modules only.
-- `scripts/build.mjs` uses Vite's library mode. The browser entry points (`.`, `./core`, `./studio`) are built in one pass so they share a single copy of the scene context; the CLI is a second, Node-targeted build. `tsc -p tsconfig.build.json` emits declarations. The recorder entry and the take render page join the build in their phases.
+- `scripts/build.mjs` uses Vite's library mode. The browser entry points (`.`, `./core`, `./studio`) are built in one pass so they share a single copy of the scene context; the CLI is a second, Node-targeted build. `tsc -p tsconfig.build.json` emits declarations. The recorder is a fourth browser entry point (`./recorder`). `mediabunny` stays external, so the host's bundler resolves the one installed copy.
 - `package.json` `files` allow-lists `dist/`. `sideEffects` is false except for the CLI entry, so unused browser code tree-shakes.
 - Releases are published from a clean, verified checkout. Versions are immutable.
 
@@ -559,9 +604,9 @@ Each phase ends with something that runs and is tested.
 | 0. Spikes | Risk answers | **Complete.** Results are recorded in this document. |
 | 1. Core and scene renderer | `core` schemas, motion, spatial and focus maths; `Scene`, `Surface`; `ScenePreview` with play and scrub; `examples/vite-app` | **Complete.** |
 | 2. Flute parity | `init` and adapters, scene discovery and library, guide and `FLICK.md`, capture bridge, scene export, snapshots | **Complete.** `scripts/check-installed.mjs` goes from `init` to an exported MP4 in a fresh Vite app and a fresh Next.js app. |
-| 3. Daemon and recorder | Daemon, take storage, HUD, capture, event log, ingest | A recording made in the example app is on disk with a valid `take.json` |
-| 4. Take compositor | Frame sources, zoom, cursor, camera bubble, take editor, take export with audio | A take exports to MP4 with cursor, auto-zoom, camera and voice in sync |
-| 5. Sequences and voiceover | Sequence schema and export, narration over scenes | A scene plus a take export as one file with a fade |
+| 3. Daemon and recorder | Daemon, take storage, HUD, capture, event log, ingest | **Complete.** `tests/recorder` records the example app in headed Chromium and validates the take on disk. |
+| 4. Take compositor | Frame sources, zoom, cursor, camera bubble, take editor, take export with audio | **Complete.** `tests/take` checks the composite pixel by pixel on a synthetic take and exports it; `tests/recorder` edits and exports a real recording. |
+| 5. Sequences and voiceover | Sequence schema and export, narration over scenes | **Complete.** `tests/sequence` narrates a scene through the studio, and exports a scene plus a take as one file with a fade, with a cut, and with music over the whole. |
 | 6. Release | Installed-package tests, docs, publish | `@flickjs/record` installs and works from the registry |
 
 ---
@@ -571,6 +616,6 @@ Each phase ends with something that runs and is tested.
 - **Chromium only for recording and export.** Scenes preview in any modern browser.
 - **Own tab only.** No desktop capture, no other windows, no system audio. Tab audio can be added later through the same capture call.
 - **Depth of field is an approximation.** Gaussian kernels in the DOM; no aperture-shaped bokeh and no occlusion between surfaces.
-- **Not yet verified:** the sync-marker latency measurement (8.2); decoding remuxed variable-frame-rate recordings by timestamp at retina resolution (9.1); `restrictTo` on `body` in macOS Chrome (verified on Linux only); H.264 `VideoEncoder` availability in Playwright's Chromium on macOS (12.2 has the VP9 fallback). Each is checked at the start of its phase.
+- **Not yet verified:** recording on macOS end to end (the recorder is tested on Linux under a virtual display, where the latency measurement returns a value but no real cursor exists); playback smoothness of a retina-resolution take in the editor on a real machine (decoding is verified, speed is not); how voice and picture line up by ear in a real export; `restrictTo` on `body` in macOS Chrome (verified on Linux only); H.264 `VideoEncoder` availability in Playwright's Chromium on macOS (12.2 has the VP9 fallback). Each is checked at the start of its phase.
 - **Deferred:** a virtual-time export mode that advances host CSS animations and timers frame by frame; a visual keyframe editor for scenes; background blur for the camera.
 - **Out of scope:** hosted rendering, accounts, a drag-and-drop builder, React Native.

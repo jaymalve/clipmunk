@@ -5,8 +5,8 @@
   "devUrl": "http://127.0.0.1:5173",
   "files": {
     ".flick/.gitignore": "ecc0d5de56deee4a7edd406056a4d948dbfc7c618dd154594ad9ba90b8d0da19",
-    "FLICK.md": "ac708f1567a1fe17e8ab738274fdf5905cd2d8784dfa6d73e80a79526afdd9be",
-    "src/flick/Studio.tsx": "77b951d250695d19674325de67bed7b3e8037205fad8c857578b4b1bc9e5e1a4"
+    "FLICK.md": "6dc98d9912067ecf7e9c5067188be80f59557feb392357a78f4ebed54cd97d5f",
+    "src/flick/Studio.tsx": "e30a853eb6d6fad9318f0f98f880865ea0788a27b41beb130471a42a81bac99f"
   },
   "entry": "src/main.tsx"
 }

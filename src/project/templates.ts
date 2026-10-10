@@ -17,6 +17,9 @@ const Studio =
     ? lazy(() => import("${PACKAGE_NAME}/studio").then((module) => ({ default: module.FlickStudio })))
     : null;
 
+// The recorder loads in development only: Alt+Shift+R on any page of the app.
+if (import.meta.env.DEV && typeof window !== "undefined") void import("${PACKAGE_NAME}/recorder").then((module) => module.bootRecorder());
+
 /** Wrap the app with this, inside the providers scenes should share. */
 export function FlickStudioHost({ children }${typed ? ": { children?: ReactNode }" : ""}) {
   if (!Studio) return <>{children}</>;
@@ -42,6 +45,9 @@ const Studio =
         })),
       )
     : null;
+
+// The recorder loads in development only: Alt+Shift+R on any page of the app.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") void import("${PACKAGE_NAME}/recorder").then((module) => module.bootRecorder());
 
 /** Wrap the app with this, inside the providers scenes should share. */
 export function FlickStudioHost({ children }${typed ? ": { children?: ReactNode }" : ""}) {
@@ -73,8 +79,26 @@ const Studio =
       )
     : null;
 
+// The recorder loads in development only: Alt+Shift+R on any page of the app.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") void import("${PACKAGE_NAME}/recorder").then((module) => module.bootRecorder());
+
 export default function FlickStudioHost() {
   return Studio ? <Studio /> : null;
+}
+`;
+}
+
+/** Next.js: a client component for the root layout, so the recorder is reachable on every route. */
+export function nextRecorder(): string {
+  return `"use client";
+${HEADER}import { useEffect } from "react";
+
+/** Add <FlickRecorder /> once to your root layout. It renders nothing and loads nothing in production. */
+export function FlickRecorder() {
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") void import("${PACKAGE_NAME}/recorder").then((module) => module.bootRecorder());
+  }, []);
+  return null;
 }
 `;
 }

@@ -34,7 +34,10 @@ export function Header() {
         <h1>Good morning, Maya</h1>
         <p>Here is how Orbit is doing this week.</p>
       </div>
-      <button className="btn" type="button">New report</button>
+      <div className="actions">
+        <input className="search" type="search" placeholder="Search customers" aria-label="Search customers" />
+        <button className="btn" type="button">New report</button>
+      </div>
     </div>
   );
 }

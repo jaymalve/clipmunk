@@ -76,6 +76,23 @@ describe("flick cli", () => {
     expect(broken.out).toContain("needs a component next to it");
   });
 
+  it("runs the daemon until interrupted and lists takes", async () => {
+    const cwd = await host(VITE);
+    expect((await flick(cwd, "dev", "--port", "70000")).err).toContain("--port must be a port number");
+    expect((await flick(cwd, "takes")).out).toContain("No takes yet");
+    const controller = new AbortController();
+    const out: string[] = [];
+    const running = run(["dev", "--port", "0", "--json"], { cwd, out: (text) => out.push(text), err: () => {}, signal: controller.signal, version: "9.9.9" });
+    await expect.poll(() => out.length).toBe(1);
+    const { data } = JSON.parse(out[0]!) as { data: { port: number; token: string; link: string } };
+    expect(data.link).toBe(`http://127.0.0.1:5173/?flick=1#flick-daemon=${data.port}.${data.token}`);
+    const status = await fetch(`http://127.0.0.1:${data.port}/v1/status`, { headers: { authorization: `Bearer ${data.token}` } });
+    expect(((await status.json()) as { data: { version: string } }).data.version).toBe("9.9.9");
+    controller.abort();
+    expect(await running).toBe(0);
+    await expect(fetch(`http://127.0.0.1:${data.port}/v1/status`)).rejects.toThrow();
+  });
+
   it("asks for what is missing before rendering", async () => {
     const cwd = await host(VITE);
     expect((await flick(cwd, "export")).err).toContain("export needs --scene");
