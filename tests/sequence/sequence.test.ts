@@ -113,8 +113,8 @@ describe("generated music", () => {
 
   it("is set on a scene through the daemon and heard in its export", async () => {
     expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "techno" } })).json).toMatchObject({ ok: false, issues: [{ code: "invalid-music" }] });
-    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "upbeat", seed: 9 } })).json).toMatchObject({ ok: true, data: { music: { style: "upbeat", seed: 9, gain: 0.5, duck: true } } });
-    expect((await recipe()).music).toEqual({ style: "upbeat", seed: 9, gain: 0.5, duck: true });
+    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "upbeat", seed: 9 } })).json).toMatchObject({ ok: true, data: { music: { style: "upbeat", seed: 9, gain: 0.5, duck: true, sync: true } } });
+    expect((await recipe()).music).toEqual({ style: "upbeat", seed: 9, gain: 0.5, duck: true, sync: true });
     expect((await recipe()).definition).toEqual(JSON.parse(recipeFile).definition);
 
     const output = out(".flick/exports/zz-test-music-scene.mp4");
@@ -178,7 +178,7 @@ describe("narrating in the studio", () => {
     const music = async () => JSON.parse(await readFile(recipePath, "utf8")).music;
     await page.getByRole("button", { name: "Music", exact: true }).click();
     await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("lofi");
-    await expect.poll(music, { timeout: 10_000 }).toEqual({ style: "lofi", seed: 1, gain: 0.5, duck: true });
+    await expect.poll(music, { timeout: 10_000 }).toEqual({ style: "lofi", gain: 0.5, duck: true, sync: true });
     await page.getByRole("button", { name: "Music ♪" }).waitFor({ timeout: 10_000 });
     await page.getByRole("button", { name: /^(Play|Replay)$/ }).click(); // plays with the music running
     await page.waitForTimeout(500);

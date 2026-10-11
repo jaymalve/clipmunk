@@ -1,6 +1,6 @@
 import { link, mkdir, mkdtemp, open, rm } from "node:fs/promises";
 import path from "node:path";
-import { DAEMON_HASH, EXPORTS_DIR, ExportTakeSchema, TAKES_DIR, TAKE_PARAM, TakeSchema, fail, ok, zodIssues, type ExportTakeResult, type Result } from "../core";
+import { DAEMON_HASH, EXPORTS_DIR, ExportTakeSchema, TAKES_DIR, TAKE_PARAM, TakeEventSchema, TakeSchema, fail, ok, parseEvents, takeMoments, zodIssues, type ExportTakeResult, type Result } from "../core";
 import { Fault, exists, readText, resolveInside, resolveStudio, toIssues } from "../project";
 import { launchBrowser } from "./browser";
 import { finishTake } from "./ffmpeg";
@@ -98,7 +98,8 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
       await file.close();
       check();
       const voice = media.audio && !edit.audio.muted ? media.audio : undefined;
-      const music = request.music && edit.music ? await writeMusic(temporary, edit.music, encoded.durationMs) : undefined;
+      const events = parseEvents((await readText(root, `${TAKES_DIR}/${request.takeId}/${media.events.file}`)) ?? "", TakeEventSchema);
+      const music = request.music && edit.music ? await writeMusic(temporary, edit.music, { key: `take:${request.takeId}`, durationMs: encoded.durationMs, momentsMs: takeMoments(take.data, events) }) : undefined;
       const finished = path.join(temporary, "finished.mp4");
       await finishTake({
         video,

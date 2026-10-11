@@ -234,10 +234,10 @@ Sound files are named by plain file name and live in `.flick/audio`. The same `{
 ### 5.5a Music
 
 ```ts
-type Music = { style: "upbeat" | "lofi"; seed: number; gain: number; duck: boolean };
+type Music = { style: "upbeat" | "lofi"; seed?: number; gain: number; duck: boolean; sync: boolean };
 ```
 
-A scene (`recipe.music`), a take (`edit.music`) and a sequence (`music`) can each carry one. `seed` picks a different tune in the same style, `gain` defaults to 0.5, and `duck` (default on) lowers the music while a voice is present. When a sequence has music, its clips are exported without their own.
+A scene (`recipe.music`), a take (`edit.music`) and a sequence (`music`) can each carry one. Without a `seed`, each clip gets its own tune, derived from its kind and id, and keeps it across exports; a `seed` picks a specific one. `gain` defaults to 0.5, `duck` (default on) lowers the music while a voice is present, and `sync` (default on) lines the music up with the clip's key moments. When a sequence has music, its clips are exported without their own.
 
 ### 5.6 Results and errors
 
@@ -533,6 +533,7 @@ Background music is synthesized by `renderMusic` in `core/music.ts`: a pure Type
 - **How it is made.** A seeded random generator picks a key and one of a few chord progressions for the style. Voices are computed sample by sample: detuned chord pads through a low-pass, a bass line, a pitch-swept kick, noise-based snare and hats, and a plucked melody drawn from the chord with echoes. Lo-fi adds swing, tape hiss and crackle.
 - **Stable by construction.** The mix goes through a fixed gain per style and a soft clipper, never a gain measured from the audio. So a longer clip starts with exactly the same music as a shorter one, and adding an accent cannot change how loud the rest is. Each style is set to a similar loudness (about 0.15 RMS, peaks under 0.8).
 - **Fitted to the clip.** It is rendered to the clip's exact length with a fade in and a fade out, so there is no looping. A sequence passes the time of each join as an accent: a short swell into a low thump.
+- **Synced to the picture.** `core/moments.ts` finds a clip's key moments: in a scene, when each surface finishes arriving (the last keyframe of any track that moves or fades it; camera and focus travel are ignored); in a take, the first click of each burst of activity, on the trimmed clock; in a sequence, each join. With `sync` on, `fitTempo` picks a tempo within 8% of the style's own, and a starting point inside the first beat, that puts beats, or the points halfway between beats, on those moments. Each moment also gets an accent placed exactly on it (softer in scenes and takes than at a sequence's joins). Because the tempo may only move 8%, several unrelated moments cannot always land on the rhythm exactly; `fitTempo` reports the average miss, and the accents are exact regardless. A test renders a fitted tune with accents off and checks the kick drum lands on every moment when a tempo in range can reach them. `planMusic` wraps all of this and is the one function both the studio and the exporter call.
 - **Same in preview and export.** The studio renders the same function into an `AudioBuffer` and starts it at the clock's position; the exporter writes it to a WAV for FFmpeg. Ducking under a voice (`sidechaincompress`) happens at export only, so the preview plays the music at its full level.
 
 `flick music <style>` writes a sample WAV for listening to a style.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { PROGRESS_BINDING, WRITE_BINDING, installBridge } from "../bridge";
 import { createTakeRenderer, type TakeRenderer } from "../compositor";
-import { TakeEventSchema, parseEvents, resolveZoomTracks, zoomSegments, type Issue, type Take, type TakeEdit, type TakeEvent } from "../core";
+import { TakeEventSchema, parseEvents, resolveZoomTracks, takeMoments, zoomSegments, type Issue, type Take, type TakeEdit, type TakeEvent } from "../core";
 import { createClock, type Clock } from "../react";
 import type { DaemonClient } from "../recorder";
 import { Chrome } from "./Chrome";
@@ -141,7 +141,8 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
     void element.play().catch(() => {});
   }, [session.playing, voice, take.edit.audio, take.edit.trim.startMs, clock]);
 
-  useMusicPreview({ music: take.edit.music, durationMs, clock, playing: session.playing });
+  const moments = useMemo(() => takeMoments(take, events), [take.edit.trim, events]); // eslint-disable-line react-hooks/exhaustive-deps
+  useMusicPreview({ music: take.edit.music, clip: { key: `take:${take.id}`, durationMs, momentsMs: moments }, clock, playing: session.playing });
 
   // The exporter drives this page through the same renderer the preview uses.
   useEffect(() => {
@@ -259,7 +260,7 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
             <Slider label="Shadow" value={e.canvas.shadow} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(shadow) => edit((c) => ({ ...c, canvas: { ...c.canvas, shadow } }))} />
           </Group>
           <Group title="Music">
-            <MusicControls value={e.music} hasVoice={!!voice} onChange={(music) => edit(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
+            <MusicControls value={e.music} hasVoice={!!voice} clipKey={`take:${take.id}`} moments={moments.length} onChange={(music) => edit(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
           </Group>
           {voice && (
             <Group title="Voice">

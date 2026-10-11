@@ -1,7 +1,7 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { CAPTURE_SELECTOR, installBridge } from "../bridge";
-import { motionDuration, validateDefinition, type AudioClip, type Issue, type Music, type SceneDefinition } from "../core";
+import { motionDuration, sceneMoments, validateDefinition, type AudioClip, type Issue, type Music, type SceneDefinition } from "../core";
 import { Scene, createClock } from "../react";
 import { Chrome } from "./Chrome";
 import { ExportPanel, type DaemonState } from "./daemon";
@@ -61,7 +61,8 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
       setMusicIssue(result.ok ? undefined : result.issues[0]!.message);
     }, 400);
   };
-  useMusicPreview({ music, durationMs, clock, playing: session.playing });
+  const moments = useMemo(() => (current ? sceneMoments(current) : []), [current]);
+  useMusicPreview({ music, clip: { key: `scene:${sceneId ?? ""}`, durationMs, momentsMs: moments }, clock, playing: session.playing });
   const narration = useNarration({ sceneId, audio, client: daemon?.client, clock, durationMs, playing: session.playing, seek: session.seek, toggle: session.toggle });
 
   // The exporter drives this same clock. Capture refuses a scene with unresolved issues.
@@ -156,7 +157,7 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
         {musicIssue && <div className="issues" role="alert">{musicIssue}</div>}
         {choosingMusic && sceneId && daemon?.client && (
           <div className="musicbox">
-            <MusicControls value={music} hasVoice={narration.hasNarration} onChange={changeMusic} />
+            <MusicControls value={music} hasVoice={narration.hasNarration} clipKey={`scene:${sceneId}`} moments={moments.length} onChange={changeMusic} />
           </div>
         )}
         <Controls clock={clock} durationMs={durationMs} title={title} backHref={backHref} disabled={!valid} {...session}

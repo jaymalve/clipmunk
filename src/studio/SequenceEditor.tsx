@@ -166,7 +166,7 @@ function Editor(props: { initial: Sequence; client: DaemonClient; daemon: Daemon
           }}>Add</button>
         </div>
         <div className="musicbox">
-          <MusicControls value={sequence.music} onChange={(music) => setSequence(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
+          <MusicControls value={sequence.music} clipKey={`sequence:${sequence.id}`} onChange={(music) => setSequence(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
         </div>
         <p className="note">There is no live preview of a whole sequence yet: open a clip to see it, and export to see them joined.</p>
       </div>

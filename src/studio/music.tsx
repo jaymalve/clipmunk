@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MUSIC_STYLES, MusicSchema, renderMusic, type Music, type MusicStyle } from "../core";
+import { MUSIC_STYLES, MusicSchema, planMusic, renderMusic, type Music, type MusicRequest, type MusicStyle } from "../core";
 import type { Clock } from "../react";
 
 /** Generated music in the studio: the controls that choose it, and playback alongside a
@@ -9,29 +9,32 @@ const NAMES: Record<MusicStyle, string> = { upbeat: "Upbeat", lofi: "Lo-fi" };
 let shared: AudioContext | undefined;
 const audio = () => (shared ??= new AudioContext());
 
-function toBuffer(music: Pick<Music, "style" | "seed">, durationMs: number, accentsMs?: readonly number[]): AudioBuffer {
+function toBuffer(request: MusicRequest): AudioBuffer {
   const context = audio();
-  const rendered = renderMusic({ style: music.style, seed: music.seed, durationMs, accentsMs, sampleRate: context.sampleRate });
+  const rendered = renderMusic({ ...request, sampleRate: context.sampleRate });
   const buffer = context.createBuffer(2, rendered.left.length, rendered.sampleRate);
   buffer.copyToChannel(rendered.left as Float32Array<ArrayBuffer>, 0);
   buffer.copyToChannel(rendered.right as Float32Array<ArrayBuffer>, 1);
   return buffer;
 }
 
+export type MusicClip = { key: string; durationMs: number; momentsMs?: readonly number[] };
+
 /** Play a clip's music in step with its clock. Ducking under a voice happens at export only. */
-export function useMusicPreview(options: { music?: Music; durationMs: number; clock: Clock; playing: boolean; accentsMs?: readonly number[] }) {
+export function useMusicPreview(options: { music?: Music; clip: MusicClip; clock: Clock; playing: boolean }) {
   const { music, clock, playing } = options;
-  const durationMs = Math.round(options.durationMs);
   const [buffer, setBuffer] = useState<AudioBuffer>();
-  const style = music?.style, seed = music?.seed;
-  const accents = JSON.stringify(options.accentsMs ?? []);
+  // Only what changes the sound: volume and ducking do not need a new render.
+  const plan = music ? JSON.stringify(planMusic(music, { ...options.clip, durationMs: Math.round(options.clip.durationMs) })) : "";
   useEffect(() => {
     setBuffer(undefined);
-    if (!style || seed === undefined || durationMs <= 0) return;
+    if (!plan) return;
+    const request = JSON.parse(plan) as MusicRequest;
+    if (request.durationMs <= 0) return;
     // Synthesis takes a moment for a long clip; let the page paint the new setting first.
-    const timer = setTimeout(() => setBuffer(toBuffer({ style, seed }, durationMs, JSON.parse(accents) as number[])), 30);
+    const timer = setTimeout(() => setBuffer(toBuffer(request)), 30);
     return () => clearTimeout(timer);
-  }, [style, seed, durationMs, accents]);
+  }, [plan]);
 
   const volume = useRef<GainNode | undefined>(undefined);
   useEffect(() => {
@@ -57,7 +60,7 @@ export function useMusicPreview(options: { music?: Music; durationMs: number; cl
 }
 
 /** Style, volume, a new tune in the same style, and a short listen. `onChange(undefined)` turns music off. */
-export function MusicControls({ value, onChange, hasVoice }: { value: Music | undefined; onChange: (music: Music | undefined) => void; hasVoice?: boolean }) {
+export function MusicControls({ value, onChange, hasVoice, clipKey, moments = 0 }: { value: Music | undefined; onChange: (music: Music | undefined) => void; hasVoice?: boolean; clipKey: string; moments?: number }) {
   const [listening, setListening] = useState(false);
   const stop = useRef<(() => void) | undefined>(undefined);
   useEffect(() => () => stop.current?.(), []);
@@ -68,7 +71,7 @@ export function MusicControls({ value, onChange, hasVoice }: { value: Music | un
     void context.resume();
     const source = context.createBufferSource(), gain = context.createGain();
     gain.gain.value = value.gain;
-    source.buffer = toBuffer(value, 12_000);
+    source.buffer = toBuffer(planMusic(value, { key: clipKey, durationMs: 12_000 }));
     source.connect(gain).connect(context.destination);
     source.start();
     setListening(true);
@@ -105,6 +108,12 @@ export function MusicControls({ value, onChange, hasVoice }: { value: Music | un
             <label className="field check">
               <input type="checkbox" checked={value.duck} onChange={(event) => onChange({ ...value, duck: event.currentTarget.checked })} />
               <span>Lower under voice (on export)</span>
+            </label>
+          )}
+          {moments > 0 && (
+            <label className="field check">
+              <input type="checkbox" checked={value.sync} onChange={(event) => change({ ...value, sync: event.currentTarget.checked })} />
+              <span>Sync the beat to {moments} moment{moments === 1 ? "" : "s"} in this clip</span>
             </label>
           )}
           <div className="field tune">

@@ -13,3 +13,4 @@ export * from "./cursor";
 export * from "./audio";
 export * from "./sequence";
 export * from "./music";
+export * from "./moments";

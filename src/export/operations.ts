@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   AUDIO_DIR,
+  sceneMoments,
   EXPORTS_DIR,
   ExportSceneSchema,
   MAX_EXPORT_DURATION_MS,
@@ -112,7 +113,7 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
       else warnings.push(`${AUDIO_DIR}/${clip.file} is missing, so this scene was exported without it.`);
     }
     const wanted = request.music ? studio.data.scene?.music : undefined;
-    const music = wanted && (await writeMusic(temporary, wanted, durationMs));
+    const music = wanted && (await writeMusic(temporary, wanted, { key: `scene:${request.sceneId}`, durationMs, momentsMs: sceneMoments(studio.data.scene!.definition) }));
     let finished = joined;
     if (tracks.length || music) {
       finished = path.join(temporary, "with-audio.mp4");

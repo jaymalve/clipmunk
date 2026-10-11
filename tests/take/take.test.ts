@@ -114,9 +114,10 @@ describe("take editor", () => {
 
   it("adds generated music, picks a new tune, and plays it with the preview", async () => {
     await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("lofi");
-    await saved((edit) => edit.music, { style: "lofi", seed: 1, gain: 0.5, duck: true });
+    await saved((edit) => edit.music, { style: "lofi", gain: 0.5, duck: true, sync: true }); // its own tune, from the take's name
+    expect(await page.getByLabel(/Sync the beat to 1 moment/).isChecked()).toBe(true); // the take has one click
     await page.getByRole("button", { name: "New tune" }).click();
-    await expect.poll(async () => JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit.music.seed, { timeout: 10_000 }).not.toBe(1);
+    await expect.poll(async () => typeof JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit.music.seed, { timeout: 10_000 }).toBe("number");
     // Playing with music on must not disturb playback.
     await seek(0);
     await page.getByRole("button", { name: "Play" }).click();

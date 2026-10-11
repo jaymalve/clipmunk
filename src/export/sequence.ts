@@ -53,7 +53,7 @@ export async function exportSequence(input: unknown, context: ExportContext): Pr
       overlay.push({ ...track, file: await resolveInside(root, `${AUDIO_DIR}/${track.file}`) });
     }
     // The music marks each join between clips with a soft accent.
-    const music = sequence.music && (await writeMusic(await resolveInside(root, work), sequence.music, plan.totalMs, plan.startsMs.slice(1).map((start, index) => start + plan.fadesMs[index + 1]! / 2)));
+    const music = sequence.music && (await writeMusic(await resolveInside(root, work), sequence.music, { key: `sequence:${sequence.id}`, durationMs: plan.totalMs, momentsMs: plan.startsMs.slice(1).map((start, index) => start + plan.fadesMs[index + 1]! / 2), accentLevel: 1 }));
     const joined = path.join(await resolveInside(root, work), "sequence.mp4");
     const { audio } = await joinClips({ clips, fadesMs: plan.fadesMs, fps: sequence.fps, width: sequence.width, height: sequence.height, overlay, music, totalMs: plan.totalMs, output: joined, cwd: root });
     if (signal?.aborted) throw new Fault("export-cancelled", "Export cancelled. No file was written.");

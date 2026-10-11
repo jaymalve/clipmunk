@@ -11,11 +11,13 @@ export type MusicStyle = (typeof MUSIC_STYLES)[number];
 
 export const MusicSchema = z.strictObject({
   style: z.enum(MUSIC_STYLES),
-  /** A different seed gives a different tune in the same style. */
-  seed: z.number().int().min(0).max(999_999).default(1),
+  /** A different seed gives a different tune in the same style. Left out, each clip gets its own tune from its name. */
+  seed: z.number().int().min(0).max(999_999).optional(),
   gain: z.number().finite().min(0).max(2).default(0.5),
   /** Lower the music while a voice is speaking. */
   duck: z.boolean().default(true),
+  /** Fit the tempo to the clip's key moments and mark them with accents. */
+  sync: z.boolean().default(true),
 });
 export type Music = z.output<typeof MusicSchema>;
 
@@ -27,6 +29,12 @@ export type MusicRequest = {
   sampleRate?: number;
   /** Moments (in milliseconds) to mark with a soft swell and hit, such as the cuts of a sequence. */
   accentsMs?: readonly number[];
+  /** How strong those accents are, from 0 to 1. */
+  accentLevel?: number;
+  /** Tempo in beats per minute; the style's own tempo when left out. */
+  bpm?: number;
+  /** How far into its first beat the music starts, so the beat can be lined up with the picture. */
+  phaseMs?: number;
 };
 
 const TAU = Math.PI * 2;
@@ -73,7 +81,9 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
   const key = pick([-12, -10, -9, -7, -5, -4]); // semitones from A4: roots between A3 and F4
   const scale = plan.major ? MAJOR : MINOR;
   const progression = pick(plan.progressions).map((degree) => chordOn(degree, scale, request.style !== "upbeat"));
-  const beat = 60 / plan.bpm, bar = beat * 4;
+  const bpm = request.bpm ?? plan.bpm;
+  const beat = 60 / bpm, bar = beat * 4;
+  const phase = Math.max(0, request.phaseMs ?? 0) / 1000;
   const seconds = length / sampleRate;
 
   /** Add a mono signal to both channels, with `pan` from -1 (left) to 1 (right). */
@@ -123,9 +133,9 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
     }, (age) => Math.exp(-age / 0.018));
   };
 
-  const bars = Math.ceil(seconds / bar) + 1;
+  const bars = Math.ceil((seconds + phase) / bar) + 1;
   for (let index = 0; index < bars; index++) {
-    const start = index * bar;
+    const start = index * bar - phase;
     const chord = progression[Math.floor(index / plan.barsPerChord) % progression.length]!;
     const opensChord = index % plan.barsPerChord === 0;
     const swung = (eighth: number) => start + eighth * (beat / 2) + (eighth % 2 ? plan.swing * beat : 0);
@@ -177,16 +187,17 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
   }
 
   // Accents: a breath of noise rising into a low thump, to underline a cut.
+  const accentLevel = Math.max(0, Math.min(1, request.accentLevel ?? 1));
   for (const accent of request.accentsMs ?? []) {
     const at = accent / 1000;
     if (at < 0.4 || at > seconds - 0.2) continue;
     let previous = 0;
-    note(at - 0.35, 0.35, 1, 0.11, 0, () => {
+    note(at - 0.35, 0.35, 1, 0.11 * accentLevel, 0, () => {
       const sample = noise() * 2 - 1;
       previous += 0.25 * (sample - previous);
       return sample - previous;
     }, (age) => (age / 0.35) ** 2);
-    note(at, 0.5, 1, 0.42, 0, (_phase, age) => Math.sin(TAU * (42 * age + (40 / 18) * (1 - Math.exp(-age * 18)))), (age) => Math.exp(-age / 0.16));
+    note(at, 0.5, 1, 0.42 * accentLevel, 0, (_phase, age) => Math.sin(TAU * (42 * age + (40 / 18) * (1 - Math.exp(-age * 18)))), (age) => Math.exp(-age / 0.16));
   }
 
   if (request.style === "lofi") {
@@ -218,7 +229,65 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
     left[i] = left[i]! * level * fade;
     right[i] = right[i]! * level * fade;
   }
-  return { sampleRate, left, right, bpm: plan.bpm };
+  return { sampleRate, left, right, bpm };
+}
+
+/** The style's own tempo, before any fitting. */
+export const styleTempo = (style: MusicStyle): number => PLANS[style].bpm;
+
+/** A tune number from a clip's name, so every clip gets its own music and keeps it across exports. */
+export function seedFor(key: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619);
+  return (hash >>> 0) % 1_000_000;
+}
+
+const OFFBEAT_COST_MS = 12;
+
+/** Choose a tempo near the style's own, and a starting point within the first beat, so that
+ * beats, or the points halfway between them, fall on the given moments. Tempo moves by at
+ * most `tolerance` (8% by default), which keeps the style's feel, so several unrelated moments
+ * cannot always be matched exactly: `errorMs` reports how far, on average, a moment is from
+ * the rhythm. Accents are placed on the moments themselves and do not depend on this fit.
+ */
+export function fitTempo(baseBpm: number, momentsMs: readonly number[], tolerance = 0.08): { bpm: number; phaseMs: number; errorMs: number } {
+  if (!momentsMs.length) return { bpm: baseBpm, phaseMs: 0, errorMs: 0 };
+  let best = { bpm: baseBpm, phaseMs: 0, errorMs: Number.POSITIVE_INFINITY };
+  // Step outward from the style's own tempo, so that exact tempo is always one of the candidates.
+  const steps = Math.floor((baseBpm * tolerance) / 0.25);
+  for (let step = -steps; step <= steps; step++) {
+    const bpm = baseBpm + step * 0.25;
+    const beat = 60_000 / bpm;
+    // The best starting point always puts one of the moments exactly on a beat, so try each.
+    for (const anchor of momentsMs) {
+      const phaseMs = (beat - (anchor % beat)) % beat;
+      let total = 0;
+      for (const moment of momentsMs) {
+        const position = (moment + phaseMs) / beat;
+        const toBeat = Math.abs(position - Math.round(position)) * beat;
+        // Halfway between beats is still on the rhythm (the hi-hat plays there), so it counts,
+        // at a small cost that makes a full beat win when both are possible.
+        const toHalf = Math.abs(position * 2 - Math.round(position * 2)) * (beat / 2) + OFFBEAT_COST_MS;
+        total += Math.min(toBeat, toHalf);
+      }
+      const errorMs = total / momentsMs.length;
+      // Prefer the style's own tempo when two candidates fit equally well.
+      if (errorMs < best.errorMs - 0.5 || (Math.abs(errorMs - best.errorMs) <= 0.5 && Math.abs(bpm - baseBpm) < Math.abs(best.bpm - baseBpm))) best = { bpm: Math.round(bpm * 100) / 100, phaseMs, errorMs };
+    }
+  }
+  return best;
+}
+
+/** Everything needed to render a clip's music: its own tune unless one was chosen, and, with
+ * `sync` on, a tempo fitted to the clip's key moments with an accent on each. The studio and
+ * the exporter both call this, so they render the same thing.
+ */
+export function planMusic(music: Music, clip: { key: string; durationMs: number; momentsMs?: readonly number[]; accentLevel?: number }): MusicRequest {
+  const base: MusicRequest = { style: music.style, seed: music.seed ?? seedFor(clip.key), durationMs: clip.durationMs };
+  const moments = (clip.momentsMs ?? []).filter((moment) => moment > 300 && moment < clip.durationMs - 200);
+  if (!music.sync || !moments.length) return base;
+  const fit = fitTempo(styleTempo(music.style), moments);
+  return { ...base, bpm: fit.bpm, phaseMs: fit.phaseMs, accentsMs: moments, accentLevel: clip.accentLevel ?? 0.6 };
 }
 
 /** The rendered music as a 16-bit stereo WAV file. */
