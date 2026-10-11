@@ -1,9 +1,9 @@
-import { link, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
   AUDIO_DIR,
-  EXPORTS_DIR,
+  type CatalogScene,
   type ExportSceneResult,
   ExportSceneSchema,
   fail,
@@ -19,97 +19,90 @@ import {
 } from "../core";
 import { type Context, exists, Fault, readText, resolveInside, resolveStudio, toIssues, writeText } from "../project";
 import { launchBrowser, openClip } from "./browser";
-import { addAudio, concatSegments, type Encoder, startEncoder } from "./ffmpeg";
+import { addAudio, concatSegments, type Encoder, type PlacedAudio, startEncoder } from "./ffmpeg";
 import { writeMusic } from "./music";
+import {
+  CANCELLED,
+  type Cancellation,
+  cancellation,
+  claimOutput,
+  even,
+  publish,
+  removeDirectory,
+  workDirectory,
+} from "./output";
 
 /** Rendering operations. A scene is sampled at exact frame times through the same
  * bridge the studio uses, so the file matches the preview frame for frame.
  */
 export type ExportContext = Context & { signal?: AbortSignal; onProgress?: (done: number, total: number) => void };
-const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
+type SceneRequest = ReturnType<typeof ExportSceneSchema.parse>;
+type Browser = Awaited<ReturnType<typeof launchBrowser>>;
+type RenderPlan = { durationMs: number; width: number; height: number; frames: number; workers: number };
 
-async function freeOutput(root: string, sceneId: string): Promise<string> {
-  for (let n = 1; ; n++) {
-    const candidate = `${EXPORTS_DIR}/${sceneId}${n === 1 ? "" : `-${n}`}.mp4`;
-    if (!(await exists(root, candidate))) return candidate;
-  }
+/** Open the scene once at a neutral size to learn its authored frame, and decide the output from it. */
+async function planRender(browser: Browser, url: string, request: SceneRequest): Promise<RenderPlan> {
+  const probe = await openClip(browser, url, { width: 1280, height: 720 });
+  const info = probe.info;
+  await probe.close();
+  if (info.durationMs <= 0)
+    throw new Fault(
+      "still-scene",
+      "This scene has no motion, so there is no video to export. Use flick snapshot for a still.",
+    );
+  if (info.durationMs > MAX_EXPORT_DURATION_MS)
+    throw new Fault("too-long", `Scenes longer than ${MAX_EXPORT_DURATION_MS / 60000} minutes are not supported.`);
+  const width = request.width ?? even(request.height ? (request.height * info.width) / info.height : info.width);
+  const height = request.height ?? even(request.width ? (request.width * info.height) / info.width : info.height);
+  const frames = Math.ceil((info.durationMs * request.fps) / 1000);
+  const workers = Math.min(request.workers ?? Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2))), frames);
+  return { durationMs: info.durationMs, width, height, frames, workers };
 }
 
-export async function exportScene(input: unknown, context: ExportContext): Promise<Result<ExportSceneResult>> {
-  const parsed = ExportSceneSchema.safeParse(input);
-  if (!parsed.success) return fail(zodIssues(parsed.error, "invalid-export"));
-  const request = parsed.data;
-  const started = Date.now();
-  const { root, signal } = context;
+/** Split the frames across pages, encode one segment per page, and join the segments.
+ * Every frame is a pure function of time, so the pages can work independently.
+ */
+async function renderFrames(options: {
+  browser: Browser;
+  url: string;
+  plan: RenderPlan;
+  request: SceneRequest;
+  root: string;
+  directory: string;
+  cancel: Cancellation;
+  onProgress?: (done: number, total: number) => void;
+}): Promise<string> {
+  const { browser, plan, request, directory, cancel } = options;
+  const format = request.draft ? "jpeg" : "png";
+  const segments = Array.from({ length: plan.workers }, (_, index) => ({
+    file: path.join(directory, `segment-${index}.mp4`),
+    from: Math.floor((plan.frames * index) / plan.workers),
+    to: Math.floor((plan.frames * (index + 1)) / plan.workers),
+  }));
   const encoders: Encoder[] = [];
-  let browser: Awaited<ReturnType<typeof launchBrowser>> | undefined;
-  let temporary: string | undefined;
-  const abort = () => {
+  cancel.onCancel(() => {
     for (const encoder of encoders) encoder.kill();
-    void browser?.close();
-  };
-  const check = () => {
-    if (signal?.aborted) throw new Fault("export-cancelled", "Export cancelled. No file was written.");
-  };
-  signal?.addEventListener("abort", abort, { once: true });
+  });
+  let done = 0;
   try {
-    check();
-    if (request.output && (await exists(root, request.output)))
-      throw new Fault(
-        "output-exists",
-        `${request.output} already exists. Choose another --output; Flick never overwrites a file.`,
-        request.output,
-      );
-    const studio = await resolveStudio({ url: request.url, sceneId: request.sceneId }, context);
-    if (!studio.ok) return studio;
-    const output = request.output ?? (await freeOutput(root, request.sceneId));
-    const target = await resolveInside(root, output);
-
-    browser = await launchBrowser();
-    // Open once at a neutral size to learn the authored frame, then render at the output size.
-    const probe = await openClip(browser, studio.data.url, { width: 1280, height: 720 });
-    const info = probe.info;
-    await probe.close();
-    if (info.durationMs <= 0)
-      throw new Fault(
-        "still-scene",
-        "This scene has no motion, so there is no video to export. Use flick snapshot for a still.",
-      );
-    if (info.durationMs > MAX_EXPORT_DURATION_MS)
-      throw new Fault("too-long", `Scenes longer than ${MAX_EXPORT_DURATION_MS / 60000} minutes are not supported.`);
-    const width = request.width ?? even(request.height ? (request.height * info.width) / info.height : info.width);
-    const height = request.height ?? even(request.width ? (request.width * info.height) / info.width : info.height);
-    const frames = Math.ceil((info.durationMs * request.fps) / 1000);
-    const workers = Math.min(request.workers ?? Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2))), frames);
-
-    await mkdir(path.dirname(target), { recursive: true });
-    temporary = await mkdtemp(path.join(path.dirname(target), ".flick-export-"));
-    const segments = Array.from({ length: workers }, (_, index) => ({
-      file: path.join(temporary!, `segment-${index}.mp4`),
-      from: Math.floor((frames * index) / workers),
-      to: Math.floor((frames * (index + 1)) / workers),
-    }));
-    let done = 0;
     await Promise.all(
       segments.map(async (segment) => {
-        const clip = await openClip(browser!, studio.data.url, { width, height });
+        const clip = await openClip(browser, options.url, { width: plan.width, height: plan.height });
         const encoder = startEncoder({
           output: segment.file,
           fps: request.fps,
-          width,
-          height,
+          width: plan.width,
+          height: plan.height,
           frames: segment.to - segment.from,
           input: request.draft ? "mjpeg" : "png",
-          cwd: root,
+          cwd: options.root,
         });
         encoders.push(encoder);
         try {
           for (let frame = segment.from; frame < segment.to; frame++) {
-            check();
-            await encoder.write(
-              await clip.frame(Math.min(info.durationMs, (frame * 1000) / request.fps), request.draft ? "jpeg" : "png"),
-            );
-            context.onProgress?.(++done, frames);
+            cancel.check();
+            await encoder.write(await clip.frame(Math.min(plan.durationMs, (frame * 1000) / request.fps), format));
+            options.onProgress?.(++done, plan.frames);
           }
           await encoder.finish();
         } finally {
@@ -117,66 +110,115 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
         }
       }),
     );
-    check();
-    const joined = path.join(temporary, "joined.mp4");
-    const list = path.join(temporary, "segments.txt");
-    await writeFile(list, segments.map((segment) => `file '${segment.file.replace(/'/g, "'\\''")}'`).join("\n"));
-    await concatSegments(
-      segments.map((segment) => segment.file),
-      list,
-      joined,
-      root,
-    );
-    check();
-    // Narration or other sound attached to the scene. A missing file is reported, not fatal.
-    const durationMs = (frames * 1000) / request.fps;
-    const warnings: string[] = [];
-    const tracks: { file: string; offsetMs: number; gain: number }[] = [];
-    for (const clip of studio.data.scene?.audio ?? []) {
-      if (await exists(root, `${AUDIO_DIR}/${clip.file}`))
-        tracks.push({ ...clip, file: await resolveInside(root, `${AUDIO_DIR}/${clip.file}`) });
-      else warnings.push(`${AUDIO_DIR}/${clip.file} is missing, so this scene was exported without it.`);
-    }
-    const wanted = request.music ? studio.data.scene?.music : undefined;
-    const music =
-      wanted &&
-      (await writeMusic(temporary, wanted, {
-        key: `scene:${request.sceneId}`,
-        durationMs,
-        momentsMs: sceneMoments(studio.data.scene!.definition),
-      }));
-    let finished = joined;
-    if (tracks.length || music) {
-      finished = path.join(temporary, "with-audio.mp4");
-      await addAudio({ video: joined, output: finished, cwd: root, durationMs, tracks, music });
-    }
-    try {
-      await link(finished, target);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST")
-        throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
-      throw error;
-    }
-    return ok({
-      output,
-      fps: request.fps,
-      frames,
+  } finally {
+    for (const encoder of encoders) encoder.kill();
+  }
+  cancel.check();
+  const joined = path.join(directory, "joined.mp4");
+  const list = path.join(directory, "segments.txt");
+  await writeFile(list, segments.map((segment) => `file '${segment.file.replace(/'/g, "'\\''")}'`).join("\n"));
+  await concatSegments(
+    segments.map((segment) => segment.file),
+    list,
+    joined,
+    options.root,
+  );
+  return joined;
+}
+
+/** The scene's sound: its audio clips that exist on disk, and its generated music.
+ * A missing file is reported as a warning, not a failure.
+ */
+async function sceneSound(
+  root: string,
+  scene: CatalogScene,
+  request: SceneRequest,
+  directory: string,
+  durationMs: number,
+) {
+  const warnings: string[] = [];
+  const tracks: PlacedAudio[] = [];
+  for (const clip of scene.audio ?? []) {
+    const file = `${AUDIO_DIR}/${clip.file}`;
+    if (await exists(root, file)) tracks.push({ ...clip, file: await resolveInside(root, file) });
+    else warnings.push(`${file} is missing, so this scene was exported without it.`);
+  }
+  const wanted = request.music ? scene.music : undefined;
+  const music =
+    wanted &&
+    (await writeMusic(directory, wanted, {
+      key: `scene:${scene.id}`,
       durationMs,
-      width,
-      height,
-      workers,
-      audio: tracks.length > 0 || !!music,
+      momentsMs: sceneMoments(scene.definition),
+    }));
+  return { tracks, music, warnings };
+}
+
+export async function exportScene(input: unknown, context: ExportContext): Promise<Result<ExportSceneResult>> {
+  const parsed = ExportSceneSchema.safeParse(input);
+  if (!parsed.success) return fail(zodIssues(parsed.error, "invalid-export"));
+  const request = parsed.data;
+  const started = Date.now();
+  const { root } = context;
+  const cancel = cancellation(context.signal);
+  let browser: Browser | undefined;
+  let directory: string | undefined;
+  try {
+    cancel.check();
+    const claim = await claimOutput(root, request.output, request.sceneId);
+    const studio = await resolveStudio({ url: request.url, sceneId: request.sceneId }, context);
+    if (!studio.ok) return studio;
+    const scene = studio.data.scene!;
+
+    browser = await launchBrowser();
+    cancel.onCancel(() => void browser?.close());
+    const plan = await planRender(browser, studio.data.url, request);
+    directory = await workDirectory(claim);
+    const picture = await renderFrames({
+      browser,
+      url: studio.data.url,
+      plan,
+      request,
+      root,
+      directory,
+      cancel,
+      onProgress: context.onProgress,
+    });
+    cancel.check();
+
+    const durationMs = (plan.frames * 1000) / request.fps;
+    const sound = await sceneSound(root, scene, request, directory, durationMs);
+    let finished = picture;
+    if (sound.tracks.length || sound.music) {
+      finished = path.join(directory, "with-audio.mp4");
+      await addAudio({
+        video: picture,
+        output: finished,
+        cwd: root,
+        durationMs,
+        tracks: sound.tracks,
+        music: sound.music,
+      });
+    }
+    await publish(finished, claim);
+    return ok({
+      output: claim.output,
+      fps: request.fps,
+      frames: plan.frames,
+      durationMs,
+      width: plan.width,
+      height: plan.height,
+      workers: plan.workers,
+      audio: sound.tracks.length > 0 || !!sound.music,
       elapsedMs: Date.now() - started,
-      ...(warnings.length ? { warnings } : {}),
+      ...(sound.warnings.length ? { warnings: sound.warnings } : {}),
     });
   } catch (error) {
-    if (signal?.aborted) return fail([{ code: "export-cancelled", message: "Export cancelled. No file was written." }]);
-    return fail(toIssues(error, "export-failed"));
+    return fail(cancel.cancelled() ? [CANCELLED] : toIssues(error, "export-failed"));
   } finally {
-    signal?.removeEventListener("abort", abort);
-    for (const encoder of encoders) encoder.kill();
+    cancel.release();
     await browser?.close().catch(() => {});
-    if (temporary) await rm(temporary, { recursive: true, force: true });
+    await removeDirectory(directory);
   }
 }
 

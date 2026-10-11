@@ -33,8 +33,8 @@ export function sceneMoments(definition: Pick<SceneDefinition, "motion">): numbe
 }
 
 /** The first click of each burst of activity, on the trimmed clip's clock. */
-export function takeMoments(take: Pick<Take, "edit">, events: readonly TakeEvent[]): number[] {
-  const { startMs, endMs } = take.edit.trim;
+export function takeMoments(trim: Take["edit"]["trim"], events: readonly TakeEvent[]): number[] {
+  const { startMs, endMs } = trim;
   const clicks = events
     .filter((event) => event.k === "down" && event.t >= startMs && event.t <= endMs)
     .map((event) => event.t - startMs);

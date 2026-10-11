@@ -46,17 +46,22 @@ export function useMusicPreview(options: { music?: Music; clip: MusicClip; clock
     return () => clearTimeout(timer);
   }, [plan]);
 
+  // Volume changes apply to the sound already playing; they must not restart it.
+  const level = music?.gain ?? 0;
+  const startLevel = useRef(level);
+  startLevel.current = level;
   const volume = useRef<GainNode | undefined>(undefined);
   useEffect(() => {
-    if (volume.current && music) volume.current.gain.value = music.gain;
-  }, [music?.gain]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (volume.current) volume.current.gain.value = level;
+  }, [level]);
   useEffect(() => {
-    if (!playing || !buffer || !music) return;
+    if (!playing || !buffer) return;
     const context = audio();
     void context.resume();
     const source = context.createBufferSource();
-    const gain = (volume.current = context.createGain());
-    gain.gain.value = music.gain;
+    const gain = context.createGain();
+    volume.current = gain;
+    gain.gain.value = startLevel.current;
     source.buffer = buffer;
     source.connect(gain).connect(context.destination);
     source.start(0, Math.min(buffer.duration, Math.max(0, clock.get() / 1000)));
@@ -66,7 +71,7 @@ export function useMusicPreview(options: { music?: Music; clip: MusicClip; clock
       gain.disconnect();
       volume.current = undefined;
     };
-  }, [playing, buffer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playing, buffer, clock]);
 }
 
 /** Style, volume, a new tune in the same style, and a short listen. `onChange(undefined)` turns music off. */

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AudioClip } from "../core";
 import type { Clock } from "../react";
 import type { DaemonClient } from "../recorder";
@@ -31,7 +31,11 @@ export function useNarration(options: {
   useEffect(() => {
     if (!client) return;
     const wanted = new Set(clips.map((clip) => clip.file));
-    for (const [file, element] of players.current) if (!wanted.has(file)) element.pause(), players.current.delete(file);
+    for (const [file, element] of players.current) {
+      if (wanted.has(file)) continue;
+      element.pause();
+      players.current.delete(file);
+    }
     for (const clip of clips)
       if (!players.current.has(clip.file))
         players.current.set(
@@ -54,11 +58,13 @@ export function useNarration(options: {
   }, [clips, client, playing, clock, state.phase]);
 
   const session = useRef<{ recorder: MediaRecorder; stream: MediaStream } | undefined>(undefined);
-  const stop = () => session.current?.recorder.state === "recording" && session.current.recorder.stop();
+  const stop = useCallback(() => {
+    if (session.current?.recorder.state === "recording") session.current.recorder.stop();
+  }, []);
   // The take ends when the scene does.
   useEffect(() => {
     if (state.phase === "recording" && !playing && clock.get() > 0) stop();
-  }, [playing, state.phase, clock]);
+  }, [playing, state.phase, clock, stop]);
 
   async function start() {
     if (!client || !sceneId || !options.durationMs) return;
@@ -87,8 +93,10 @@ export function useNarration(options: {
           `/v1/scenes/${sceneId}/narration?offset=${Math.round(recordingStarted - playStarted)}`,
           new Blob(chunks, { type: recorder.mimeType }),
         );
-        if (result.ok) setClips(result.data.audio), setState({ phase: "idle" });
-        else setState({ phase: "error", message: result.issues[0]!.message });
+        if (result.ok) {
+          setClips(result.data.audio);
+          setState({ phase: "idle" });
+        } else setState({ phase: "error", message: result.issues[0]!.message });
       };
     } catch (error) {
       setState({

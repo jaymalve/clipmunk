@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/run";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportScene, exportSequence, probeMedia, probeVideo } from "../../src/export";
+import { near as closeTo, colourAt, loudness as loudnessOf } from "../support/media";
 import { FFMPEG, makeTake, QUADRANTS } from "../support/take";
 
 /** Narration over a scene and sequences of scenes and takes, end to end on the example app. */
@@ -42,37 +43,13 @@ const tone = (seconds: number, format: string[]) =>
     ["-loglevel", "error", "-f", "lavfi", "-i", `sine=frequency=330:duration=${seconds}`, ...format, "-"],
     { maxBuffer: 16e6 },
   );
-const colour = (file: string, at: number, crop: string) => [
-  ...execFileSync(FFMPEG, [
-    "-loglevel",
-    "error",
-    "-ss",
-    String(at),
-    "-i",
-    path.join(root, file),
-    "-vf",
-    `crop=${crop},scale=1:1`,
-    "-frames:v",
-    "1",
-    "-f",
-    "rawvideo",
-    "-pix_fmt",
-    "rgb24",
-    "-",
-  ]).subarray(0, 3),
-];
-const near = (actual: number[], expected: readonly number[], tolerance = 50) =>
-  expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
-const out = (name: string) => (made.push(name), name);
-/** Mean loudness of a file's sound in decibels, from FFmpeg's own measurement. */
-const loudness = (file: string) =>
-  Number(
-    /mean_volume: (-?[\d.]+) dB/.exec(
-      spawnSync(FFMPEG, ["-hide_banner", "-i", path.join(root, file), "-af", "volumedetect", "-f", "null", "-"], {
-        encoding: "utf8",
-      }).stderr,
-    )?.[1] ?? Number.NaN,
-  );
+const colour = (file: string, at: number, crop: string) => colourAt(path.join(root, file), at, crop);
+const near = (actual: number[], expected: readonly number[]) => closeTo(actual, expected, 50);
+const out = (name: string) => {
+  made.push(name);
+  return name;
+};
+const loudness = (file: string) => loudnessOf(path.join(root, file));
 
 beforeAll(async () => {
   process.env.FLICK_FFMPEG ??= FFMPEG;

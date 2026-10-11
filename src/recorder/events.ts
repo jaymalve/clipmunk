@@ -47,8 +47,18 @@ export function createEventLog(options: EventLogOptions) {
     pendingMove = undefined;
     pendingScroll = false;
   };
-  const schedule = () => (frame ||= requestAnimationFrame(drain));
+  const schedule = () => {
+    frame ||= requestAnimationFrame(drain);
+  };
+  /** Write out a move or scroll that is still waiting for the next frame. */
+  const flushPending = () => {
+    if (!frame) return;
+    cancelAnimationFrame(frame);
+    drain();
+  };
 
+  // Each handler takes its own event type; they are stored together as plain listeners.
+  // biome-ignore lint/suspicious/noExplicitAny: the list mixes pointer, focus and keyboard handlers
   const handlers: [string, (event: any) => void][] = [
     [
       "pointermove",
@@ -64,13 +74,15 @@ export function createEventLog(options: EventLogOptions) {
         const wanted = options.cursorOf(event.target);
         const style =
           wanted === "pointer" ? "pointer" : wanted === "text" || wanted === "vertical-text" ? "text" : "default";
-        if (style !== cursor) push({ t: now(), k: "cursor", style: (cursor = style) });
+        if (style === cursor) return;
+        cursor = style;
+        push({ t: now(), k: "cursor", style });
       },
     ],
     [
       "pointerdown",
       (event: PointerEvent) => {
-        if (frame) cancelAnimationFrame(frame), drain(); // the click must come after the move that led to it
+        flushPending(); // the click must come after the move that led to it
         const target =
           event.target instanceof Element ? (event.target.closest(INTERACTIVE) ?? event.target) : document.body;
         push({
@@ -130,7 +142,7 @@ export function createEventLog(options: EventLogOptions) {
     },
     stop() {
       for (const [type, listener] of listeners) removeEventListener(type, listener, { capture: true });
-      if (frame) cancelAnimationFrame(frame), drain();
+      flushPending();
       clearInterval(timer);
       flush();
     },

@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/run";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
+import { colourAt, near } from "../support/media";
 import { FFMPEG, makeTake, QUADRANTS } from "../support/take";
 
 /** The take compositor, editor and export, checked against a synthetic take whose pixels are known. */
@@ -30,8 +30,6 @@ const pixel = (x: number, y: number) =>
     [x, y],
   );
 const seek = (ms: number) => page.evaluate((time) => (window as any).__FLICK__.seek(time), ms);
-const near = (actual: number[], expected: readonly number[], tolerance = 40) =>
-  expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
 const takeFile = (id: string) => path.join(root, ".flick/takes", id, "take.json");
 
 beforeAll(async () => {
@@ -193,26 +191,7 @@ describe("exporting from the editor", () => {
 });
 
 describe("take export", () => {
-  /** Average colour of a region of one frame of a file. */
-  const colour = (file: string, at: number, crop: string) => [
-    ...execFileSync(FFMPEG, [
-      "-loglevel",
-      "error",
-      "-ss",
-      String(at),
-      "-i",
-      path.join(root, file),
-      "-vf",
-      `crop=${crop},scale=1:1`,
-      "-frames:v",
-      "1",
-      "-f",
-      "rawvideo",
-      "-pix_fmt",
-      "rgb24",
-      "-",
-    ]).subarray(0, 3),
-  ];
+  const colour = (file: string, at: number, crop: string) => colourAt(path.join(root, file), at, crop);
 
   it("renders the composited take to an MP4 with the voice track", async () => {
     const output = ".flick/exports/zz-test-take.mp4";

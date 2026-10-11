@@ -540,6 +540,8 @@ Background music is synthesized by `renderMusic` in `core/music.ts`: a pure Type
 
 ### 12.4 Output rules
 
+These rules live in one place, `export/output.ts`, and the scene, take and sequence exporters all use it: `claimOutput` picks a path that overwrites nothing, `workDirectory` makes the scratch folder beside it, `publish` links the result into place, and `cancellation` turns an abort signal into a `check()` and a list of things to stop.
+
 Outputs are project-relative `.mp4` paths. Existing files are never overwritten. Work happens in a temporary directory next to the target and the result is linked into place only on success. Cancellation (signal or job delete) kills the encoder and the browser and publishes nothing.
 
 ### 12.5 Snapshots
@@ -588,6 +590,8 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 
 Every command accepts `--json` and then prints only the operation result. Human output is a separate formatter over the same result.
 
+Each command is one small function: project and listing commands in `cli/commands.ts`, rendering commands in `cli/render-commands.ts`. `cli/run.ts` only parses the arguments and looks the command up in a table; `cli/invocation.ts` defines what a command receives, including the single `print` that serves both output modes.
+
 ---
 
 ## 15. Testing
@@ -612,6 +616,7 @@ Every command accepts `--json` and then prints only the operation result. Human 
 ## 16. Build and release
 
 - TypeScript strict, ES modules only.
+- Biome formats and lints everything (`npm run lint`, `npm run format`; line width 120). `npm run verify` runs the linter, the import-boundary check, the type checker and the unit tests. One rule is off, `noNonNullAssertion`, because strict indexed access makes `!` the normal way to say an index is known to be in range; every other exception is a `biome-ignore` comment that states its reason.
 - `scripts/build.mjs` uses Vite's library mode. The browser entry points (`.`, `./core`, `./studio`) are built in one pass so they share a single copy of the scene context; the CLI is a second, Node-targeted build. `tsc -p tsconfig.build.json` emits declarations. The recorder is a fourth browser entry point (`./recorder`). `mediabunny` stays external, so the host's bundler resolves the one installed copy.
 - `package.json` `files` allow-lists `dist/`. `sideEffects` is false except for the CLI entry, so unused browser code tree-shakes.
 - Releases are published from a clean, verified checkout. Versions are immutable.

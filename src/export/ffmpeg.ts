@@ -14,11 +14,15 @@ export function ffmpegPath(): string {
   try {
     const manifest = createRequire(path.join(process.cwd(), "package.json")).resolve("ffmpeg-static/package.json");
     const binary = path.join(path.dirname(manifest), process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-    if (existsSync(binary)) return (resolved = binary);
+    if (existsSync(binary)) {
+      resolved = binary;
+      return resolved;
+    }
   } catch {
     // not installed; fall through to PATH
   }
-  return (resolved = "ffmpeg");
+  resolved = "ffmpeg";
+  return resolved;
 }
 export const MISSING_FFMPEG =
   "FFmpeg was not found. Install it (https://ffmpeg.org/download.html) so `ffmpeg` is on your PATH, or run `npm install -D ffmpeg-static` in this project, or set FLICK_FFMPEG to its location.";
@@ -402,14 +406,10 @@ export async function joinClips(options: {
     length += clips[index]!.durationMs - fade;
   }
   if (options.overlay.length) {
-    options.overlay.forEach((track, index) =>
-      graph.push(
-        placed(`[${clips.length + index}:a:0]`, track, `o${index}`).replace(
-          `[o${index}]`,
-          `,aformat=channel_layouts=stereo[o${index}]`,
-        ),
-      ),
-    );
+    for (const [index, track] of options.overlay.entries()) {
+      const line = placed(`[${clips.length + index}:a:0]`, track, `o${index}`);
+      graph.push(line.replace(`[o${index}]`, `,aformat=channel_layouts=stereo[o${index}]`));
+    }
     graph.push(
       `[${sound}]${options.overlay.map((_, index) => `[o${index}]`).join("")}amix=inputs=${options.overlay.length + 1}:normalize=0:dropout_transition=0[mixed]`,
     );

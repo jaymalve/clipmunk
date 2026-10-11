@@ -145,7 +145,10 @@ export function evaluateMotion(motion: Motion, elapsedMs: number): MotionState {
     const value = interpolate(track.keyframes, time);
     if (track.target.kind === "surface") {
       let entry = surfaces.get(track.target.id);
-      if (!entry) surfaces.set(track.target.id, (entry = {}));
+      if (!entry) {
+        entry = {};
+        surfaces.set(track.target.id, entry);
+      }
       entry[track.property] = value;
     } else if (track.target.kind === "camera") camera[track.property] = value;
     else focus[track.property] = value;

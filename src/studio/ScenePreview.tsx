@@ -22,6 +22,7 @@ import {
 import { createClock, Scene } from "../react";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
+import { IssueList } from "./IssueList";
 import { MusicControls, useMusicPreview } from "./music";
 import { useNarration } from "./narration";
 import { useClipSession } from "./session";
@@ -139,7 +140,6 @@ export function ScenePreview({
           throw new Error("The scene has unresolved issues. Open it in the studio and fix them before capturing.");
       },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasScene, durationMs, width, height, session.seek]);
 
   const viewport = useRef<HTMLDivElement>(null);
@@ -197,18 +197,12 @@ export function ScenePreview({
       </div>
       <Chrome style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 10 }}>
         {(issues.length > 0 || failure) && (
-          <div className="issues" role="alert">
-            <strong>{failure ? "A scene component failed to render." : "This scene needs a correction."}</strong>
-            <ul>
-              {failure && <li>{failure.message}</li>}
-              {issues.map((issue, index) => (
-                <li key={index}>
-                  {issue.path && <code>{issue.path}: </code>}
-                  {issue.message}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <IssueList
+            issues={issues}
+            title={failure ? "A scene component failed to render." : "This scene needs a correction."}
+          >
+            {failure && <li>{failure.message}</li>}
+          </IssueList>
         )}
         {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
         {exporting && sceneId && <ExportPanel clip={{ sceneId }} daemon={daemon} frame={{ width, height }} />}

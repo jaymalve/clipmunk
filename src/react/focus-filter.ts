@@ -21,7 +21,8 @@ function depthRamps() {
     context.putImageData(image, 0, 0);
     return canvas.toDataURL("image/png");
   };
-  return (ramps = { x: make(256, 1), y: make(1, 256) });
+  ramps = { x: make(256, 1), y: make(1, 256) };
+  return ramps;
 }
 
 const n = (value: number) => +value.toFixed(3);
@@ -65,7 +66,8 @@ export function createFocusFilters(defs: () => SVGDefsElement | null) {
         element.setAttribute("primitiveUnits", "userSpaceOnUse");
         element.setAttribute("color-interpolation-filters", "sRGB");
         container.append(element);
-        filters.set(token, (entry = { element, id, signature: "" }));
+        entry = { element, id, signature: "" };
+        filters.set(token, entry);
       }
       const inner = markup(mask, width, height);
       if (inner !== entry.signature) {

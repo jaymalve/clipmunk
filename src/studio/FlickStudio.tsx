@@ -13,6 +13,7 @@ import {
 } from "../core";
 import { Chrome } from "./Chrome";
 import { type DaemonState, useDaemon } from "./daemon";
+import { IssueList } from "./IssueList";
 import { ScenePreview } from "./ScenePreview";
 import { SequenceEditor } from "./SequenceEditor";
 import { TakeEditor } from "./TakeEditor";
@@ -152,9 +153,11 @@ function Library({ catalog, missing, daemon }: { catalog: SceneCatalog; missing?
   const [draft, setDraft] = useState("");
   useEffect(() => {
     if (daemon?.client)
-      void daemon.client
-        .get<{ sequences: Sequence[]; issues: Issue[] }>("/v1/sequences")
-        .then((result) => result.ok && (setSequences(result.data.sequences), setSequenceIssues(result.data.issues)));
+      void daemon.client.get<{ sequences: Sequence[]; issues: Issue[] }>("/v1/sequences").then((result) => {
+        if (!result.ok) return;
+        setSequences(result.data.sequences);
+        setSequenceIssues(result.data.issues);
+      });
     if (daemon?.client)
       void daemon.client
         .get<{ takes: TakeSummary[] }>("/v1/takes")
@@ -174,19 +177,11 @@ function Library({ catalog, missing, daemon }: { catalog: SceneCatalog; missing?
           )}
         </p>
         {issues.length > 0 && (
-          <div className="issues" role="alert" style={{ marginBottom: 24 }}>
-            <strong>
-              {missing ? `Scene "${missing}" could not be opened.` : "Some scene files need a correction."}
-            </strong>
-            <ul>
-              {issues.map((issue, index) => (
-                <li key={index}>
-                  {issue.path && <code>{issue.path}: </code>}
-                  {issue.message}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <IssueList
+            issues={issues}
+            title={missing ? `Scene "${missing}" could not be opened.` : "Some scene files need a correction."}
+            style={{ marginBottom: 24 }}
+          />
         )}
         <div className="grid">
           {catalog.scenes.map((scene, index) => (
@@ -235,18 +230,7 @@ function Library({ catalog, missing, daemon }: { catalog: SceneCatalog; missing?
                 ? `${sequences.length} sequence${sequences.length === 1 ? "" : "s"} in src/flick/sequences`
                 : "Join scenes and takes into one video, with cuts or fades between them."}
             </p>
-            {sequenceIssues.length > 0 && (
-              <div className="issues" role="alert" style={{ marginBottom: 16 }}>
-                <ul>
-                  {sequenceIssues.map((issue, index) => (
-                    <li key={index}>
-                      {issue.path && <code>{issue.path}: </code>}
-                      {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {sequenceIssues.length > 0 && <IssueList issues={sequenceIssues} style={{ marginBottom: 16 }} />}
             <div className="rows">
               {sequences.map((sequence) => (
                 <a key={sequence.id} className="row" href={href({ sequence: sequence.id })}>

@@ -51,8 +51,10 @@ export async function createTakeRenderer(options: {
   let smoothing = Number.NaN;
   const derive = () => {
     zoomTracks = resolveZoomTracks(take.edit, events, take.source);
-    if (smoothing !== take.edit.cursor.smoothing)
-      cursor = prepareCursor(events, (smoothing = take.edit.cursor.smoothing));
+    if (smoothing !== take.edit.cursor.smoothing) {
+      smoothing = take.edit.cursor.smoothing;
+      cursor = prepareCursor(events, smoothing);
+    }
     if (canvas.width !== take.edit.canvas.width) canvas.width = take.edit.canvas.width;
     if (canvas.height !== take.edit.canvas.height) canvas.height = take.edit.canvas.height;
   };

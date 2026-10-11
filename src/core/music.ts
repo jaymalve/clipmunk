@@ -91,41 +91,52 @@ function chordOn(degree: number, scale: number[], sevenths: boolean): Chord {
   return { root: at(0), tones: [at(0), at(2), at(4), ...(sevenths ? [at(6)] : [])] };
 }
 
-export function renderMusic(request: MusicRequest): RenderedMusic {
-  const sampleRate = request.sampleRate ?? 44100;
-  const length = Math.max(1, Math.round((request.durationMs / 1000) * sampleRate));
-  const left = new Float32Array(length),
-    right = new Float32Array(length);
-  const plan = PLANS[request.style];
-  const rng = random(request.seed + STYLE_SEED[request.style]);
-  const pick = <T>(items: readonly T[]) => items[Math.floor(rng() * items.length)]!;
+type Wave = (phase: number, age: number) => number;
+type Envelope = (age: number, duration: number) => number;
+const sine: Wave = (phase) => Math.sin(phase);
+const saw: Wave = (phase) => 2 * (phase / TAU - Math.floor(phase / TAU + 0.5));
+const triangle: Wave = (phase) => 2 * Math.abs(saw(phase, 0)) - 1;
+/** Fades in over `attack` seconds and out over the last `release` seconds. */
+const swell =
+  (attack: number, release: number): Envelope =>
+  (age, duration) =>
+    Math.min(1, age / attack) * Math.min(1, Math.max(0, (duration - age) / release));
+/** Starts at once and dies away, like a plucked string. */
+const pluck =
+  (decay: number): Envelope =>
+  (age, duration) =>
+    Math.min(1, age / 0.004) * Math.exp(-age / decay) * Math.min(1, Math.max(0, (duration - age) / 0.02));
 
-  const key = pick([-12, -10, -9, -7, -5, -4]); // semitones from A4: roots between A3 and F4
-  const scale = plan.major ? MAJOR : MINOR;
-  const progression = pick(plan.progressions).map((degree) => chordOn(degree, scale, request.style !== "upbeat"));
-  const bpm = request.bpm ?? plan.bpm;
-  const beat = 60 / bpm,
-    bar = beat * 4;
-  const phase = Math.max(0, request.phaseMs ?? 0) / 1000;
-  const seconds = length / sampleRate;
-
-  /** Add a mono signal to both channels, with `pan` from -1 (left) to 1 (right). */
-  const write = (index: number, value: number, pan: number) => {
-    if (index < 0 || index >= length) return;
-    left[index] = left[index]! + value * Math.min(1, 1 - pan);
-    right[index] = right[index]! + value * Math.min(1, 1 + pan);
-  };
-  /** One note: `wave` gives the raw tone for a phase, `shape` its loudness over the note's life. */
-  const note = (
+/** The stereo buffer being filled, and the one way sound gets onto it. */
+type Tape = {
+  sampleRate: number;
+  length: number;
+  left: Float32Array;
+  right: Float32Array;
+  /** One note: `wave` gives the raw tone for a phase, `shape` its loudness over the note's life.
+   * `pan` runs from -1 (left) to 1 (right). A `cutoff` above 0 low-passes the tone.
+   */
+  note(
     start: number,
     duration: number,
     frequency: number,
     level: number,
     pan: number,
-    wave: (phase: number, age: number) => number,
-    shape: (age: number, duration: number) => number,
-    cutoff = 0,
-  ) => {
+    wave: Wave,
+    shape: Envelope,
+    cutoff?: number,
+  ): void;
+};
+
+function createTape(length: number, sampleRate: number): Tape {
+  const left = new Float32Array(length),
+    right = new Float32Array(length);
+  const write = (index: number, value: number, pan: number) => {
+    if (index < 0 || index >= length) return;
+    left[index] = left[index]! + value * Math.min(1, 1 - pan);
+    right[index] = right[index]! + value * Math.min(1, 1 + pan);
+  };
+  const note: Tape["note"] = (start, duration, frequency, level, pan, wave, shape, cutoff = 0) => {
     const from = Math.round(start * sampleRate),
       count = Math.round(duration * sampleRate);
     const step = (frequency * TAU) / sampleRate;
@@ -140,177 +151,154 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
       phase += step;
     }
   };
-  const sine = (phase: number) => Math.sin(phase);
-  const saw = (phase: number) => 2 * (phase / TAU - Math.floor(phase / TAU + 0.5));
-  const triangle = (phase: number) => 2 * Math.abs(saw(phase)) - 1;
-  const swell = (attack: number, release: number) => (age: number, duration: number) =>
-    Math.min(1, age / attack) * Math.min(1, Math.max(0, (duration - age) / release));
-  const pluck = (decay: number) => (age: number, duration: number) =>
-    Math.min(1, age / 0.004) * Math.exp(-age / decay) * Math.min(1, Math.max(0, (duration - age) / 0.02));
+  return { sampleRate, length, left, right, note };
+}
 
-  const noise = random(request.seed * 7 + 13);
-  const kick = (start: number, level: number) =>
-    note(
-      start,
-      0.32,
-      1,
-      level,
-      0,
-      (_phase, age) => Math.sin(TAU * (48 * age + (62 / 28) * (1 - Math.exp(-age * 28)))),
-      (age) => Math.exp(-age / 0.11),
-    );
-  const snare = (start: number, level: number) => {
-    note(start, 0.2, 190, level * 0.5, 0, sine, (age) => Math.exp(-age / 0.05));
+/** Drums made from a pitch-swept sine (kick) and shaped noise (snare, hi-hat). */
+function drumKit(tape: Tape, noise: () => number) {
+  const kickTone: Wave = (_phase, age) => Math.sin(TAU * (48 * age + (62 / 28) * (1 - Math.exp(-age * 28))));
+  /** White noise with its low end removed; `keep` is how much of the previous sample is subtracted. */
+  const hiss = (keep: number): Wave => {
     let previous = 0;
-    note(
-      start,
-      0.2,
-      1,
-      level,
-      0.05,
-      () => {
-        const sample = noise() * 2 - 1,
-          edge = sample - previous * 0.6;
-        previous = sample;
-        return edge;
-      },
-      (age) => Math.exp(-age / 0.07),
-    );
+    return () => {
+      const sample = noise() * 2 - 1,
+        edge = sample - previous * keep;
+      previous = sample;
+      return edge;
+    };
   };
-  const hat = (start: number, level: number, pan: number) => {
-    let previous = 0;
-    note(
-      start,
-      0.06,
-      1,
-      level,
-      pan,
-      () => {
-        const sample = noise() * 2 - 1,
-          edge = sample - previous;
-        previous = sample;
-        return edge;
-      },
-      (age) => Math.exp(-age / 0.018),
-    );
+  return {
+    kick: (start: number, level: number) =>
+      tape.note(start, 0.32, 1, level, 0, kickTone, (age) => Math.exp(-age / 0.11)),
+    snare(start: number, level: number) {
+      tape.note(start, 0.2, 190, level * 0.5, 0, sine, (age) => Math.exp(-age / 0.05));
+      tape.note(start, 0.2, 1, level, 0.05, hiss(0.6), (age) => Math.exp(-age / 0.07));
+    },
+    hat: (start: number, level: number, pan: number) =>
+      tape.note(start, 0.06, 1, level, pan, hiss(1), (age) => Math.exp(-age / 0.018)),
   };
+}
 
-  const bars = Math.ceil((seconds + phase) / bar) + 1;
-  for (let index = 0; index < bars; index++) {
-    const start = index * bar - phase;
-    const chord = progression[Math.floor(index / plan.barsPerChord) % progression.length]!;
-    const opensChord = index % plan.barsPerChord === 0;
-    const swung = (eighth: number) => start + eighth * (beat / 2) + (eighth % 2 ? plan.swing * beat : 0);
-    const tone = (semitone: number) => NOTE(key + semitone);
+/** What one bar needs to know: where it starts, its chord, and the piece's shared settings. */
+type Bar = {
+  tape: Tape;
+  style: MusicStyle;
+  plan: Plan;
+  drums: ReturnType<typeof drumKit>;
+  rng: () => number;
+  start: number;
+  beat: number;
+  chord: Chord;
+  opensChord: boolean;
+  /** Pitch of a scale step in this piece's key. */
+  tone: (semitone: number) => number;
+  /** Time of an eighth note in this bar, with the style's swing. */
+  swung: (eighth: number) => number;
+};
 
-    // Chords: two slightly detuned voices per tone, held for the whole chord.
-    if (opensChord) {
-      const held = bar * plan.barsPerChord;
-      chord.tones.forEach((semitone, voice) => {
-        const level = (request.style === "lofi" ? 0.07 : 0.05) / Math.sqrt(chord.tones.length / 3);
-        const cutoff = request.style === "lofi" ? 1100 : 1700;
-        for (const [detune, pan] of [
-          [-0.06, -0.55],
-          [0.06, 0.55],
-        ] as const)
-          note(
-            start,
-            held + 0.4,
-            tone(semitone - 12 + detune),
-            level,
-            pan * (voice % 2 ? 1 : -1),
-            request.style === "lofi" ? triangle : saw,
-            swell(0.25, 0.5),
-            cutoff,
-          );
-      });
-    }
+/** Chords: two slightly detuned voices per tone, held for the whole chord. */
+function playChords({ tape, style, plan, start, beat, chord, tone }: Bar) {
+  const held = beat * 4 * plan.barsPerChord;
+  chord.tones.forEach((semitone, voice) => {
+    const level = (style === "lofi" ? 0.07 : 0.05) / Math.sqrt(chord.tones.length / 3);
+    const cutoff = style === "lofi" ? 1100 : 1700;
+    for (const [detune, pan] of [
+      [-0.06, -0.55],
+      [0.06, 0.55],
+    ] as const)
+      tape.note(
+        start,
+        held + 0.4,
+        tone(semitone - 12 + detune),
+        level,
+        pan * (voice % 2 ? 1 : -1),
+        style === "lofi" ? triangle : saw,
+        swell(0.25, 0.5),
+        cutoff,
+      );
+  });
+}
 
-    // Bass.
-    const bassNote = tone(chord.root - 24);
-    if (request.style === "upbeat") {
-      for (let eighth = 0; eighth < 8; eighth++)
-        note(swung(eighth), beat * 0.42, eighth === 6 ? bassNote * 1.5 : bassNote, 0.2, 0, triangle, pluck(0.2), 500);
-    } else {
-      for (const eighth of [0, 3, 5]) note(swung(eighth), beat * 0.8, bassNote, 0.22, 0, sine, pluck(0.35));
-    }
-
-    // Drums.
-    if (request.style === "upbeat") {
-      for (let quarter = 0; quarter < 4; quarter++) {
-        kick(start + quarter * beat, 0.6);
-        if (quarter % 2) snare(start + quarter * beat, 0.2);
-        hat(start + quarter * beat + beat / 2, 0.1, 0.25);
-      }
-    } else if (request.style === "lofi") {
-      for (const eighth of [0, 5]) kick(swung(eighth), 0.5);
-      for (const eighth of [2, 6]) snare(swung(eighth), 0.17);
-      for (let eighth = 0; eighth < 8; eighth++) hat(swung(eighth), 0.045 + rng() * 0.045, eighth % 2 ? 0.3 : -0.2);
-    }
-
-    // Melody: notes drawn from the chord, with an echo for space.
-    const density = request.style === "upbeat" ? 0.72 : 0.36;
-    for (let eighth = 0; eighth < 8; eighth++) {
-      if (rng() > density) continue;
-      const semitone = pick(chord.tones) + (rng() < 0.3 ? 12 : 0);
-      const level = request.style === "upbeat" ? 0.075 : 0.085;
-      const decay = request.style === "lofi" ? 0.45 : 0.22;
-      const voice = (phase: number) =>
-        sine(phase) + (request.style === "lofi" ? 0.3 * sine(phase * 2) : 0.2 * triangle(phase * 2));
-      for (const [echo, fade, pan] of [
-        [0, 1, -0.2],
-        [beat * 0.75, 0.38, 0.5],
-        [beat * 1.5, 0.16, -0.5],
-      ] as const)
-        note(swung(eighth) + echo, decay * 3, tone(semitone), level * fade, pan, voice, pluck(decay));
-    }
+function playBass({ tape, style, beat, chord, tone, swung }: Bar) {
+  const root = tone(chord.root - 24);
+  if (style === "upbeat") {
+    // Driving eighth notes, lifting a fifth near the end of the bar.
+    for (let eighth = 0; eighth < 8; eighth++)
+      tape.note(swung(eighth), beat * 0.42, eighth === 6 ? root * 1.5 : root, 0.2, 0, triangle, pluck(0.2), 500);
+  } else {
+    for (const eighth of [0, 3, 5]) tape.note(swung(eighth), beat * 0.8, root, 0.22, 0, sine, pluck(0.35));
   }
+}
 
-  // Accents: a breath of noise rising into a low thump, to underline a cut.
-  const accentLevel = Math.max(0, Math.min(1, request.accentLevel ?? 1));
-  for (const accent of request.accentsMs ?? []) {
+function playDrums({ style, drums, rng, start, beat, swung }: Bar) {
+  if (style === "upbeat") {
+    for (let quarter = 0; quarter < 4; quarter++) {
+      drums.kick(start + quarter * beat, 0.6);
+      if (quarter % 2) drums.snare(start + quarter * beat, 0.2);
+      drums.hat(start + quarter * beat + beat / 2, 0.1, 0.25);
+    }
+  } else {
+    for (const eighth of [0, 5]) drums.kick(swung(eighth), 0.5);
+    for (const eighth of [2, 6]) drums.snare(swung(eighth), 0.17);
+    for (let eighth = 0; eighth < 8; eighth++) drums.hat(swung(eighth), 0.045 + rng() * 0.045, eighth % 2 ? 0.3 : -0.2);
+  }
+}
+
+/** Melody: notes drawn from the chord, each with two quieter echoes for space. */
+function playMelody({ tape, style, rng, beat, chord, tone, swung }: Bar) {
+  const density = style === "upbeat" ? 0.72 : 0.36;
+  const level = style === "upbeat" ? 0.075 : 0.085;
+  const decay = style === "lofi" ? 0.45 : 0.22;
+  const voice: Wave = (phase) =>
+    sine(phase, 0) + (style === "lofi" ? 0.3 * sine(phase * 2, 0) : 0.2 * triangle(phase * 2, 0));
+  for (let eighth = 0; eighth < 8; eighth++) {
+    if (rng() > density) continue;
+    const semitone = chord.tones[Math.floor(rng() * chord.tones.length)]! + (rng() < 0.3 ? 12 : 0);
+    for (const [echo, fade, pan] of [
+      [0, 1, -0.2],
+      [beat * 0.75, 0.38, 0.5],
+      [beat * 1.5, 0.16, -0.5],
+    ] as const)
+      tape.note(swung(eighth) + echo, decay * 3, tone(semitone), level * fade, pan, voice, pluck(decay));
+  }
+}
+
+/** Accents: a breath of noise rising into a low thump, to underline a moment. */
+function playAccents(tape: Tape, noise: () => number, accentsMs: readonly number[], accentLevel: number) {
+  const seconds = tape.length / tape.sampleRate;
+  const level = Math.max(0, Math.min(1, accentLevel));
+  const thump: Wave = (_phase, age) => Math.sin(TAU * (42 * age + (40 / 18) * (1 - Math.exp(-age * 18))));
+  for (const accent of accentsMs) {
     const at = accent / 1000;
     if (at < 0.4 || at > seconds - 0.2) continue;
     let previous = 0;
-    note(
-      at - 0.35,
-      0.35,
-      1,
-      0.11 * accentLevel,
-      0,
-      () => {
-        const sample = noise() * 2 - 1;
-        previous += 0.25 * (sample - previous);
-        return sample - previous;
-      },
-      (age) => (age / 0.35) ** 2,
-    );
-    note(
-      at,
-      0.5,
-      1,
-      0.42 * accentLevel,
-      0,
-      (_phase, age) => Math.sin(TAU * (42 * age + (40 / 18) * (1 - Math.exp(-age * 18)))),
-      (age) => Math.exp(-age / 0.16),
-    );
+    const breath: Wave = () => {
+      const sample = noise() * 2 - 1;
+      previous += 0.25 * (sample - previous);
+      return sample - previous;
+    };
+    tape.note(at - 0.35, 0.35, 1, 0.11 * level, 0, breath, (age) => (age / 0.35) ** 2);
+    tape.note(at, 0.5, 1, 0.42 * level, 0, thump, (age) => Math.exp(-age / 0.16));
   }
+}
 
-  if (request.style === "lofi") {
-    // Tape hiss and the odd crackle.
-    const dust = random(request.seed * 31 + 5);
-    for (let i = 0; i < length; i++) {
-      const hiss = (dust() * 2 - 1) * 0.006 + (dust() > 0.9996 ? (dust() * 2 - 1) * 0.12 : 0);
-      left[i] = left[i]! + hiss;
-      right[i] = right[i]! + hiss;
-    }
+/** Lo-fi's tape hiss and the odd crackle. */
+function addTapeNoise(tape: Tape, seed: number) {
+  const dust = random(seed * 31 + 5);
+  for (let i = 0; i < tape.length; i++) {
+    const hiss = (dust() * 2 - 1) * 0.006 + (dust() > 0.9996 ? (dust() * 2 - 1) * 0.12 : 0);
+    tape.left[i] = tape.left[i]! + hiss;
+    tape.right[i] = tape.right[i]! + hiss;
   }
+}
 
-  // Master: a fixed gain per style (never one measured from the audio, so a longer clip or an
-  // added accent cannot change how loud the rest is), peaks rounded off instead of clipped,
-  // and the very top softened.
-  const drive = DRIVE[request.style];
-  const top = 1 - Math.exp((-TAU * (request.style === "upbeat" ? 11000 : 6000)) / sampleRate);
+/** Master: a fixed gain per style (never one measured from the audio, so a longer clip or an
+ * added accent cannot change how loud the rest is), peaks rounded off instead of clipped, the
+ * very top softened, and a fade at each end.
+ */
+function master({ left, right, length, sampleRate }: Tape, style: MusicStyle) {
+  const drive = DRIVE[style];
+  const top = 1 - Math.exp((-TAU * (style === "upbeat" ? 11000 : 6000)) / sampleRate);
   let smoothLeft = 0,
     smoothRight = 0;
   for (let i = 0; i < length; i++) {
@@ -327,7 +315,53 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
     left[i] = left[i]! * level * fade;
     right[i] = right[i]! * level * fade;
   }
-  return { sampleRate, left, right, bpm };
+}
+
+export function renderMusic(request: MusicRequest): RenderedMusic {
+  const { style } = request;
+  const sampleRate = request.sampleRate ?? 44100;
+  const tape = createTape(Math.max(1, Math.round((request.durationMs / 1000) * sampleRate)), sampleRate);
+  const plan = PLANS[style];
+  // Two independent streams: one chooses the notes, the other is the sound of the drums and accents.
+  const rng = random(request.seed + STYLE_SEED[style]);
+  const noise = random(request.seed * 7 + 13);
+  const pick = <T>(items: readonly T[]) => items[Math.floor(rng() * items.length)]!;
+
+  const key = pick([-12, -10, -9, -7, -5, -4]); // semitones from A4: roots between A3 and F4
+  const scale = plan.major ? MAJOR : MINOR;
+  const progression = pick(plan.progressions).map((degree) => chordOn(degree, scale, style !== "upbeat"));
+  const bpm = request.bpm ?? plan.bpm;
+  const beat = 60 / bpm,
+    bar = beat * 4;
+  const phase = Math.max(0, request.phaseMs ?? 0) / 1000;
+  const drums = drumKit(tape, noise);
+
+  const bars = Math.ceil((tape.length / sampleRate + phase) / bar) + 1;
+  for (let index = 0; index < bars; index++) {
+    const start = index * bar - phase;
+    const current: Bar = {
+      tape,
+      style,
+      plan,
+      drums,
+      rng,
+      start,
+      beat,
+      chord: progression[Math.floor(index / plan.barsPerChord) % progression.length]!,
+      opensChord: index % plan.barsPerChord === 0,
+      tone: (semitone) => NOTE(key + semitone),
+      swung: (eighth) => start + eighth * (beat / 2) + (eighth % 2 ? plan.swing * beat : 0),
+    };
+    // The order matters: each part draws from the same random stream.
+    if (current.opensChord) playChords(current);
+    playBass(current);
+    playDrums(current);
+    playMelody(current);
+  }
+  playAccents(tape, noise, request.accentsMs ?? [], request.accentLevel ?? 1);
+  if (style === "lofi") addTapeNoise(tape, request.seed);
+  master(tape, style);
+  return { sampleRate, left: tape.left, right: tape.right, bpm };
 }
 
 /** The style's own tempo, before any fitting. */
@@ -404,8 +438,9 @@ export function encodeWav(music: RenderedMusic): Uint8Array {
   const frames = music.left.length;
   const bytes = new Uint8Array(44 + frames * 4);
   const view = new DataView(bytes.buffer);
-  const text = (offset: number, value: string) =>
-    [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+  const text = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index++) view.setUint8(offset + index, value.charCodeAt(index));
+  };
   text(0, "RIFF");
   view.setUint32(4, 36 + frames * 4, true);
   text(8, "WAVEfmt ");

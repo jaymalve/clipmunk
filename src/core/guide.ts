@@ -233,7 +233,7 @@ export function formatGuide(guide: Guide = getGuide()): string {
     "",
     "## Workflow",
   ];
-  guide.workflow.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+  for (const [index, step] of guide.workflow.entries()) lines.push(`${index + 1}. ${step}`);
   lines.push("", "## Concepts");
   for (const concept of guide.concepts)
     lines.push(

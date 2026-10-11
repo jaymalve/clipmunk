@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Take, type TakeEvent, TakeEventSchema, validateTake } from "../../src/core";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
+import { colourAt } from "../support/media";
 
 /** Records the example app for real: headed Chromium capturing its own tab, the HUD,
  * the event log, chunked upload to the daemon and ingest. Needs a display (xvfb-run).
@@ -31,27 +32,6 @@ async function recording() {
     });
 }
 
-/** Average colour of a region of one video frame, as [r, g, b]. */
-function colourAt(file: string, seconds: number, crop: string): number[] {
-  const bytes = execFileSync(ffmpeg, [
-    "-loglevel",
-    "error",
-    "-ss",
-    String(seconds),
-    "-i",
-    file,
-    "-vf",
-    `crop=${crop},scale=1:1`,
-    "-frames:v",
-    "1",
-    "-f",
-    "rawvideo",
-    "-pix_fmt",
-    "rgb24",
-    "-",
-  ]);
-  return [...bytes.subarray(0, 3)];
-}
 async function record(
   options: { camera: boolean; microphone: boolean },
   during: () => Promise<void>,
@@ -204,9 +184,10 @@ describe("recorder", () => {
         "position:fixed;left:40px;top:300px;width:120px;height:120px;background:rgb(0,160,0);z-index:5";
       document.body.append(box);
       // Only the click on the page counts, not the one on the recorder's own Record button.
-      addEventListener("pointerdown", (event) => event.clientX === 700 && (box.style.background = "rgb(255,0,0)"), {
-        capture: true,
-      });
+      const turnRed = (event: PointerEvent) => {
+        if (event.clientX === 700) box.style.background = "rgb(255,0,0)";
+      };
+      addEventListener("pointerdown", turnRed, { capture: true });
     });
     const { take, events, dir } = await record({ camera: false, microphone: false }, async () => {
       await page.waitForTimeout(1800); // nothing repaints: a tab capture emits no frames here

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { CatalogScene, Issue, Sequence, SequenceItem, TakeSummary } from "../core";
 import type { DaemonClient } from "../recorder";
+import { SaveStatus, useAutosave } from "./autosave";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel, sizesFor } from "./daemon";
+import { IssueList } from "./IssueList";
 import { MusicControls } from "./music";
 
 /** Builds a sequence: an ordered list of scenes and takes with a cut or a fade between
@@ -59,19 +61,7 @@ export function SequenceEditor({
           <h1>{id}</h1>
         </header>
         {daemon?.problem && <p className="note">The daemon is not connected. {daemon.problem.message}</p>}
-        {issues && (
-          <div className="issues" role="alert">
-            <strong>This sequence cannot be opened.</strong>
-            <ul>
-              {issues.map((issue, index) => (
-                <li key={index}>
-                  {issue.path && <code>{issue.path}: </code>}
-                  {issue.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {issues && <IssueList issues={issues} title="This sequence cannot be opened." />}
       </div>
     </Chrome>
   );
@@ -87,29 +77,16 @@ function Editor(props: {
 }) {
   const { client } = props;
   const [sequence, setSequence] = useState(props.initial);
-  const [saveState, setSaveState] = useState<"saved" | "saving" | string>("saved");
   const [exporting, setExporting] = useState(false);
-  const saved = useRef(props.initial);
-  const pending = useRef<Promise<void>>(Promise.resolve());
-  const save = (next: Sequence) =>
-    (pending.current = pending.current.then(async () => {
-      if (next === saved.current) return;
-      setSaveState("saving");
-      const result = await client.put<Sequence>(
-        `/v1/sequences/${next.id}`,
-        new Blob([JSON.stringify(next)], { type: "application/json" }),
-      );
-      if (result.ok) saved.current = next;
-      setSaveState(result.ok ? "saved" : result.issues.map((issue) => issue.message).join(" "));
-    }));
-  useEffect(() => {
-    if (sequence === saved.current) return;
-    const timer = setTimeout(() => void save(sequence), 400);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sequence]);
-  const latest = useRef(sequence);
-  latest.current = sequence;
+  const save = useAutosave(
+    sequence,
+    async (next) => {
+      const body = new Blob([JSON.stringify(next)], { type: "application/json" });
+      const result = await client.put<Sequence>(`/v1/sequences/${next.id}`, body);
+      return result.ok ? undefined : result.issues.map((issue) => issue.message).join(" ");
+    },
+    400,
+  );
 
   const choices: Choice[] = [
     ...props.scenes.map((scene) => ({ kind: "scene" as const, id: scene.id, title: scene.title })),
@@ -146,9 +123,7 @@ function Editor(props: {
               setSequence((current) => ({ ...current, title: title || current.title }));
             }}
           />
-          <span className={saveState === "saved" || saveState === "saving" ? "save" : "save bad"}>
-            {saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving…" : saveState}
-          </span>
+          <SaveStatus state={save.state} />
           <button type="button" onClick={() => setExporting((value) => !value)}>
             Export
           </button>
@@ -162,9 +137,7 @@ function Editor(props: {
             Delete
           </button>
         </header>
-        {exporting && (
-          <ExportPanel clip={{ sequenceId: sequence.id }} daemon={props.daemon} before={() => save(latest.current)} />
-        )}
+        {exporting && <ExportPanel clip={{ sequenceId: sequence.id }} daemon={props.daemon} before={save.flush} />}
         <div className="settings">
           <label>
             Shape
@@ -224,6 +197,7 @@ function Editor(props: {
         </div>
         <ol className="clips">
           {sequence.items.map((item, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a clip may appear twice, so its position is its only identity
             <li key={index}>
               {index > 0 && (
                 <div className="join">

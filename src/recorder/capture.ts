@@ -81,7 +81,8 @@ function preparePage() {
       const until = performance.now() + ms;
       let flip = 0;
       const step = () => {
-        tick.style.opacity = String(0.99 - (flip ^= 1) * 0.01);
+        flip ^= 1;
+        tick.style.opacity = String(0.99 - flip * 0.01);
         if (performance.now() < until && tick.isConnected) requestAnimationFrame(step);
       };
       step();
@@ -340,6 +341,7 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
         );
       mark();
       const heartbeat = setInterval(mark, 1000);
+      // biome-ignore lint/suspicious/noExplicitAny: the list mixes error, rejection and lifecycle handlers
       const watch: [EventTarget, string, (event: any) => void][] = [
         [window, "pagehide", () => note("pagehide: the page is unloading (reload or navigation) while recording")],
         [window, "error", (event: ErrorEvent) => note(`window error: ${event.message}`)],

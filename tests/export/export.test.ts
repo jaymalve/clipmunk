@@ -11,7 +11,10 @@ const root = path.resolve("examples/vite-app");
 const restore = new Map<string, string>();
 const made: string[] = [];
 let server: ViteDevServer, url: string;
-const out = (name: string) => (made.push(name), name);
+const out = (name: string) => {
+  made.push(name);
+  return name;
+};
 
 beforeAll(async () => {
   process.env.FLICK_FFMPEG ??= path.resolve("node_modules/ffmpeg-static/ffmpeg");

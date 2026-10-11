@@ -123,8 +123,12 @@ export function mountRecorderHud(): RecorderHud {
       return;
     }
     const unsupported = isSupported();
-    if (unsupported)
-      return void ((status.textContent = unsupported), (status.className = "status error"), (action.disabled = true));
+    if (unsupported) {
+      status.textContent = unsupported;
+      status.className = "status error";
+      action.disabled = true;
+      return;
+    }
     status.textContent = "Connecting…";
     const daemon = await connectDaemon();
     if (daemon.problem) {
@@ -140,8 +144,12 @@ export function mountRecorderHud(): RecorderHud {
     render(recorder.state);
   }
 
-  mic.onclick = () => ((options.microphone = !options.microphone), recorder && render(recorder.state));
-  camera.onclick = () => ((options.camera = !options.camera), recorder && render(recorder.state));
+  const toggle = (option: "microphone" | "camera") => () => {
+    options[option] = !options[option];
+    if (recorder) render(recorder.state);
+  };
+  mic.onclick = toggle("microphone");
+  camera.onclick = toggle("camera");
   action.onclick = () => {
     if (!recorder) return void connect();
     if (recorder.state.phase === "recording") return void recorder.stop();
@@ -177,5 +185,6 @@ export function mountRecorderHud(): RecorderHud {
       return recorder;
     },
   };
-  return (mounted = hud);
+  mounted = hud;
+  return hud;
 }

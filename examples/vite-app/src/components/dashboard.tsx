@@ -60,8 +60,8 @@ export function MetricCard({ index }: { index: number }) {
 }
 export const Metrics = () => (
   <div className="cards">
-    {METRICS.map((_, index) => (
-      <MetricCard key={index} index={index} />
+    {METRICS.map((metric, index) => (
+      <MetricCard key={metric.label} index={index} />
     ))}
   </div>
 );
@@ -78,7 +78,8 @@ export function RevenueChart({ progress = 1 }: { progress?: number }) {
   return (
     <div className="panel">
       <h2>Revenue, last 12 weeks</h2>
-      <svg className="chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <svg className="chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img">
+        <title>Revenue over the last 12 weeks</title>
         <defs>
           <linearGradient id="orbit-fill" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0" stopColor="#6366f1" stopOpacity=".28" />
