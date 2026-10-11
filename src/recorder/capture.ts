@@ -168,6 +168,239 @@ async function measureLatency(stream: MediaStream): Promise<number> {
   }
 }
 
+type Note = (text: string) => void;
+type Page = ReturnType<typeof preparePage>;
+
+/** Saving needs the daemon and FFmpeg on its side. Find out before recording, not after. */
+async function daemonProblem(client: DaemonClient): Promise<string | undefined> {
+  const status = await client.get<DaemonStatus>("/v1/status");
+  if (!status.ok) return status.issues[0]!.message;
+  if (!status.data.ffmpeg)
+    return "The Flick daemon cannot find FFmpeg, which it needs to save a recording. Install FFmpeg, or run `npm install -D ffmpeg-static` in your project, then restart `npx flick dev`.";
+  return undefined;
+}
+
+/** Ask for the camera and microphone, then for the tab. Every stream is added to `streams`
+ * as soon as it exists, so the caller can stop them all even if a later prompt is refused.
+ */
+async function openStreams(options: RecorderOptions, streams: MediaStream[], step: (text: string) => void) {
+  // The camera and microphone come first, while the cursor is still visible.
+  let voice: MediaStream | undefined;
+  if (options.camera || options.microphone) {
+    step("Allow the camera or microphone…");
+    voice = await navigator.mediaDevices.getUserMedia({
+      video: options.camera ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } : false,
+      audio: options.microphone ? { echoCancellation: true, noiseSuppression: true } : false,
+    });
+    streams.push(voice);
+  }
+  step("Choose this tab to share…");
+  const display = await navigator.mediaDevices.getDisplayMedia({
+    video: { frameRate: 60 },
+    audio: false,
+    preferCurrentTab: true,
+    selfBrowserSurface: "include",
+  } as DisplayMediaStreamOptions);
+  streams.push(display);
+  const screenTrack = display.getVideoTracks()[0] as RestrictableTrack;
+  if (screenTrack.getSettings().displaySurface !== "browser")
+    throw new Error("Choose “This tab” in the sharing dialog. Flick records the app's own tab.");
+  return { voice, display, screenTrack };
+}
+
+/** Create the take with the daemon and open its log with the conditions it was recorded under. */
+async function openTake(client: DaemonClient, background: string, options: RecorderOptions, latencyMs: number) {
+  const created = await client.post<{ id: string }>("/v1/takes", {
+    width: innerWidth,
+    height: innerHeight,
+    dpr: devicePixelRatio,
+    background,
+  });
+  if (!created.ok) throw new Error(created.issues[0]!.message);
+  const takeId = created.data.id;
+  const note: Note = (text) => client.note(`/v1/takes/${takeId}/log`, text);
+  note(
+    `start ${innerWidth}x${innerHeight}@${devicePixelRatio} latency=${latencyMs}ms camera=${options.camera} microphone=${options.microphone} url=${location.pathname}${location.search} ua=${navigator.userAgent}`,
+  );
+  return { takeId, note };
+}
+
+/** Sends a take's chunks to the daemon. Each track uploads strictly in order; a failed chunk
+ * is retried before the next is sent. `onFailure` runs once a chunk is given up on.
+ */
+function createUploader(client: DaemonClient, takeId: string, note: Note, onFailure: () => void) {
+  let error: string | undefined;
+  const queues = new Map<TakeTrack, { seq: number; tail: Promise<void> }>();
+  const send = async (track: TakeTrack, seq: number, data: Blob) => {
+    for (let attempt = 0; attempt < 4 && !error; attempt++) {
+      const result: Result<unknown> = await client.put(`/v1/takes/${takeId}/media/${track}?seq=${seq}`, data);
+      if (result.ok) return;
+      if (result.issues[0]!.code !== "daemon-unreachable" || attempt === 3) {
+        error = result.issues[0]!.message;
+        note(`upload failed ${track}#${seq}: ${error}`);
+        onFailure();
+      } else await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  };
+  return {
+    upload(track: TakeTrack, data: Blob) {
+      if (!data.size) return;
+      const queue = queues.get(track) ?? { seq: 0, tail: Promise.resolve() };
+      queues.set(track, queue);
+      const seq = queue.seq++;
+      queue.tail = queue.tail.then(() => send(track, seq, data));
+    },
+    /** Resolves when everything handed over so far has been sent or given up on. */
+    settled: () => Promise.all([...queues.values()].map((queue) => queue.tail)),
+    get error() {
+      return error;
+    },
+  };
+}
+
+/** Start a MediaRecorder that hands over a chunk every second. */
+function recordStream(
+  stream: MediaStream,
+  format: { mimeType: string | undefined; bitsPerSecond: number },
+  onData: (data: Blob) => void,
+  onError: (message: string) => void,
+) {
+  const recorder = new MediaRecorder(stream, format);
+  recorder.ondataavailable = (event) => onData(event.data);
+  recorder.onerror = (event) => onError((event as ErrorEvent).error?.message ?? "unknown");
+  const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
+  // The file's clock starts when start() is called, at the first frame that follows. The
+  // `start` event fires a few hundred milliseconds later (measured), so it is not used.
+  const started = performance.now();
+  recorder.start(1000);
+  return { recorder, started, stopped };
+}
+
+/** A full page load ends a tab capture. Keep enough in sessionStorage, refreshed every
+ * second, to save what was uploaded. Returns the function that stops refreshing.
+ */
+function keepMarker(takeId: string, startedAt: number, payload: Record<string, unknown>): () => void {
+  const mark = () => {
+    const marker: Marker = {
+      takeId,
+      startedAt: Date.now() - (performance.now() - startedAt),
+      aliveAt: Date.now(),
+      payload,
+    };
+    sessionStorage.setItem(MARKER_KEY, JSON.stringify(marker));
+  };
+  mark();
+  const heartbeat = setInterval(mark, 1000);
+  return () => clearInterval(heartbeat);
+}
+
+/** Write what happens to the page during a recording into the take's log. Returns the undo. */
+function watchPage(note: Note, screenTrack: MediaStreamTrack): () => void {
+  // biome-ignore lint/suspicious/noExplicitAny: the list mixes error, rejection and lifecycle handlers
+  const watch: [EventTarget, string, (event: any) => void][] = [
+    [window, "pagehide", () => note("pagehide: the page is unloading (reload or navigation) while recording")],
+    [window, "error", (event: ErrorEvent) => note(`window error: ${event.message}`)],
+    [
+      window,
+      "unhandledrejection",
+      (event: PromiseRejectionEvent) => note(`unhandled rejection: ${String(event.reason)}`),
+    ],
+    [document, "visibilitychange", () => note(`visibility ${document.visibilityState}`)],
+    [screenTrack, "mute", () => note("screen track muted")],
+  ];
+  for (const [target, type, listener] of watch) target.addEventListener(type, listener);
+  return () => {
+    for (const [target, type, listener] of watch) target.removeEventListener(type, listener);
+  };
+}
+
+type Capture = {
+  client: DaemonClient;
+  takeId: string;
+  note: Note;
+  page: Page;
+  display: MediaStream;
+  voice: MediaStream | undefined;
+  latencyMs: number;
+  ignore: (event: Event) => boolean;
+  /** Something went wrong that recording on cannot fix; the recording should stop. */
+  onFault: () => void;
+};
+
+/** Start recording every track of a take. From here until `finish`, the take is running. */
+function beginCapture(capture: Capture) {
+  const { takeId, note, page, display, voice, latencyMs } = capture;
+  const uploader = createUploader(capture.client, takeId, note, capture.onFault);
+  const record = (track: TakeTrack, stream: MediaStream, mimeType: string | undefined, bitsPerSecond: number) =>
+    recordStream(
+      stream,
+      { mimeType, bitsPerSecond },
+      (data) => uploader.upload(track, data),
+      (message) => {
+        note(`${track} recorder error: ${message}`);
+        capture.onFault();
+      },
+    );
+
+  page.hideCursor();
+  page.pulse(800);
+  const screenTrack = display.getVideoTracks()[0]!;
+  const pixels = screenTrack.getSettings().width! * screenTrack.getSettings().height!;
+  const screen = record("screen", display, pick(SCREEN_TYPES), Math.round(Math.min(24e6, Math.max(6e6, pixels * 4))));
+  const hasCamera = !!voice?.getVideoTracks().length,
+    hasVoice = !!voice?.getAudioTracks().length;
+  const sideTypes = hasCamera ? ["video/webm;codecs=vp8,opus", "video/webm"] : ["audio/webm;codecs=opus", "audio/webm"];
+  const side = voice ? record(hasCamera ? "cam" : "mic", voice, pick(sideTypes), hasCamera ? 2.5e6 : 128e3) : undefined;
+  const startedAt = screen.started; // zero of the take clock
+  const sideOffset = side ? Math.round(side.started - startedAt) : 0;
+  const log = createEventLog({
+    clock: () => performance.now() - startedAt,
+    flush: (lines) => uploader.upload("events", new Blob([lines])),
+    cursorOf: page.cursorOf,
+    ignore: capture.ignore,
+  });
+  log.start();
+
+  const payloadFor = (durationMs: number) => ({
+    durationMs,
+    screen: { latencyMs },
+    ...(side && hasCamera ? { cam: { offsetMs: sideOffset, hasAudio: hasVoice } } : {}),
+    ...(side && !hasCamera ? { mic: { offsetMs: sideOffset } } : {}),
+  });
+  const stopMarker = keepMarker(takeId, startedAt, payloadFor(0));
+  const unwatch = watchPage(note, screenTrack);
+
+  return {
+    startedAt,
+    camera: hasCamera ? voice : undefined,
+    /** The take ends now: fix its length and stop watching the page. Returns what to finalise it with. */
+    halt() {
+      const durationMs = performance.now() - startedAt;
+      note(`stop after ${Math.round(durationMs)}ms`);
+      stopMarker();
+      unwatch();
+      return payloadFor(durationMs);
+    },
+    /** Stop the recorders, `release` the streams, and wait for the last chunks to reach the daemon.
+     * Resolves with the upload failure, if there was one.
+     */
+    async finish(release: () => void): Promise<string | undefined> {
+      log.stop();
+      for (const item of [screen, side]) if (item && item.recorder.state !== "inactive") item.recorder.stop();
+      await Promise.all([screen.stopped, side?.stopped]);
+      release();
+      await uploader.settled();
+      return uploader.error;
+    },
+  };
+}
+
+function explain(error: unknown): string {
+  if (error instanceof DOMException && error.name === "NotAllowedError")
+    return "Recording was not allowed. Approve the sharing, camera and microphone prompts and try again.";
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function createRecorder(client: DaemonClient, ignore: (event: Event) => boolean) {
   let state: RecorderState = { phase: "idle" };
   const listeners = new Set<(state: RecorderState) => void>();
@@ -175,6 +408,7 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
     state = next;
     for (const listener of [...listeners]) listener(next);
   };
+  const step = (text: string) => set({ phase: "starting", step: text });
   let stopActive: (() => Promise<void>) | undefined;
 
   /** Finalise a take whose chunks are with the daemon. A failure keeps everything and can be retried. */
@@ -196,45 +430,18 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
     if (state.phase === "starting" || state.phase === "recording" || state.phase === "saving") return;
     const unsupported = isSupported();
     if (unsupported) return set({ phase: "error", message: unsupported });
-    set({ phase: "starting", step: "Checking the daemon…" });
-    // Saving needs FFmpeg on the daemon's side. Find out before recording, not after.
-    const status = await client.get<DaemonStatus>("/v1/status");
-    if (!status.ok) return set({ phase: "error", message: status.issues[0]!.message });
-    if (!status.data.ffmpeg)
-      return set({
-        phase: "error",
-        message:
-          "The Flick daemon cannot find FFmpeg, which it needs to save a recording. Install FFmpeg, or run `npm install -D ffmpeg-static` in your project, then restart `npx flick dev`.",
-      });
+    step("Checking the daemon…");
+    const problem = await daemonProblem(client);
+    if (problem) return set({ phase: "error", message: problem });
     const streams: MediaStream[] = [];
-    let page: ReturnType<typeof preparePage> | undefined;
+    let page: Page | undefined;
     const cleanup = () => {
       for (const stream of streams) for (const track of stream.getTracks()) track.stop();
       page?.restore();
     };
     try {
-      // Ask for the camera and microphone first, while the cursor is still visible.
-      let voice: MediaStream | undefined;
-      if (options.camera || options.microphone) {
-        set({ phase: "starting", step: "Allow the camera or microphone…" });
-        voice = await navigator.mediaDevices.getUserMedia({
-          video: options.camera ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } : false,
-          audio: options.microphone ? { echoCancellation: true, noiseSuppression: true } : false,
-        });
-        streams.push(voice);
-      }
-      set({ phase: "starting", step: "Choose this tab to share…" });
-      const display = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 60 },
-        audio: false,
-        preferCurrentTab: true,
-        selfBrowserSurface: "include",
-      } as DisplayMediaStreamOptions);
-      streams.push(display);
-      const screenTrack = display.getVideoTracks()[0] as RestrictableTrack;
-      if (screenTrack.getSettings().displaySurface !== "browser")
-        throw new Error("Choose “This tab” in the sharing dialog. Flick records the app's own tab.");
-      set({ phase: "starting", step: "Preparing the capture…" });
+      const { voice, display, screenTrack } = await openStreams(options, streams, step);
+      step("Preparing the capture…");
       page = preparePage();
       // Chrome leaves this pending forever if it cannot restrict the capture; never leave the recorder stuck on it.
       await within(
@@ -243,131 +450,16 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
         (async () => screenTrack.restrictTo(await RestrictionTarget!.fromElement(document.body)))(),
       );
       const latencyMs = await measureLatency(display);
-
-      const created = await client.post<{ id: string }>("/v1/takes", {
-        width: innerWidth,
-        height: innerHeight,
-        dpr: devicePixelRatio,
-        background: page.background,
-      });
-      if (!created.ok) throw new Error(created.issues[0]!.message);
-      const takeId = created.data.id;
-      const note = (text: string) => client.note(`/v1/takes/${takeId}/log`, text);
-      note(
-        `start ${innerWidth}x${innerHeight}@${devicePixelRatio} latency=${latencyMs}ms camera=${options.camera} microphone=${options.microphone} url=${location.pathname}${location.search} ua=${navigator.userAgent}`,
-      );
-
-      // Each track uploads its chunks strictly in order; a failed chunk is retried before the next is sent.
-      let uploadError: string | undefined;
-      const queues = new Map<TakeTrack, { seq: number; tail: Promise<void> }>();
-      const upload = (track: TakeTrack, data: Blob) => {
-        if (!data.size) return;
-        const queue = queues.get(track) ?? { seq: 0, tail: Promise.resolve() };
-        queues.set(track, queue);
-        const seq = queue.seq++;
-        queue.tail = queue.tail.then(async () => {
-          for (let attempt = 0; attempt < 4 && !uploadError; attempt++) {
-            const result: Result<unknown> = await client.put(`/v1/takes/${takeId}/media/${track}?seq=${seq}`, data);
-            if (result.ok) return;
-            if (result.issues[0]!.code !== "daemon-unreachable" || attempt === 3) {
-              uploadError = result.issues[0]!.message;
-              note(`upload failed ${track}#${seq}: ${uploadError}`);
-              // Recording on with nowhere to put it would only lose more; stop now and say why.
-              void stopActive?.();
-            } else await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-          }
-        });
-      };
-      const record = (track: TakeTrack, stream: MediaStream, mimeType: string | undefined, bitsPerSecond: number) => {
-        const recorder = new MediaRecorder(stream, { mimeType, bitsPerSecond });
-        recorder.ondataavailable = (event) => upload(track, event.data);
-        recorder.onerror = (event) => {
-          note(`${track} recorder error: ${(event as ErrorEvent).error?.message ?? "unknown"}`);
-          void stopActive?.();
-        };
-        const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
-        // The file's clock starts when start() is called, at the first frame that follows. The
-        // `start` event fires a few hundred milliseconds later (measured), so it is not used.
-        const started = performance.now();
-        recorder.start(1000);
-        return { recorder, started, stopped };
-      };
-
-      page.hideCursor();
-      page.pulse(800);
-      const pixels = screenTrack.getSettings().width! * screenTrack.getSettings().height!;
-      const screen = record(
-        "screen",
-        display,
-        pick(SCREEN_TYPES),
-        Math.round(Math.min(24e6, Math.max(6e6, pixels * 4))),
-      );
-      const hasCamera = !!voice?.getVideoTracks().length,
-        hasVoice = !!voice?.getAudioTracks().length;
-      const side = voice
-        ? record(
-            hasCamera ? "cam" : "mic",
-            voice,
-            pick(hasCamera ? ["video/webm;codecs=vp8,opus", "video/webm"] : ["audio/webm;codecs=opus", "audio/webm"]),
-            hasCamera ? 2.5e6 : 128e3,
-          )
-        : undefined;
-      const startedAt = screen.started; // zero of the take clock
-      const sideOffset = side ? Math.round(side.started - startedAt) : 0;
-      const log = createEventLog({
-        clock: () => performance.now() - startedAt,
-        flush: (lines) => upload("events", new Blob([lines])),
-        cursorOf: page.cursorOf,
-        ignore,
-      });
-      log.start();
-
-      const payloadFor = (durationMs: number) => ({
-        durationMs,
-        screen: { latencyMs },
-        ...(side && hasCamera ? { cam: { offsetMs: sideOffset, hasAudio: hasVoice } } : {}),
-        ...(side && !hasCamera ? { mic: { offsetMs: sideOffset } } : {}),
-      });
-      // A full page load ends a tab capture. Keep enough in sessionStorage to save what was uploaded.
-      const mark = () =>
-        sessionStorage.setItem(
-          MARKER_KEY,
-          JSON.stringify({
-            takeId,
-            startedAt: Date.now() - (performance.now() - startedAt),
-            aliveAt: Date.now(),
-            payload: payloadFor(0),
-          } satisfies Marker),
-        );
-      mark();
-      const heartbeat = setInterval(mark, 1000);
-      // biome-ignore lint/suspicious/noExplicitAny: the list mixes error, rejection and lifecycle handlers
-      const watch: [EventTarget, string, (event: any) => void][] = [
-        [window, "pagehide", () => note("pagehide: the page is unloading (reload or navigation) while recording")],
-        [window, "error", (event: ErrorEvent) => note(`window error: ${event.message}`)],
-        [
-          window,
-          "unhandledrejection",
-          (event: PromiseRejectionEvent) => note(`unhandled rejection: ${String(event.reason)}`),
-        ],
-        [document, "visibilitychange", () => note(`visibility ${document.visibilityState}`)],
-        [screenTrack, "mute", () => note("screen track muted")],
-      ];
-      for (const [target, type, listener] of watch) target.addEventListener(type, listener);
-
+      const { takeId, note } = await openTake(client, page.background, options, latencyMs);
+      // Recording on with nowhere to put it would only lose more; a fault stops the take and says why.
+      const onFault = () => void stopActive?.();
+      const capture = beginCapture({ client, takeId, note, page, display, voice, latencyMs, ignore, onFault });
       stopActive = async () => {
         stopActive = undefined;
-        const durationMs = performance.now() - startedAt;
-        note(`stop after ${Math.round(durationMs)}ms`);
-        clearInterval(heartbeat);
-        for (const [target, type, listener] of watch) target.removeEventListener(type, listener);
+        const payload = capture.halt();
         set({ phase: "saving" });
-        log.stop();
-        for (const item of [screen, side]) if (item && item.recorder.state !== "inactive") item.recorder.stop();
-        await Promise.all([screen.stopped, side?.stopped]);
-        cleanup();
-        await Promise.all([...queues.values()].map((queue) => queue.tail));
-        const save = saver(takeId, payloadFor(durationMs));
+        const uploadError = await capture.finish(cleanup);
+        const save = saver(takeId, payload);
         // What reached the daemon before an upload failed is still a usable recording.
         if (uploadError)
           return set({
@@ -382,18 +474,10 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
         note("screen track ended (sharing was stopped from the browser)");
         void stopActive?.();
       });
-      set({ phase: "recording", startedAt, takeId, camera: hasCamera ? voice : undefined });
+      set({ phase: "recording", startedAt: capture.startedAt, takeId, camera: capture.camera });
     } catch (error) {
       cleanup();
-      const denied = error instanceof DOMException && error.name === "NotAllowedError";
-      set({
-        phase: "error",
-        message: denied
-          ? "Recording was not allowed. Approve the sharing, camera and microphone prompts and try again."
-          : error instanceof Error
-            ? error.message
-            : String(error),
-      });
+      set({ phase: "error", message: explain(error) });
     }
   }
 
