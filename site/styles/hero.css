@@ -417,11 +417,11 @@
   .hero__h1 {
     margin-top: 24px;
   }
+  /* No room beside the copy: the scene goes underneath, at full width, with nothing cut off. */
   .hero__art {
     display: block;
-    width: 150%;
-    margin: 32px 0 0;
-    padding: 0 0 110px var(--gutter);
+    margin-top: 32px;
+    padding-bottom: 110px;
   }
   .hero__glow {
     display: none;
@@ -433,7 +433,19 @@
   .scene.is-settled .scene__tilt {
     transform: none;
   }
+  .app {
+    font-size: clamp(6.5px, 2.05cqw, 14px);
+  }
   .scene__chip {
-    right: 36%;
+    width: clamp(96px, 26cqw, 200px);
+  }
+  /* At this size a real zoom pushes the sidebar off the screen, and focus blur makes the text unreadable. */
+  .scene__zoom.is-zoomed {
+    transform: scale(1.03);
+  }
+  .app__publish,
+  .app__plans,
+  .app__chart {
+    filter: none !important;
   }
 }
