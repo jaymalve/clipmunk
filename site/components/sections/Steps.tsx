@@ -53,7 +53,9 @@ export default function Steps() {
           <article className="card step">
             <span className="step__num mono">03</span>
             <h3>Export and post it</h3>
-            <p>Chip renders an MP4 on your machine. Paste it into the PR, the changelog or the docs, and go outside.</p>
+            <p>
+              Clipmunk renders an MP4 on your machine. Paste it into the PR, the changelog or the docs, and go outside.
+            </p>
             <code className="step__cmd mono">
               <span className="munk">$</span> npx clipmunk export --scene plans-reveal
             </code>

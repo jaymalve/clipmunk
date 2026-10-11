@@ -103,7 +103,7 @@ export default function Chip({
   pitch = 1,
   className = "",
   style,
-  title = "Chip",
+  title = "Clipmunk",
   onPoke,
 }: Props) {
   const uid = useId();

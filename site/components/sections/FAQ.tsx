@@ -31,7 +31,7 @@ export default function FAQ() {
       <div className="wrap faq__in">
         <div className="shead shead--left">
           <h2>Questions, answered.</h2>
-          <p>Still curious? Ask Chip. Busy, but surprisingly patient.</p>
+          <p>Still curious? Ask Clipmunk. Busy, but surprisingly patient.</p>
         </div>
         <div className="faq__list">
           {QUESTIONS.map((item, index) => (

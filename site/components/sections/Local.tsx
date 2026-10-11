@@ -7,7 +7,7 @@ const RULES = [
   },
   {
     title: "Your app's tab, and only that",
-    text: "Chip records the tab your app runs in. Not your desktop, not your messages, not the other forty tabs.",
+    text: "Clipmunk records the tab your app runs in. Not your desktop, not your messages, not the other forty tabs.",
   },
   {
     title: "Nothing ships to production",
@@ -31,8 +31,8 @@ export default function Local() {
         <div className="shead shead--left">
           <h2>A very local chipmunk.</h2>
           <p>
-            Something that records your screen should behave itself. Chip does, and everything it gathers stays in the
-            burrow.
+            Something that records your screen should behave itself. Clipmunk does, and everything it gathers stays in
+            the burrow.
           </p>
           <div className="shead__actions">
             <a href="#faq" className="btn btn--sm">

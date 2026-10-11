@@ -10,7 +10,7 @@ export default function Story() {
           <h2>A feature, in four panels.</h2>
           <p>
             The part where you would normally open a screen recorder, sigh, and do it four times. Which, from now on, is
-            Chip&apos;s job.
+            Clipmunk&apos;s job.
           </p>
         </div>
 
@@ -69,7 +69,7 @@ export default function Story() {
             </div>
             <figcaption>
               <time className="mono">5:03 PM</time>
-              Chip picks a lens, pulls focus, and calls action on your real components.
+              Clipmunk picks a lens, pulls focus, and calls action on your real components.
             </figcaption>
           </figure>
 

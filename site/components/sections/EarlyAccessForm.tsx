@@ -26,7 +26,7 @@ export default function EarlyAccessForm() {
   if (state === "done") {
     return (
       <p className="cta__done" role="status">
-        You&apos;re on the list. Chip has stashed your email somewhere safe.
+        You&apos;re on the list. Clipmunk has stashed your email somewhere safe.
       </p>
     );
   }

@@ -11,8 +11,8 @@ export default function FinalCTA() {
         </div>
         <h2 className="cta__h2">Get early access.</h2>
         <p className="cta__sub">
-          Ship the feature. Close the screen recorder you never liked. Chip cuts the clip, and it is in the pull request
-          before anyone asks to see it.
+          Ship the feature. Close the screen recorder you never liked. Clipmunk cuts the clip, and it is in the pull
+          request before anyone asks to see it.
         </p>
         <EarlyAccessForm />
       </div>

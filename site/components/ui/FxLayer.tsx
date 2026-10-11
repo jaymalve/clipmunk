@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const WORDS = ["chip!", "chk-chk", "squeak", "rolling!", "cut!", "one more take"];
+const WORDS = ["squeak!", "chk-chk", "rolling!", "cut!", "one more take"];
 
 type Label = { id: number; x: number; y: number; word: string };
 
@@ -15,7 +15,7 @@ export default function FxLayer() {
     function onPoke(event: Event) {
       const { x, y } = (event as CustomEvent<{ x: number; y: number }>).detail;
       const id = ++next;
-      const word = WORDS[id % WORDS.length] ?? "chip!";
+      const word = WORDS[id % WORDS.length] ?? "squeak!";
       setLabels((list) => [...list, { id, x, y, word }]);
       window.setTimeout(() => setLabels((list) => list.filter((label) => label.id !== id)), 1100);
     }
