@@ -29,8 +29,8 @@ const clock = (ms: number) =>
 export type RecorderHud = { open(): void; close(): void; toggle(): void; readonly recorder: Recorder | undefined };
 let mounted: RecorderHud | undefined;
 
-export function mountRecorderHud(): RecorderHud {
-  if (mounted) return mounted;
+/** The controls' DOM, built once. Nothing here changes after it is created except through `paint`. */
+function buildHud() {
   const host = document.createElement(TAG);
   host.setAttribute("data-flick-chrome", "");
   const root = host.attachShadow({ mode: "open" });
@@ -41,15 +41,88 @@ export function mountRecorderHud(): RecorderHud {
       <button class="discard" type="button" hidden>Discard</button><button class="primary action" type="button">Record</button><button class="ghost close" type="button" aria-label="Close recorder">✕</button>
     </div>`;
   const $ = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
-  const status = $(".status"),
-    action = $<HTMLButtonElement>(".action"),
-    mic = $<HTMLButtonElement>(".mic"),
-    camera = $<HTMLButtonElement>(".camera");
-  const dot = $(".dot"),
-    cursor = $(".cursor"),
-    preview = $<HTMLVideoElement>(".cam"),
-    discard = $<HTMLButtonElement>(".discard");
-  const options = { microphone: true, camera: false };
+  return {
+    host,
+    status: $(".status"),
+    dot: $(".dot"),
+    cursor: $(".cursor"),
+    preview: $<HTMLVideoElement>(".cam"),
+    action: $<HTMLButtonElement>(".action"),
+    mic: $<HTMLButtonElement>(".mic"),
+    camera: $<HTMLButtonElement>(".camera"),
+    discard: $<HTMLButtonElement>(".discard"),
+    close: $<HTMLButtonElement>(".close"),
+  };
+}
+type Parts = ReturnType<typeof buildHud>;
+type Choices = { microphone: boolean; camera: boolean };
+
+function actionLabel(state: RecorderState): string {
+  if (state.phase === "recording") return "Stop";
+  if (state.phase === "error") return state.retry ? "Save recording" : "Record again";
+  if (state.phase === "saved") return "Record again";
+  return state.phase === "idle" ? "Record" : "…";
+}
+
+/** Write the status line. While recording it is a running clock; the returned timer keeps it going. */
+function paintStatus(status: HTMLElement, state: RecorderState): ReturnType<typeof setInterval> | undefined {
+  status.className = `status${state.phase === "error" ? " error" : ""}`;
+  if (state.phase === "recording") {
+    const tick = () =>
+      (status.textContent = `${clock(performance.now() - state.startedAt)} · ${innerWidth}×${innerHeight}`);
+    tick();
+    return setInterval(tick, 250);
+  }
+  if (state.phase === "saved") {
+    const params = new URLSearchParams({ [STUDIO_PARAM]: "1", [TAKE_PARAM]: state.take.id });
+    status.innerHTML = `Saved ${(state.take.source.durationMs / 1000).toFixed(1)} s · <a href="?${params}">Open take</a>`;
+  } else if (state.phase === "error") status.textContent = state.message;
+  else if (state.phase === "starting") status.textContent = state.step;
+  else status.textContent = state.phase === "saving" ? "Saving…" : `Ready · ${innerWidth}×${innerHeight}`;
+  return undefined;
+}
+
+/** Show the camera's picture while recording, as it will sit in the take. */
+function paintPreview(preview: HTMLVideoElement, state: RecorderState) {
+  const stream = state.phase === "recording" ? state.camera : undefined;
+  preview.style.display = stream ? "block" : "none";
+  if (stream && preview.srcObject !== stream) {
+    preview.srcObject = stream;
+    void preview.play().catch(() => {});
+  }
+  if (state.phase !== "recording") preview.srcObject = null;
+}
+
+/** Make the buttons match the recorder's state and the chosen microphone and camera. */
+function paintButtons(parts: Parts, state: RecorderState, choices: Choices) {
+  const { mic, camera, action, discard } = parts;
+  const busy = state.phase === "starting" || state.phase === "saving";
+  const recording = state.phase === "recording";
+  const retry = state.phase === "error" && !!state.retry;
+  mic.hidden = camera.hidden = recording || busy || retry;
+  mic.className = `mic${choices.microphone ? " on" : ""}`;
+  camera.className = `camera${choices.camera ? " on" : ""}`;
+  mic.setAttribute("aria-pressed", String(choices.microphone));
+  camera.setAttribute("aria-pressed", String(choices.camera));
+  action.disabled = busy;
+  action.textContent = actionLabel(state);
+  action.title = recording ? "Stop recording (Alt+Shift+R)" : "";
+  discard.hidden = !retry;
+}
+
+/** Say why recording cannot start here. `retry` leaves the main button usable as "Retry". */
+function paintProblem(parts: Parts, message: string, retry = false) {
+  parts.status.className = "status error";
+  parts.status.textContent = message;
+  parts.action.disabled = !retry;
+  if (retry) parts.action.textContent = "Retry";
+}
+
+export function mountRecorderHud(): RecorderHud {
+  if (mounted) return mounted;
+  const parts = buildHud();
+  const { host, cursor } = parts;
+  const choices: Choices = { microphone: true, camera: false };
   let recorder: Recorder | undefined;
   let ticker: ReturnType<typeof setInterval> | undefined;
   let visible = false;
@@ -60,105 +133,50 @@ export function mountRecorderHud(): RecorderHud {
     (cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`);
 
   function render(state: RecorderState) {
-    const busy = state.phase === "starting" || state.phase === "saving";
     const recording = state.phase === "recording";
-    dot.hidden = !recording;
+    parts.dot.hidden = !recording;
     cursor.style.display = recording ? "block" : "none";
-    preview.style.display = recording && state.camera ? "block" : "none";
-    if (recording && state.camera && preview.srcObject !== state.camera) {
-      preview.srcObject = state.camera;
-      void preview.play().catch(() => {});
-    }
-    if (!recording) preview.srcObject = null;
-    mic.hidden = camera.hidden = recording || busy;
-    mic.className = `mic${options.microphone ? " on" : ""}`;
-    camera.className = `camera${options.camera ? " on" : ""}`;
-    mic.setAttribute("aria-pressed", String(options.microphone));
-    camera.setAttribute("aria-pressed", String(options.camera));
-    action.disabled = busy || !recorder;
-    const retry = state.phase === "error" ? state.retry : undefined;
-    action.textContent = recording
-      ? "Stop"
-      : retry
-        ? "Save recording"
-        : state.phase === "saved" || state.phase === "error"
-          ? "Record again"
-          : busy
-            ? "…"
-            : "Record";
-    action.title = recording ? "Stop recording (Alt+Shift+R)" : "";
-    discard.hidden = !retry;
-    if (retry) mic.hidden = camera.hidden = true;
-    status.className = `status${state.phase === "error" ? " error" : ""}`;
+    paintPreview(parts.preview, state);
+    paintButtons(parts, state, choices);
     clearInterval(ticker);
-    if (recording) {
-      const tick = () =>
-        (status.textContent = `${clock(performance.now() - state.startedAt)} · ${innerWidth}×${innerHeight}`);
-      tick();
-      ticker = setInterval(tick, 250);
-    } else if (state.phase === "saved") {
-      const params = new URLSearchParams({ [STUDIO_PARAM]: "1", [TAKE_PARAM]: state.take.id });
-      status.innerHTML = `Saved ${(state.take.source.durationMs / 1000).toFixed(1)} s · <a href="?${params}">Open take</a>`;
-    } else
-      status.textContent =
-        state.phase === "error"
-          ? state.message
-          : state.phase === "starting"
-            ? state.step
-            : state.phase === "saving"
-              ? "Saving…"
-              : recorder
-                ? `Ready · ${innerWidth}×${innerHeight}`
-                : status.textContent;
+    ticker = paintStatus(parts.status, state);
   }
 
   async function connect() {
     // The studio's own pages navigate with full page loads, which would end the capture at the first click.
     if (new URLSearchParams(location.search).has(STUDIO_PARAM)) {
-      status.className = "status error";
-      status.textContent =
-        "The recorder records your app, not the Flick studio. Open a page of your app (without ?flick=1) and press Alt+Shift+R there.";
-      action.disabled = true;
-      mic.hidden = camera.hidden = true;
-      return;
+      parts.mic.hidden = parts.camera.hidden = true;
+      return paintProblem(
+        parts,
+        "The recorder records your app, not the Flick studio. Open a page of your app (without ?flick=1) and press Alt+Shift+R there.",
+      );
     }
     const unsupported = isSupported();
-    if (unsupported) {
-      status.textContent = unsupported;
-      status.className = "status error";
-      action.disabled = true;
-      return;
-    }
-    status.textContent = "Connecting…";
+    if (unsupported) return paintProblem(parts, unsupported);
+    parts.status.textContent = "Connecting…";
     const daemon = await connectDaemon();
-    if (daemon.problem) {
-      status.className = "status error";
-      status.textContent = daemon.problem.message;
-      action.textContent = "Retry";
-      action.disabled = false;
-      return;
-    }
+    if (daemon.problem) return paintProblem(parts, daemon.problem.message, true);
     recorder = createRecorder(daemon.client, fromHud);
     recorder.subscribe(render);
     recorder.recoverInterrupted();
     render(recorder.state);
   }
 
-  const toggle = (option: "microphone" | "camera") => () => {
-    options[option] = !options[option];
+  const toggle = (choice: keyof Choices) => () => {
+    choices[choice] = !choices[choice];
     if (recorder) render(recorder.state);
   };
-  mic.onclick = toggle("microphone");
-  camera.onclick = toggle("camera");
-  action.onclick = () => {
+  parts.mic.onclick = toggle("microphone");
+  parts.camera.onclick = toggle("camera");
+  parts.action.onclick = () => {
     if (!recorder) return void connect();
     if (recorder.state.phase === "recording") return void recorder.stop();
     if (recorder.state.phase === "error" && recorder.state.retry) return void recorder.state.retry();
     recorder.reset();
-    void recorder.start(options);
+    void recorder.start(choices);
   };
-  discard.onclick = () => recorder?.reset();
-  $(".close").onclick = () => hud.close();
+  parts.discard.onclick = () => recorder?.reset();
+  parts.close.onclick = () => hud.close();
 
   const hud: RecorderHud = {
     open() {
