@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { fail, ok, zodIssues, type Result } from "./result";
 import { AudioClipSchema } from "./audio";
 import { MusicSchema } from "./music";
 import { ClipIdSchema } from "./recipe";
+import { fail, ok, type Result, zodIssues } from "./result";
 
 /** A sequence joins scenes and takes into one video. It is a small JSON file in the host
  * repo, next to the scenes, so a person, the studio or a coding agent can all write it.
@@ -13,7 +13,9 @@ export const SEQUENCE_PARAM = "flick-sequence";
 export const SequenceItemSchema = z.strictObject({
   clip: z.strictObject({ kind: z.enum(["scene", "take"]), id: ClipIdSchema }),
   /** How this item arrives from the one before it. Ignored on the first item. A fade overlaps the two. */
-  transition: z.strictObject({ kind: z.enum(["cut", "fade"]), ms: z.number().finite().min(0).max(5000).default(500) }).prefault({ kind: "cut" }),
+  transition: z
+    .strictObject({ kind: z.enum(["cut", "fade"]), ms: z.number().finite().min(0).max(5000).default(500) })
+    .prefault({ kind: "cut" }),
 });
 export type SequenceItem = z.output<typeof SequenceItemSchema>;
 
@@ -42,12 +44,19 @@ export function validateSequence(input: unknown): Result<Sequence> {
  * A fade of `ms` overlaps the two clips, so it shortens the total by `ms`; it is capped at
  * half of the shorter neighbour so a clip is never entirely inside its transitions.
  */
-export function planSequence(items: readonly SequenceItem[], durationsMs: readonly number[]): { startsMs: number[]; fadesMs: number[]; totalMs: number } {
-  const startsMs: number[] = [], fadesMs: number[] = [];
+export function planSequence(
+  items: readonly SequenceItem[],
+  durationsMs: readonly number[],
+): { startsMs: number[]; fadesMs: number[]; totalMs: number } {
+  const startsMs: number[] = [],
+    fadesMs: number[] = [];
   let cursor = 0;
   items.forEach((item, index) => {
     const duration = durationsMs[index] ?? 0;
-    const fade = index > 0 && item.transition.kind === "fade" ? Math.max(0, Math.min(item.transition.ms, duration / 2, durationsMs[index - 1]! / 2)) : 0;
+    const fade =
+      index > 0 && item.transition.kind === "fade"
+        ? Math.max(0, Math.min(item.transition.ms, duration / 2, durationsMs[index - 1]! / 2))
+        : 0;
     fadesMs.push(fade);
     startsMs.push(cursor - fade);
     cursor += duration - fade;

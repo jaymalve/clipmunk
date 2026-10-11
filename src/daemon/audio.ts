@@ -1,6 +1,17 @@
 import { rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { AUDIO_DIR, MusicSchema, SCENES_DIR, SceneRecipeSchema, fail, ok, zodIssues, type AudioClip, type Music, type Result } from "../core";
+import {
+  AUDIO_DIR,
+  type AudioClip,
+  fail,
+  type Music,
+  MusicSchema,
+  ok,
+  type Result,
+  SCENES_DIR,
+  SceneRecipeSchema,
+  zodIssues,
+} from "../core";
 import { extractAudio } from "../export";
 import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
 
@@ -18,18 +29,35 @@ async function recipeOf(sceneId: string, context: Context) {
   if (text === undefined) throw new Fault("unknown-scene", `No scene named "${sceneId}".`);
   const json = JSON.parse(text) as Record<string, unknown>;
   const parsed = SceneRecipeSchema.safeParse(json);
-  if (!parsed.success) throw new Fault("invalid-scene", `${source} has errors; fix them before recording narration.`, source);
+  if (!parsed.success)
+    throw new Fault("invalid-scene", `${source} has errors; fix them before recording narration.`, source);
   return { source, json, audio: parsed.data.audio ?? [] };
 }
-async function saveAudio(sceneId: string, context: Context, next: AudioClip[], recipe: Awaited<ReturnType<typeof recipeOf>>) {
+async function saveAudio(
+  sceneId: string,
+  context: Context,
+  next: AudioClip[],
+  recipe: Awaited<ReturnType<typeof recipeOf>>,
+) {
   const { audio: _old, ...rest } = recipe.json;
-  await writeText(context.root, recipe.source, `${JSON.stringify(next.length ? { ...rest, audio: next } : rest, null, 2)}\n`);
+  await writeText(
+    context.root,
+    recipe.source,
+    `${JSON.stringify(next.length ? { ...rest, audio: next } : rest, null, 2)}\n`,
+  );
   // Files of narration that the recipe no longer uses would only pile up.
   for (const clip of recipe.audio)
-    if (isNarration(sceneId, clip.file) && !next.some((kept) => kept.file === clip.file)) await rm(await resolveInside(context.root, `${AUDIO_DIR}/${clip.file}`), { force: true });
+    if (isNarration(sceneId, clip.file) && !next.some((kept) => kept.file === clip.file))
+      await rm(await resolveInside(context.root, `${AUDIO_DIR}/${clip.file}`), { force: true });
 }
 
-export async function storeNarration(sceneId: string, data: Buffer, offsetMs: number, context: Context, now = new Date()): Promise<Result<{ audio: AudioClip[] }>> {
+export async function storeNarration(
+  sceneId: string,
+  data: Buffer,
+  offsetMs: number,
+  context: Context,
+  now = new Date(),
+): Promise<Result<{ audio: AudioClip[] }>> {
   try {
     if (!data.length) throw new Fault("empty-recording", "No sound was received.");
     const recipe = await recipeOf(sceneId, context);
@@ -43,7 +71,10 @@ export async function storeNarration(sceneId: string, data: Buffer, offsetMs: nu
       await rm(path.join(directory, `${name}.upload`), { force: true });
     }
     // One narration per scene: a new recording replaces the previous one; other sounds stay.
-    const next = [...recipe.audio.filter((clip) => !isNarration(sceneId, clip.file)), { file: `${name}.wav`, offsetMs: Math.round(offsetMs), gain: 1 }];
+    const next = [
+      ...recipe.audio.filter((clip) => !isNarration(sceneId, clip.file)),
+      { file: `${name}.wav`, offsetMs: Math.round(offsetMs), gain: 1 },
+    ];
     await saveAudio(sceneId, context, next, recipe);
     return ok({ audio: next });
   } catch (error) {
@@ -64,14 +95,25 @@ export async function removeNarration(sceneId: string, context: Context): Promis
 
 /** Absolute path of a sound in .flick/audio. Only plain file names are accepted. */
 export async function audioFile(name: string, context: Context): Promise<string> {
-  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(name) || name.includes("..")) throw new Fault("unknown-file", `"${name}" is not an audio file name.`);
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(name) || name.includes(".."))
+    throw new Fault("unknown-file", `"${name}" is not an audio file name.`);
   const absolute = await resolveInside(context.root, `${AUDIO_DIR}/${name}`);
-  if (!(await stat(absolute).then((info) => info.isFile(), () => false))) throw new Fault("unknown-file", `${AUDIO_DIR}/${name} does not exist.`);
+  if (
+    !(await stat(absolute).then(
+      (info) => info.isFile(),
+      () => false,
+    ))
+  )
+    throw new Fault("unknown-file", `${AUDIO_DIR}/${name} does not exist.`);
   return absolute;
 }
 
 /** Set or clear a scene's generated music. Only the recipe's `music` field changes. */
-export async function setSceneMusic(sceneId: string, input: unknown, context: Context): Promise<Result<{ music: Music | null }>> {
+export async function setSceneMusic(
+  sceneId: string,
+  input: unknown,
+  context: Context,
+): Promise<Result<{ music: Music | null }>> {
   try {
     const recipe = await recipeOf(sceneId, context);
     const { music: _old, ...rest } = recipe.json;

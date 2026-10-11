@@ -40,22 +40,32 @@ const glyph = (style: CursorStyle) => {
 
 /** Where the recording sits on the canvas, and the factor from source CSS pixels to canvas pixels. */
 export function layoutTake(width: number, height: number, take: Take) {
-  const { canvas } = take.edit, { source } = take;
+  const { canvas } = take.edit,
+    { source } = take;
   // Pixel-valued settings are authored against the edit's canvas; scale them for other output sizes.
   const unit = Math.min(width / canvas.width, height / canvas.height);
   const pad = canvas.padding * Math.min(width, height);
   const scale = Math.min((width - 2 * pad) / source.width, (height - 2 * pad) / source.height);
-  const boxWidth = source.width * scale, boxHeight = source.height * scale;
-  return { unit, pad, scale, box: { x: (width - boxWidth) / 2, y: (height - boxHeight) / 2, width: boxWidth, height: boxHeight }, radius: canvas.radius * unit };
+  const boxWidth = source.width * scale,
+    boxHeight = source.height * scale;
+  return {
+    unit,
+    pad,
+    scale,
+    box: { x: (width - boxWidth) / 2, y: (height - boxHeight) / 2, width: boxWidth, height: boxHeight },
+    radius: canvas.radius * unit,
+  };
 }
 
 export function drawTake(ctx: Context2D, width: number, height: number, take: Take, frame: TakeFrame): void {
   const { edit, source } = take;
   const { unit, pad, scale, box, radius } = layoutTake(width, height, take);
   const zoom = frame.view.scale;
-  const centerX = box.x + box.width / 2, centerY = box.y + box.height / 2;
+  const centerX = box.x + box.width / 2,
+    centerY = box.y + box.height / 2;
   /** Source CSS pixels to canvas pixels, through the zoom. */
-  const place = (x: number, y: number) => [centerX + (x - frame.view.x) * scale * zoom, centerY + (y - frame.view.y) * scale * zoom] as const;
+  const place = (x: number, y: number) =>
+    [centerX + (x - frame.view.x) * scale * zoom, centerY + (y - frame.view.y) * scale * zoom] as const;
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -151,7 +161,8 @@ export function drawTake(ctx: Context2D, width: number, height: number, take: Ta
     ctx.clip();
     // Cover the square with the camera picture, centred, and flip it like a mirror if asked.
     const cover = diameter / Math.min(source.cam.width, source.cam.height);
-    const drawWidth = source.cam.width * cover, drawHeight = source.cam.height * cover;
+    const drawWidth = source.cam.width * cover,
+      drawHeight = source.cam.height * cover;
     ctx.translate(left + diameter / 2, top + diameter / 2);
     if (edit.cam.mirror) ctx.scale(-1, 1);
     frame.cam.draw(ctx, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);

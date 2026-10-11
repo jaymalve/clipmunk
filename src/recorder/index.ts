@@ -2,9 +2,18 @@ import { hasInterruptedRecording } from "./capture";
 import { adoptDaemonLink } from "./daemon";
 import { mountRecorderHud } from "./hud";
 
-export { mountRecorderHud, type RecorderHud } from "./hud";
 export { createRecorder, isSupported, type Recorder, type RecorderOptions, type RecorderState } from "./capture";
-export { adoptDaemonLink, connectDaemon, createDaemonClient, storedLink, type DaemonClient, type DaemonLink, type DaemonProblem, type DaemonStatus } from "./daemon";
+export {
+  adoptDaemonLink,
+  connectDaemon,
+  createDaemonClient,
+  type DaemonClient,
+  type DaemonLink,
+  type DaemonProblem,
+  type DaemonStatus,
+  storedLink,
+} from "./daemon";
+export { mountRecorderHud, type RecorderHud } from "./hud";
 
 export const RECORD_PARAM = "flick-record";
 let booted = false;

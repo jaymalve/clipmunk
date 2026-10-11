@@ -43,14 +43,16 @@
     "test": "vitest run src",
     "test:browser": "vitest run tests/browser",
     "lint:boundaries": "node scripts/check-boundaries.mjs",
-    "verify": "npm run lint:boundaries && npm run typecheck && npm test",
+    "verify": "npm run lint && npm run lint:boundaries && npm run typecheck && npm test",
     "build": "node scripts/build.mjs",
     "test:installed": "node scripts/check-installed.mjs",
     "test:export": "vitest run tests/export",
     "test:daemon": "vitest run tests/daemon",
     "test:recorder": "xvfb-run -a -s \"-screen 0 1600x1000x24\" vitest run tests/recorder",
     "test:take": "vitest run tests/take",
-    "test:sequence": "vitest run tests/sequence"
+    "test:sequence": "vitest run tests/sequence",
+    "lint": "biome check .",
+    "format": "biome check --write ."
   },
   "dependencies": {
     "mediabunny": "^1.61.3",
@@ -67,6 +69,7 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

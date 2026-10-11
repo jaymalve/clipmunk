@@ -15,8 +15,10 @@ export type EventLogOptions = {
   ignore: (event: Event) => boolean;
 };
 
-const EDITABLE = 'input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), textarea, [contenteditable=""], [contenteditable="true"]';
-const INTERACTIVE = 'button, a[href], input, textarea, select, label, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="checkbox"], [role="switch"], [contenteditable]';
+const EDITABLE =
+  'input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), textarea, [contenteditable=""], [contenteditable="true"]';
+const INTERACTIVE =
+  'button, a[href], input, textarea, select, label, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="checkbox"], [role="switch"], [contenteditable]';
 const round = (value: number) => Math.round(value * 10) / 10;
 const rectOf = (element: Element): [number, number, number, number] => {
   const box = element.getBoundingClientRect();
@@ -48,36 +50,77 @@ export function createEventLog(options: EventLogOptions) {
   const schedule = () => (frame ||= requestAnimationFrame(drain));
 
   const handlers: [string, (event: any) => void][] = [
-    ["pointermove", (event: PointerEvent) => {
-      pendingMove = { x: event.clientX, y: event.clientY };
-      schedule();
-    }],
-    ["pointerover", (event: PointerEvent) => {
-      if (!(event.target instanceof Element)) return;
-      const wanted = options.cursorOf(event.target);
-      const style = wanted === "pointer" ? "pointer" : wanted === "text" || wanted === "vertical-text" ? "text" : "default";
-      if (style !== cursor) push({ t: now(), k: "cursor", style: (cursor = style) });
-    }],
-    ["pointerdown", (event: PointerEvent) => {
-      if (frame) cancelAnimationFrame(frame), drain(); // the click must come after the move that led to it
-      const target = event.target instanceof Element ? event.target.closest(INTERACTIVE) ?? event.target : document.body;
-      push({ t: now(), k: "down", x: round(event.clientX), y: round(event.clientY), button: event.button, rect: rectOf(target) });
-    }],
-    ["pointerup", (event: PointerEvent) => push({ t: now(), k: "up", x: round(event.clientX), y: round(event.clientY), button: event.button })],
-    ["scroll", () => {
-      pendingScroll = true;
-      schedule();
-    }],
-    ["focusin", (event: FocusEvent) => {
-      if (event.target instanceof Element) push({ t: now(), k: "focus", rect: rectOf(event.target), editable: event.target.matches(EDITABLE) });
-    }],
-    ["keydown", (event: KeyboardEvent) => {
-      // Only that typing happened and where. The key itself is deliberately not read.
-      if (event.target instanceof Element && event.target.matches(EDITABLE) && !event.ctrlKey && !event.metaKey && !event.altKey) push({ t: now(), k: "type", rect: rectOf(event.target) });
-    }],
+    [
+      "pointermove",
+      (event: PointerEvent) => {
+        pendingMove = { x: event.clientX, y: event.clientY };
+        schedule();
+      },
+    ],
+    [
+      "pointerover",
+      (event: PointerEvent) => {
+        if (!(event.target instanceof Element)) return;
+        const wanted = options.cursorOf(event.target);
+        const style =
+          wanted === "pointer" ? "pointer" : wanted === "text" || wanted === "vertical-text" ? "text" : "default";
+        if (style !== cursor) push({ t: now(), k: "cursor", style: (cursor = style) });
+      },
+    ],
+    [
+      "pointerdown",
+      (event: PointerEvent) => {
+        if (frame) cancelAnimationFrame(frame), drain(); // the click must come after the move that led to it
+        const target =
+          event.target instanceof Element ? (event.target.closest(INTERACTIVE) ?? event.target) : document.body;
+        push({
+          t: now(),
+          k: "down",
+          x: round(event.clientX),
+          y: round(event.clientY),
+          button: event.button,
+          rect: rectOf(target),
+        });
+      },
+    ],
+    [
+      "pointerup",
+      (event: PointerEvent) =>
+        push({ t: now(), k: "up", x: round(event.clientX), y: round(event.clientY), button: event.button }),
+    ],
+    [
+      "scroll",
+      () => {
+        pendingScroll = true;
+        schedule();
+      },
+    ],
+    [
+      "focusin",
+      (event: FocusEvent) => {
+        if (event.target instanceof Element)
+          push({ t: now(), k: "focus", rect: rectOf(event.target), editable: event.target.matches(EDITABLE) });
+      },
+    ],
+    [
+      "keydown",
+      (event: KeyboardEvent) => {
+        // Only that typing happened and where. The key itself is deliberately not read.
+        if (
+          event.target instanceof Element &&
+          event.target.matches(EDITABLE) &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey
+        )
+          push({ t: now(), k: "type", rect: rectOf(event.target) });
+      },
+    ],
     ["resize", () => push({ t: now(), k: "resize", width: innerWidth, height: innerHeight })],
   ];
-  const listeners = handlers.map(([type, handler]) => [type, (event: Event) => !options.ignore(event) && handler(event)] as const);
+  const listeners = handlers.map(
+    ([type, handler]) => [type, (event: Event) => !options.ignore(event) && handler(event)] as const,
+  );
 
   return {
     start() {

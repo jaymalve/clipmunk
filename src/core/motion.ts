@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fail, ok, zodIssues, type Result } from "./result";
+import { fail, ok, type Result, zodIssues } from "./result";
 import { CameraSchema, FocusSchema, TransformSchema } from "./scene";
 
 /** Keyframed motion. Validate once with compileMotion, then evaluate any number of
@@ -44,7 +44,11 @@ export const SceneTrackSchema = z
           ctx.addIssue({ code: "custom", path: ["keyframes", index, "value"], message: issue.message });
       const previous = track.keyframes[index - 1];
       if (previous && frame.timeMs <= previous.timeMs)
-        ctx.addIssue({ code: "custom", path: ["keyframes", index, "timeMs"], message: "Keyframe times must be strictly increasing." });
+        ctx.addIssue({
+          code: "custom",
+          path: ["keyframes", index, "timeMs"],
+          message: "Keyframe times must be strictly increasing.",
+        });
     });
   });
 export type SceneTrack = z.output<typeof SceneTrackSchema>;
@@ -62,11 +66,20 @@ export const MotionSchema = z
     const seen = new Set<string>();
     motion.tracks.forEach((track, index) => {
       const key = trackKey(track);
-      if (seen.has(key)) ctx.addIssue({ code: "custom", path: ["tracks", index], message: "Duplicate track for the same target and property." });
+      if (seen.has(key))
+        ctx.addIssue({
+          code: "custom",
+          path: ["tracks", index],
+          message: "Duplicate track for the same target and property.",
+        });
       seen.add(key);
       track.keyframes.forEach((frame, frameIndex) => {
         if (frame.timeMs > motion.durationMs)
-          ctx.addIssue({ code: "custom", path: ["tracks", index, "keyframes", frameIndex, "timeMs"], message: "Keyframe time exceeds the scene duration." });
+          ctx.addIssue({
+            code: "custom",
+            path: ["tracks", index, "keyframes", frameIndex, "timeMs"],
+            message: "Keyframe time exceeds the scene duration.",
+          });
       });
     });
   });

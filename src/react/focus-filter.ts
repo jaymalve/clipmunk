@@ -38,11 +38,13 @@ function markup(mask: FocusMask, width: number, height: number): string {
     `<feComposite in="dx" in2="dy" operator="arithmetic" k1="0" k2="${n(mask.xWeight)}" k3="${n(mask.yWeight)}" k4="0" result="depth"/>`;
   mask.bands.forEach((band, i) => {
     const source = band.stdDeviation > 0 ? `b${i}` : "SourceGraphic";
-    if (band.stdDeviation > 0) out += `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(band.stdDeviation)}" result="b${i}"/>`;
+    if (band.stdDeviation > 0)
+      out += `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(band.stdDeviation)}" result="b${i}"/>`;
     out +=
       `<feComponentTransfer in="depth" result="m${i}"><feFuncA type="table" tableValues="${band.weights.map(n).join(" ")}"/></feComponentTransfer>` +
       `<feComposite in="${source}" in2="m${i}" operator="in" result="p${i}"/>`;
-    if (i > 0) out += `<feComposite in="${i === 1 ? "p0" : `s${i - 1}`}" in2="p${i}" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="s${i}"/>`;
+    if (i > 0)
+      out += `<feComposite in="${i === 1 ? "p0" : `s${i - 1}`}" in2="p${i}" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="s${i}"/>`;
   });
   return out;
 }

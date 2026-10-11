@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -27,18 +27,47 @@ const MISSING = MISSING_FFMPEG;
 export type Encoder = { write(frame: Buffer): Promise<void>; finish(): Promise<void>; kill(): void };
 
 /** Encode a stream of PNG or JPEG frames to an H.264 MP4 segment of exactly `frames` frames. */
-export function startEncoder(options: { output: string; fps: number; width: number; height: number; frames: number; input: "png" | "mjpeg"; cwd: string }): Encoder {
+export function startEncoder(options: {
+  output: string;
+  fps: number;
+  width: number;
+  height: number;
+  frames: number;
+  input: "png" | "mjpeg";
+  cwd: string;
+}): Encoder {
   const { width, height } = options;
   const child = spawn(
     ffmpegPath(),
     [
-      "-hide_banner", "-loglevel", "error", "-nostdin",
-      "-f", "image2pipe", "-framerate", String(options.fps), "-c:v", options.input, "-i", "pipe:0",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-nostdin",
+      "-f",
+      "image2pipe",
+      "-framerate",
+      String(options.fps),
+      "-c:v",
+      options.input,
+      "-i",
+      "pipe:0",
       "-an",
       // Fit the captured frame inside the output and centre it on black.
-      "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`,
-      "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
-      "-frames:v", String(options.frames), "-n", options.output,
+      "-vf",
+      `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "16",
+      "-pix_fmt",
+      "yuv420p",
+      "-frames:v",
+      String(options.frames),
+      "-n",
+      options.output,
     ],
     { cwd: options.cwd, stdio: ["pipe", "ignore", "pipe"] },
   );
@@ -46,18 +75,27 @@ export function startEncoder(options: { output: string; fps: number; width: numb
   child.stderr!.on("data", (chunk: Buffer) => (stderr = (stderr + chunk.toString()).slice(-2000)));
   child.stdin!.on("error", () => {});
   const done = new Promise<void>((resolve, reject) => {
-    child.once("error", (error: NodeJS.ErrnoException) => reject(error.code === "ENOENT" ? new Fault("missing-ffmpeg", MISSING) : error));
+    child.once("error", (error: NodeJS.ErrnoException) =>
+      reject(error.code === "ENOENT" ? new Fault("missing-ffmpeg", MISSING) : error),
+    );
     child.once("close", (code, signal) =>
       code === 0
         ? resolve()
-        : reject(new Fault("encoding-failed", `FFmpeg failed: ${stderr.trim() || (signal ? `it was stopped by the system (${signal}), which usually means the machine ran out of memory at this output size` : `exit code ${code}`)}`)),
+        : reject(
+            new Fault(
+              "encoding-failed",
+              `FFmpeg failed: ${stderr.trim() || (signal ? `it was stopped by the system (${signal}), which usually means the machine ran out of memory at this output size` : `exit code ${code}`)}`,
+            ),
+          ),
     );
   });
   done.catch(() => {});
   return {
     write: (frame) =>
       Promise.race([
-        new Promise<void>((resolve, reject) => child.stdin!.write(frame, (error) => (error ? reject(error) : resolve()))),
+        new Promise<void>((resolve, reject) =>
+          child.stdin!.write(frame, (error) => (error ? reject(error) : resolve())),
+        ),
         done.then(() => {
           throw new Fault("encoding-failed", "FFmpeg stopped before all frames were written.");
         }),
@@ -75,15 +113,41 @@ function run(args: string[], cwd: string): Promise<{ code: number | null; stderr
     const child = spawn(ffmpegPath(), args, { cwd, stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
     child.stderr!.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
-    child.once("error", (error: NodeJS.ErrnoException) => reject(error.code === "ENOENT" ? new Fault("missing-ffmpeg", MISSING) : error));
+    child.once("error", (error: NodeJS.ErrnoException) =>
+      reject(error.code === "ENOENT" ? new Fault("missing-ffmpeg", MISSING) : error),
+    );
     child.once("close", (code) => resolve({ code, stderr, child }));
   });
 }
 
 /** Join segments without re-encoding and move the index to the front for streaming. */
 export async function concatSegments(segments: string[], listFile: string, output: string, cwd: string): Promise<void> {
-  const { code, stderr } = await run(["-hide_banner", "-loglevel", "error", "-nostdin", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", "-movflags", "+faststart", "-n", output], cwd);
-  if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not join ${segments.length} segments: ${stderr.trim().slice(-800)}`);
+  const { code, stderr } = await run(
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-nostdin",
+      "-f",
+      "concat",
+      "-safe",
+      "0",
+      "-i",
+      listFile,
+      "-c",
+      "copy",
+      "-movflags",
+      "+faststart",
+      "-n",
+      output,
+    ],
+    cwd,
+  );
+  if (code !== 0)
+    throw new Fault(
+      "encoding-failed",
+      `FFmpeg could not join ${segments.length} segments: ${stderr.trim().slice(-800)}`,
+    );
 }
 
 export async function ffmpegVersion(): Promise<string | undefined> {
@@ -92,17 +156,23 @@ export async function ffmpegVersion(): Promise<string | undefined> {
     let out = "";
     child.stdout!.on("data", (chunk: Buffer) => (out += chunk.toString()));
     child.once("error", () => resolve(undefined));
-    child.once("close", (code) => resolve(code === 0 ? /ffmpeg version (\S+)/.exec(out)?.[1] ?? "unknown" : undefined));
+    child.once("close", (code) =>
+      resolve(code === 0 ? (/ffmpeg version (\S+)/.exec(out)?.[1] ?? "unknown") : undefined),
+    );
   });
 }
 
 /** Decode a file and report what is really in it. Used by tests and `flick doctor`-style checks. */
-export async function probeVideo(file: string, cwd: string): Promise<{ frames: number; width: number; height: number; fps: number; durationMs: number }> {
+export async function probeVideo(
+  file: string,
+  cwd: string,
+): Promise<{ frames: number; width: number; height: number; fps: number; durationMs: number }> {
   const { stderr } = await run(["-hide_banner", "-nostdin", "-i", file, "-map", "0:v:0", "-f", "null", "-"], cwd);
   const size = /Video:.*?\s(\d{2,5})x(\d{2,5})[\s,]/.exec(stderr);
   const frames = [...stderr.matchAll(/frame=\s*(\d+)/g)].pop();
   const duration = /Duration:\s*(\d+):(\d+):([\d.]+)/.exec(stderr);
-  if (!size || !frames || !duration) throw new Fault("probe-failed", `Could not read ${file}: ${stderr.trim().slice(-400)}`);
+  if (!size || !frames || !duration)
+    throw new Fault("probe-failed", `Could not read ${file}: ${stderr.trim().slice(-400)}`);
   return {
     frames: Number(frames[1]),
     width: Number(size[1]),
@@ -119,9 +189,12 @@ export async function probeMedia(file: string, cwd: string): Promise<MediaInfo> 
   const { stderr } = await run(["-hide_banner", "-nostdin", "-i", file], cwd);
   const duration = /Duration:\s*(\d+):(\d+):([\d.]+)/.exec(stderr);
   const video = /Stream #.*Video:.*?\s(\d{2,5})x(\d{2,5})[\s,]/.exec(stderr);
-  if (!/Stream #/.test(stderr)) throw new Fault("unreadable-media", `FFmpeg could not read ${file}: ${stderr.trim().split("\n").pop()}`);
+  if (!/Stream #/.test(stderr))
+    throw new Fault("unreadable-media", `FFmpeg could not read ${file}: ${stderr.trim().split("\n").pop()}`);
   return {
-    durationMs: duration ? Math.round((Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3])) * 1000) : 0,
+    durationMs: duration
+      ? Math.round((Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3])) * 1000)
+      : 0,
     width: video ? Number(video[1]) : undefined,
     height: video ? Number(video[2]) : undefined,
     hasVideo: !!video,
@@ -131,14 +204,21 @@ export async function probeMedia(file: string, cwd: string): Promise<MediaInfo> 
 
 /** Rewrite a MediaRecorder file without re-encoding so it gains a duration and a seek index. */
 export async function remux(input: string, output: string, cwd: string): Promise<void> {
-  const { code, stderr } = await run(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", input, "-c", "copy", output], cwd);
+  const { code, stderr } = await run(
+    ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", input, "-c", "copy", output],
+    cwd,
+  );
   if (code !== 0) throw new Fault("ingest-failed", `FFmpeg could not finalise ${input}: ${stderr.trim().slice(-600)}`);
 }
 
 /** Pull the voice track out as 48 kHz mono WAV, the form the exporter mixes from. */
 export async function extractAudio(input: string, output: string, cwd: string): Promise<void> {
-  const { code, stderr } = await run(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", input, "-vn", "-ac", "1", "-ar", "48000", output], cwd);
-  if (code !== 0) throw new Fault("ingest-failed", `FFmpeg could not extract audio from ${input}: ${stderr.trim().slice(-600)}`);
+  const { code, stderr } = await run(
+    ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", input, "-vn", "-ac", "1", "-ar", "48000", output],
+    cwd,
+  );
+  if (code !== 0)
+    throw new Fault("ingest-failed", `FFmpeg could not extract audio from ${input}: ${stderr.trim().slice(-600)}`);
 }
 
 /** Turn the page-encoded video into the final MP4: add the voice track, trimmed and levelled,
@@ -181,7 +261,11 @@ export async function finishTake(options: {
     graph.push(`[${sound}]apad[out]`);
     args.push("-filter_complex", graph.join(";"), "-map", "[out]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
   }
-  args.push(...(options.copyVideo ? ["-c:v", "copy"] : ["-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p"]));
+  args.push(
+    ...(options.copyVideo
+      ? ["-c:v", "copy"]
+      : ["-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p"]),
+  );
   args.push("-t", (options.durationMs / 1000).toFixed(3), "-movflags", "+faststart", "-n", options.output);
   const { code, stderr } = await run(args, options.cwd);
   if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not finish the video: ${stderr.trim().slice(-800)}`);
@@ -194,7 +278,11 @@ export type MusicInput = { file: string; gain: number; duck: boolean };
 function underlay(main: string | undefined, musicInput: string, music: MusicInput): { lines: string[]; out: string } {
   const level = `${musicInput}aresample=48000,aformat=channel_layouts=stereo,volume=${music.gain.toFixed(3)}[mus]`;
   if (!main) return { lines: [level], out: "mus" };
-  if (!music.duck) return { lines: [level, `[${main}][mus]amix=inputs=2:normalize=0:dropout_transition=0[withmusic]`], out: "withmusic" };
+  if (!music.duck)
+    return {
+      lines: [level, `[${main}][mus]amix=inputs=2:normalize=0:dropout_transition=0[withmusic]`],
+      out: "withmusic",
+    };
   return {
     lines: [
       level,
@@ -212,14 +300,23 @@ const placed = (input: string, track: PlacedAudio, label: string) =>
   `${input}aresample=48000,${track.offsetMs >= 0 ? `adelay=${Math.round(track.offsetMs)}:all=1` : `atrim=start=${(-track.offsetMs / 1000).toFixed(3)},asetpts=PTS-STARTPTS`},volume=${track.gain.toFixed(3)}[${label}]`;
 
 /** Lay sound files and generated music over a finished video. The picture is copied untouched. */
-export async function addAudio(options: { video: string; output: string; cwd: string; durationMs: number; tracks: PlacedAudio[]; music?: MusicInput }): Promise<void> {
+export async function addAudio(options: {
+  video: string;
+  output: string;
+  cwd: string;
+  durationMs: number;
+  tracks: PlacedAudio[];
+  music?: MusicInput;
+}): Promise<void> {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", options.video];
   for (const track of options.tracks) args.push("-i", track.file);
   if (options.music) args.push("-i", options.music.file);
   const graph = options.tracks.map((track, index) => placed(`[${index + 1}:a:0]`, track, `a${index}`));
   let sound: string | undefined;
   if (options.tracks.length) {
-    graph.push(`${options.tracks.map((_, index) => `[a${index}]`).join("")}amix=inputs=${options.tracks.length}:normalize=0:dropout_transition=0[sound]`);
+    graph.push(
+      `${options.tracks.map((_, index) => `[a${index}]`).join("")}amix=inputs=${options.tracks.length}:normalize=0:dropout_transition=0[sound]`,
+    );
     sound = "sound";
   }
   if (options.music) {
@@ -228,7 +325,22 @@ export async function addAudio(options: { video: string; output: string; cwd: st
     sound = mixed.out;
   }
   graph.push(`[${sound}]apad[out]`);
-  args.push("-filter_complex", graph.join(";"), "-map", "0:v:0", "-map", "[out]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
+  args.push(
+    "-filter_complex",
+    graph.join(";"),
+    "-map",
+    "0:v:0",
+    "-map",
+    "[out]",
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "48000",
+  );
   args.push("-t", (options.durationMs / 1000).toFixed(3), "-movflags", "+faststart", "-n", options.output);
   const { code, stderr } = await run(args, options.cwd);
   if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not add the audio: ${stderr.trim().slice(-800)}`);
@@ -261,7 +373,9 @@ export async function joinClips(options: {
   const graph: string[] = [];
   clips.forEach((clip, index) => {
     // Same size, cadence, pixel format and time base for every clip, or the joins fail.
-    graph.push(`[${index}:v:0]scale=${options.width}:${options.height}:force_original_aspect_ratio=decrease,pad=${options.width}:${options.height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p,setpts=PTS-STARTPTS,fps=${options.fps}[v${index}]`);
+    graph.push(
+      `[${index}:v:0]scale=${options.width}:${options.height}:force_original_aspect_ratio=decrease,pad=${options.width}:${options.height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p,setpts=PTS-STARTPTS,fps=${options.fps}[v${index}]`,
+    );
     if (audio)
       graph.push(
         clip.hasAudio
@@ -269,11 +383,15 @@ export async function joinClips(options: {
           : `anullsrc=r=48000:cl=stereo,atrim=0:${seconds(clip.durationMs)}[a${index}]`,
       );
   });
-  let video = "v0", sound = "a0", length = clips[0]!.durationMs;
+  let video = "v0",
+    sound = "a0",
+    length = clips[0]!.durationMs;
   for (let index = 1; index < clips.length; index++) {
     const fade = fadesMs[index] ?? 0;
     if (fade > 0) {
-      graph.push(`[${video}][v${index}]xfade=transition=fade:duration=${seconds(fade)}:offset=${seconds(length - fade)}[x${index}]`);
+      graph.push(
+        `[${video}][v${index}]xfade=transition=fade:duration=${seconds(fade)}:offset=${seconds(length - fade)}[x${index}]`,
+      );
       if (audio) graph.push(`[${sound}][a${index}]acrossfade=d=${seconds(fade)}:c1=tri:c2=tri[y${index}]`);
     } else {
       graph.push(`[${video}][v${index}]concat=n=2:v=1:a=0[x${index}]`);
@@ -284,8 +402,17 @@ export async function joinClips(options: {
     length += clips[index]!.durationMs - fade;
   }
   if (options.overlay.length) {
-    options.overlay.forEach((track, index) => graph.push(placed(`[${clips.length + index}:a:0]`, track, `o${index}`).replace(`[o${index}]`, `,aformat=channel_layouts=stereo[o${index}]`)));
-    graph.push(`[${sound}]${options.overlay.map((_, index) => `[o${index}]`).join("")}amix=inputs=${options.overlay.length + 1}:normalize=0:dropout_transition=0[mixed]`);
+    options.overlay.forEach((track, index) =>
+      graph.push(
+        placed(`[${clips.length + index}:a:0]`, track, `o${index}`).replace(
+          `[o${index}]`,
+          `,aformat=channel_layouts=stereo[o${index}]`,
+        ),
+      ),
+    );
+    graph.push(
+      `[${sound}]${options.overlay.map((_, index) => `[o${index}]`).join("")}amix=inputs=${options.overlay.length + 1}:normalize=0:dropout_transition=0[mixed]`,
+    );
     sound = "mixed";
   }
   let heard: string | undefined = audio ? sound : undefined;
@@ -296,8 +423,24 @@ export async function joinClips(options: {
   }
   args.push("-filter_complex", graph.join(";"), "-map", `[${video}]`);
   if (heard) args.push("-map", `[${heard}]`, "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
-  args.push("-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-t", seconds(options.totalMs), "-movflags", "+faststart", "-n", options.output);
+  args.push(
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "16",
+    "-pix_fmt",
+    "yuv420p",
+    "-t",
+    seconds(options.totalMs),
+    "-movflags",
+    "+faststart",
+    "-n",
+    options.output,
+  );
   const { code, stderr } = await run(args, options.cwd);
-  if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not join the sequence: ${stderr.trim().slice(-900)}`);
+  if (code !== 0)
+    throw new Fault("encoding-failed", `FFmpeg could not join the sequence: ${stderr.trim().slice(-900)}`);
   return { audio: !!heard };
 }

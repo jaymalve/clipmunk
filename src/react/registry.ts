@@ -8,16 +8,17 @@ export type Binding = {
   token: symbol;
   id: string;
   parent?: symbol;
-  element: HTMLElement;       // the spatial wrapper that carries the 3D transform
+  element: HTMLElement; // the spatial wrapper that carries the 3D transform
   content: HTMLElement | null; // optional group paint: always a visual leaf
-  children: HTMLElement;       // a visual leaf unless nested Surfaces registered under it
+  children: HTMLElement; // a visual leaf unless nested Surfaces registered under it
   transform?: Partial<Transform>; // overrides from the Surface prop, on top of the recipe node
   transformIssue?: string;
 };
 
 // offset* geometry ignores CSS transforms, which is exactly what the spatial maths needs.
 function origin(element: HTMLElement) {
-  let x = 0, y = 0;
+  let x = 0,
+    y = 0;
   for (let node: HTMLElement | null = element; node; node = node.offsetParent as HTMLElement | null) {
     const parent = node.offsetParent as HTMLElement | null;
     x += node.offsetLeft + (parent?.clientLeft ?? 0);
@@ -36,10 +37,19 @@ function hasUncoveredContent(root: Element): boolean {
   for (const child of root.childNodes) {
     if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) return true;
     if (!(child instanceof Element)) continue;
-    if (child.hasAttribute("data-flick-id") || child.hasAttribute("data-flick-leaf") || child.matches("script,style,template")) continue;
+    if (
+      child.hasAttribute("data-flick-id") ||
+      child.hasAttribute("data-flick-leaf") ||
+      child.matches("script,style,template")
+    )
+      continue;
     const css = getComputedStyle(child);
     if (css.display === "none" || css.visibility === "hidden") continue;
-    if (child.matches("img,svg,canvas,video,input,textarea,select") || (css.backgroundImage && css.backgroundImage !== "none")) return true;
+    if (
+      child.matches("img,svg,canvas,video,input,textarea,select") ||
+      (css.backgroundImage && css.backgroundImage !== "none")
+    )
+      return true;
     if (hasUncoveredContent(child)) return true;
   }
   return false;
@@ -76,8 +86,10 @@ export function createRegistry() {
     let changed = false;
     for (const [token, entry] of entries) {
       const parent = (entry.parent && entries.get(entry.parent)?.element) || stage;
-      const p = origin(parent), e = origin(entry.element);
-      const width = entry.element.offsetWidth, height = entry.element.offsetHeight;
+      const p = origin(parent),
+        e = origin(entry.element);
+      const width = entry.element.offsetWidth,
+        height = entry.element.offsetHeight;
       const next: Measurement = {
         width,
         height,

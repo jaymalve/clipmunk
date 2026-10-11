@@ -1,7 +1,15 @@
-import { CanvasSource, Mp4OutputFormat, Output, StreamTarget, getFirstEncodableVideoCodec } from "mediabunny";
-import { prepareCursor, resolveZoomTracks, zoomAt, type CursorPath, type Take, type TakeEvent, type ZoomTrack } from "../core";
-import { drawTake, type Context2D } from "./draw";
-import { openFrameSource, type FrameSource } from "./frames";
+import { CanvasSource, getFirstEncodableVideoCodec, Mp4OutputFormat, Output, StreamTarget } from "mediabunny";
+import {
+  type CursorPath,
+  prepareCursor,
+  resolveZoomTracks,
+  type Take,
+  type TakeEvent,
+  type ZoomTrack,
+  zoomAt,
+} from "../core";
+import { type Context2D, drawTake } from "./draw";
+import { type FrameSource, openFrameSource } from "./frames";
 
 /** Renders a take to a canvas at any clip time, and encodes it to a video file.
  * Clip time runs from 0 at the trim start. Preview and export call the same `renderAt`.
@@ -16,23 +24,35 @@ export type TakeRenderer = {
   /** Draw the frame at a clip time onto the preview canvas. Later calls supersede earlier ones. */
   renderAt(clipMs: number): Promise<void>;
   /** Render every frame and encode it. `write` receives file bytes and where they go. */
-  encode(job: EncodeJob, write: (data: Uint8Array, position: number) => Promise<void> | void, progress?: (done: number, total: number) => void): Promise<EncodeResult>;
+  encode(
+    job: EncodeJob,
+    write: (data: Uint8Array, position: number) => Promise<void> | void,
+    progress?: (done: number, total: number) => void,
+  ): Promise<EncodeResult>;
   close(): void;
 };
 
 const FADE_MS = 300;
 
-export async function createTakeRenderer(options: { take: Take; events: readonly TakeEvent[]; fileUrl: (name: string) => string; canvas: HTMLCanvasElement }): Promise<TakeRenderer> {
+export async function createTakeRenderer(options: {
+  take: Take;
+  events: readonly TakeEvent[];
+  fileUrl: (name: string) => string;
+  canvas: HTMLCanvasElement;
+}): Promise<TakeRenderer> {
   const { events, canvas } = options;
   let take = options.take;
   const screen = await openFrameSource(options.fileUrl(take.source.screen.file));
-  const cam: FrameSource | undefined = take.source.cam ? await openFrameSource(options.fileUrl(take.source.cam.file)).catch(() => undefined) : undefined;
+  const cam: FrameSource | undefined = take.source.cam
+    ? await openFrameSource(options.fileUrl(take.source.cam.file)).catch(() => undefined)
+    : undefined;
   let zoomTracks: ZoomTrack[] = [];
   let cursor: CursorPath = prepareCursor(events, take.edit.cursor.smoothing);
   let smoothing = Number.NaN;
   const derive = () => {
     zoomTracks = resolveZoomTracks(take.edit, events, take.source);
-    if (smoothing !== take.edit.cursor.smoothing) cursor = prepareCursor(events, (smoothing = take.edit.cursor.smoothing));
+    if (smoothing !== take.edit.cursor.smoothing)
+      cursor = prepareCursor(events, (smoothing = take.edit.cursor.smoothing));
     if (canvas.width !== take.edit.canvas.width) canvas.width = take.edit.canvas.width;
     if (canvas.height !== take.edit.canvas.height) canvas.height = take.edit.canvas.height;
   };
@@ -95,11 +115,17 @@ export async function createTakeRenderer(options: { take: Take; events: readonly
       const surface = new OffscreenCanvas(job.width, job.height);
       const ctx = surface.getContext("2d")!;
       const bitrate = Math.round(Math.min(40e6, Math.max(2e6, job.width * job.height * job.fps * 0.1)));
-      const codec = await getFirstEncodableVideoCodec(["avc", "vp9", "av1"], { width: job.width, height: job.height, bitrate });
+      const codec = await getFirstEncodableVideoCodec(["avc", "vp9", "av1"], {
+        width: job.width,
+        height: job.height,
+        bitrate,
+      });
       if (!codec) throw new Error("This browser cannot encode video at the requested size.");
       const output = new Output({
         format: new Mp4OutputFormat({ fastStart: false }),
-        target: new StreamTarget(new WritableStream({ write: (chunk) => write(chunk.data, chunk.position) as Promise<void> | undefined })),
+        target: new StreamTarget(
+          new WritableStream({ write: (chunk) => write(chunk.data, chunk.position) as Promise<void> | undefined }),
+        ),
       });
       const video = new CanvasSource(surface, { codec, bitrate, keyFrameInterval: 2 });
       output.addVideoTrack(video, { frameRate: job.fps });

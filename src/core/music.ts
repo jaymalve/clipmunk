@@ -55,14 +55,35 @@ function random(seed: number) {
 type Chord = { root: number; tones: number[] }; // semitones from the key's root
 type Plan = { bpm: number; swing: number; major: boolean; progressions: number[][]; barsPerChord: number };
 const PLANS: Record<MusicStyle, Plan> = {
-  upbeat: { bpm: 118, swing: 0, major: true, barsPerChord: 1, progressions: [[0, 4, 5, 3], [5, 3, 0, 4], [0, 3, 5, 4]] },
-  lofi: { bpm: 82, swing: 0.16, major: false, barsPerChord: 1, progressions: [[3, 6, 2, 5], [0, 5, 3, 6], [0, 3, 6, 2]] },
+  upbeat: {
+    bpm: 118,
+    swing: 0,
+    major: true,
+    barsPerChord: 1,
+    progressions: [
+      [0, 4, 5, 3],
+      [5, 3, 0, 4],
+      [0, 3, 5, 4],
+    ],
+  },
+  lofi: {
+    bpm: 82,
+    swing: 0.16,
+    major: false,
+    barsPerChord: 1,
+    progressions: [
+      [3, 6, 2, 5],
+      [0, 5, 3, 6],
+      [0, 3, 6, 2],
+    ],
+  },
 };
 /** Gain into the soft clipper, set by ear-free measurement so each style sits at a similar loudness. */
 const DRIVE: Record<MusicStyle, number> = { upbeat: 1.4, lofi: 1.7 };
 /** Keeps each style's tunes independent of the others, and stable if a style is added or removed. */
 const STYLE_SEED: Record<MusicStyle, number> = { upbeat: 1000, lofi: 2000 };
-const MAJOR = [0, 2, 4, 5, 7, 9, 11], MINOR = [0, 2, 3, 5, 7, 8, 10];
+const MAJOR = [0, 2, 4, 5, 7, 9, 11],
+  MINOR = [0, 2, 3, 5, 7, 8, 10];
 
 /** A chord built by stacking thirds on a scale degree; `sevenths` adds the fourth note. */
 function chordOn(degree: number, scale: number[], sevenths: boolean): Chord {
@@ -73,7 +94,8 @@ function chordOn(degree: number, scale: number[], sevenths: boolean): Chord {
 export function renderMusic(request: MusicRequest): RenderedMusic {
   const sampleRate = request.sampleRate ?? 44100;
   const length = Math.max(1, Math.round((request.durationMs / 1000) * sampleRate));
-  const left = new Float32Array(length), right = new Float32Array(length);
+  const left = new Float32Array(length),
+    right = new Float32Array(length);
   const plan = PLANS[request.style];
   const rng = random(request.seed + STYLE_SEED[request.style]);
   const pick = <T>(items: readonly T[]) => items[Math.floor(rng() * items.length)]!;
@@ -82,7 +104,8 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
   const scale = plan.major ? MAJOR : MINOR;
   const progression = pick(plan.progressions).map((degree) => chordOn(degree, scale, request.style !== "upbeat"));
   const bpm = request.bpm ?? plan.bpm;
-  const beat = 60 / bpm, bar = beat * 4;
+  const beat = 60 / bpm,
+    bar = beat * 4;
   const phase = Math.max(0, request.phaseMs ?? 0) / 1000;
   const seconds = length / sampleRate;
 
@@ -93,12 +116,23 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
     right[index] = right[index]! + value * Math.min(1, 1 + pan);
   };
   /** One note: `wave` gives the raw tone for a phase, `shape` its loudness over the note's life. */
-  const note = (start: number, duration: number, frequency: number, level: number, pan: number, wave: (phase: number, age: number) => number, shape: (age: number, duration: number) => number, cutoff = 0) => {
-    const from = Math.round(start * sampleRate), count = Math.round(duration * sampleRate);
+  const note = (
+    start: number,
+    duration: number,
+    frequency: number,
+    level: number,
+    pan: number,
+    wave: (phase: number, age: number) => number,
+    shape: (age: number, duration: number) => number,
+    cutoff = 0,
+  ) => {
+    const from = Math.round(start * sampleRate),
+      count = Math.round(duration * sampleRate);
     const step = (frequency * TAU) / sampleRate;
     // A one-pole low-pass takes the edge off bright waves; 0 leaves the tone as it is.
     const smoothing = cutoff > 0 ? 1 - Math.exp((-TAU * cutoff) / sampleRate) : 1;
-    let phase = 0, filtered = 0;
+    let phase = 0,
+      filtered = 0;
     for (let i = 0; i < count && from + i < length; i++) {
       const age = i / sampleRate;
       filtered += smoothing * (wave(phase, age) - filtered);
@@ -109,28 +143,56 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
   const sine = (phase: number) => Math.sin(phase);
   const saw = (phase: number) => 2 * (phase / TAU - Math.floor(phase / TAU + 0.5));
   const triangle = (phase: number) => 2 * Math.abs(saw(phase)) - 1;
-  const swell = (attack: number, release: number) => (age: number, duration: number) => Math.min(1, age / attack) * Math.min(1, Math.max(0, (duration - age) / release));
-  const pluck = (decay: number) => (age: number, duration: number) => Math.min(1, age / 0.004) * Math.exp(-age / decay) * Math.min(1, Math.max(0, (duration - age) / 0.02));
+  const swell = (attack: number, release: number) => (age: number, duration: number) =>
+    Math.min(1, age / attack) * Math.min(1, Math.max(0, (duration - age) / release));
+  const pluck = (decay: number) => (age: number, duration: number) =>
+    Math.min(1, age / 0.004) * Math.exp(-age / decay) * Math.min(1, Math.max(0, (duration - age) / 0.02));
 
   const noise = random(request.seed * 7 + 13);
   const kick = (start: number, level: number) =>
-    note(start, 0.32, 1, level, 0, (_phase, age) => Math.sin(TAU * (48 * age + (62 / 28) * (1 - Math.exp(-age * 28)))), (age) => Math.exp(-age / 0.11));
+    note(
+      start,
+      0.32,
+      1,
+      level,
+      0,
+      (_phase, age) => Math.sin(TAU * (48 * age + (62 / 28) * (1 - Math.exp(-age * 28)))),
+      (age) => Math.exp(-age / 0.11),
+    );
   const snare = (start: number, level: number) => {
     note(start, 0.2, 190, level * 0.5, 0, sine, (age) => Math.exp(-age / 0.05));
     let previous = 0;
-    note(start, 0.2, 1, level, 0.05, () => {
-      const sample = noise() * 2 - 1, edge = sample - previous * 0.6;
-      previous = sample;
-      return edge;
-    }, (age) => Math.exp(-age / 0.07));
+    note(
+      start,
+      0.2,
+      1,
+      level,
+      0.05,
+      () => {
+        const sample = noise() * 2 - 1,
+          edge = sample - previous * 0.6;
+        previous = sample;
+        return edge;
+      },
+      (age) => Math.exp(-age / 0.07),
+    );
   };
   const hat = (start: number, level: number, pan: number) => {
     let previous = 0;
-    note(start, 0.06, 1, level, pan, () => {
-      const sample = noise() * 2 - 1, edge = sample - previous;
-      previous = sample;
-      return edge;
-    }, (age) => Math.exp(-age / 0.018));
+    note(
+      start,
+      0.06,
+      1,
+      level,
+      pan,
+      () => {
+        const sample = noise() * 2 - 1,
+          edge = sample - previous;
+        previous = sample;
+        return edge;
+      },
+      (age) => Math.exp(-age / 0.018),
+    );
   };
 
   const bars = Math.ceil((seconds + phase) / bar) + 1;
@@ -147,15 +209,28 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
       chord.tones.forEach((semitone, voice) => {
         const level = (request.style === "lofi" ? 0.07 : 0.05) / Math.sqrt(chord.tones.length / 3);
         const cutoff = request.style === "lofi" ? 1100 : 1700;
-        for (const [detune, pan] of [[-0.06, -0.55], [0.06, 0.55]] as const)
-          note(start, held + 0.4, tone(semitone - 12 + detune), level, pan * (voice % 2 ? 1 : -1), request.style === "lofi" ? triangle : saw, swell(0.25, 0.5), cutoff);
+        for (const [detune, pan] of [
+          [-0.06, -0.55],
+          [0.06, 0.55],
+        ] as const)
+          note(
+            start,
+            held + 0.4,
+            tone(semitone - 12 + detune),
+            level,
+            pan * (voice % 2 ? 1 : -1),
+            request.style === "lofi" ? triangle : saw,
+            swell(0.25, 0.5),
+            cutoff,
+          );
       });
     }
 
     // Bass.
     const bassNote = tone(chord.root - 24);
     if (request.style === "upbeat") {
-      for (let eighth = 0; eighth < 8; eighth++) note(swung(eighth), beat * 0.42, eighth === 6 ? bassNote * 1.5 : bassNote, 0.2, 0, triangle, pluck(0.2), 500);
+      for (let eighth = 0; eighth < 8; eighth++)
+        note(swung(eighth), beat * 0.42, eighth === 6 ? bassNote * 1.5 : bassNote, 0.2, 0, triangle, pluck(0.2), 500);
     } else {
       for (const eighth of [0, 3, 5]) note(swung(eighth), beat * 0.8, bassNote, 0.22, 0, sine, pluck(0.35));
     }
@@ -180,8 +255,13 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
       const semitone = pick(chord.tones) + (rng() < 0.3 ? 12 : 0);
       const level = request.style === "upbeat" ? 0.075 : 0.085;
       const decay = request.style === "lofi" ? 0.45 : 0.22;
-      const voice = (phase: number) => sine(phase) + (request.style === "lofi" ? 0.3 * sine(phase * 2) : 0.2 * triangle(phase * 2));
-      for (const [echo, fade, pan] of [[0, 1, -0.2], [beat * 0.75, 0.38, 0.5], [beat * 1.5, 0.16, -0.5]] as const)
+      const voice = (phase: number) =>
+        sine(phase) + (request.style === "lofi" ? 0.3 * sine(phase * 2) : 0.2 * triangle(phase * 2));
+      for (const [echo, fade, pan] of [
+        [0, 1, -0.2],
+        [beat * 0.75, 0.38, 0.5],
+        [beat * 1.5, 0.16, -0.5],
+      ] as const)
         note(swung(eighth) + echo, decay * 3, tone(semitone), level * fade, pan, voice, pluck(decay));
     }
   }
@@ -192,12 +272,28 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
     const at = accent / 1000;
     if (at < 0.4 || at > seconds - 0.2) continue;
     let previous = 0;
-    note(at - 0.35, 0.35, 1, 0.11 * accentLevel, 0, () => {
-      const sample = noise() * 2 - 1;
-      previous += 0.25 * (sample - previous);
-      return sample - previous;
-    }, (age) => (age / 0.35) ** 2);
-    note(at, 0.5, 1, 0.42 * accentLevel, 0, (_phase, age) => Math.sin(TAU * (42 * age + (40 / 18) * (1 - Math.exp(-age * 18)))), (age) => Math.exp(-age / 0.16));
+    note(
+      at - 0.35,
+      0.35,
+      1,
+      0.11 * accentLevel,
+      0,
+      () => {
+        const sample = noise() * 2 - 1;
+        previous += 0.25 * (sample - previous);
+        return sample - previous;
+      },
+      (age) => (age / 0.35) ** 2,
+    );
+    note(
+      at,
+      0.5,
+      1,
+      0.42 * accentLevel,
+      0,
+      (_phase, age) => Math.sin(TAU * (42 * age + (40 / 18) * (1 - Math.exp(-age * 18)))),
+      (age) => Math.exp(-age / 0.16),
+    );
   }
 
   if (request.style === "lofi") {
@@ -215,14 +311,16 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
   // and the very top softened.
   const drive = DRIVE[request.style];
   const top = 1 - Math.exp((-TAU * (request.style === "upbeat" ? 11000 : 6000)) / sampleRate);
-  let smoothLeft = 0, smoothRight = 0;
+  let smoothLeft = 0,
+    smoothRight = 0;
   for (let i = 0; i < length; i++) {
     smoothLeft += top * (Math.tanh(left[i]! * drive) - smoothLeft);
     smoothRight += top * (Math.tanh(right[i]! * drive) - smoothRight);
     left[i] = smoothLeft;
     right[i] = smoothRight;
   }
-  const fadeIn = Math.min(length / 4, 0.5 * sampleRate), fadeOut = Math.min(length / 3, 1.6 * sampleRate);
+  const fadeIn = Math.min(length / 4, 0.5 * sampleRate),
+    fadeOut = Math.min(length / 3, 1.6 * sampleRate);
   const level = 0.8; // tanh keeps every sample within 1, so this is the ceiling
   for (let i = 0; i < length; i++) {
     const fade = Math.max(0, Math.min(1, i / fadeIn, (length - 1 - i) / fadeOut));
@@ -250,7 +348,11 @@ const OFFBEAT_COST_MS = 12;
  * cannot always be matched exactly: `errorMs` reports how far, on average, a moment is from
  * the rhythm. Accents are placed on the moments themselves and do not depend on this fit.
  */
-export function fitTempo(baseBpm: number, momentsMs: readonly number[], tolerance = 0.08): { bpm: number; phaseMs: number; errorMs: number } {
+export function fitTempo(
+  baseBpm: number,
+  momentsMs: readonly number[],
+  tolerance = 0.08,
+): { bpm: number; phaseMs: number; errorMs: number } {
   if (!momentsMs.length) return { bpm: baseBpm, phaseMs: 0, errorMs: 0 };
   let best = { bpm: baseBpm, phaseMs: 0, errorMs: Number.POSITIVE_INFINITY };
   // Step outward from the style's own tempo, so that exact tempo is always one of the candidates.
@@ -272,7 +374,11 @@ export function fitTempo(baseBpm: number, momentsMs: readonly number[], toleranc
       }
       const errorMs = total / momentsMs.length;
       // Prefer the style's own tempo when two candidates fit equally well.
-      if (errorMs < best.errorMs - 0.5 || (Math.abs(errorMs - best.errorMs) <= 0.5 && Math.abs(bpm - baseBpm) < Math.abs(best.bpm - baseBpm))) best = { bpm: Math.round(bpm * 100) / 100, phaseMs, errorMs };
+      if (
+        errorMs < best.errorMs - 0.5 ||
+        (Math.abs(errorMs - best.errorMs) <= 0.5 && Math.abs(bpm - baseBpm) < Math.abs(best.bpm - baseBpm))
+      )
+        best = { bpm: Math.round(bpm * 100) / 100, phaseMs, errorMs };
     }
   }
   return best;
@@ -282,7 +388,10 @@ export function fitTempo(baseBpm: number, momentsMs: readonly number[], toleranc
  * `sync` on, a tempo fitted to the clip's key moments with an accent on each. The studio and
  * the exporter both call this, so they render the same thing.
  */
-export function planMusic(music: Music, clip: { key: string; durationMs: number; momentsMs?: readonly number[]; accentLevel?: number }): MusicRequest {
+export function planMusic(
+  music: Music,
+  clip: { key: string; durationMs: number; momentsMs?: readonly number[]; accentLevel?: number },
+): MusicRequest {
   const base: MusicRequest = { style: music.style, seed: music.seed ?? seedFor(clip.key), durationMs: clip.durationMs };
   const moments = (clip.momentsMs ?? []).filter((moment) => moment > 300 && moment < clip.durationMs - 200);
   if (!music.sync || !moments.length) return base;
@@ -295,7 +404,8 @@ export function encodeWav(music: RenderedMusic): Uint8Array {
   const frames = music.left.length;
   const bytes = new Uint8Array(44 + frames * 4);
   const view = new DataView(bytes.buffer);
-  const text = (offset: number, value: string) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+  const text = (offset: number, value: string) =>
+    [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
   text(0, "RIFF");
   view.setUint32(4, 36 + frames * 4, true);
   text(8, "WAVEfmt ");

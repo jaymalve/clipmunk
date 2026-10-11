@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Issue } from "../core";
 
@@ -7,7 +7,11 @@ import type { Issue } from "../core";
  * project root; nothing here decides policy.
  */
 export class Fault extends Error {
-  constructor(readonly code: string, message: string, readonly path?: string) {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly path?: string,
+  ) {
     super(message);
   }
 }
@@ -29,7 +33,8 @@ export async function resolveInside(root: string, relative: string): Promise<str
   for (let probe = target; probe.startsWith(base); probe = path.dirname(probe)) {
     const real = await realpath(probe).catch(() => undefined);
     if (real === undefined) continue;
-    if (real !== base && !real.startsWith(base + path.sep)) throw new Fault("outside-project", `"${relative}" resolves outside the project through a symlink.`, relative);
+    if (real !== base && !real.startsWith(base + path.sep))
+      throw new Fault("outside-project", `"${relative}" resolves outside the project through a symlink.`, relative);
     break;
   }
   return target;
@@ -39,7 +44,8 @@ export async function readText(root: string, relative: string): Promise<string |
   try {
     return await readFile(await resolveInside(root, relative), "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT" || (error as NodeJS.ErrnoException).code === "EISDIR") return undefined;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || (error as NodeJS.ErrnoException).code === "EISDIR")
+      return undefined;
     throw error;
   }
 }
@@ -56,13 +62,19 @@ export async function writeText(root: string, relative: string, content: string 
 }
 
 export async function exists(root: string, relative: string): Promise<boolean> {
-  return lstat(await resolveInside(root, relative)).then(() => true, () => false);
+  return lstat(await resolveInside(root, relative)).then(
+    () => true,
+    () => false,
+  );
 }
 
 export async function listFiles(root: string, relative: string): Promise<string[]> {
   try {
     const entries = await readdir(await resolveInside(root, relative), { withFileTypes: true });
-    return entries.filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
+    return entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .sort();
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;

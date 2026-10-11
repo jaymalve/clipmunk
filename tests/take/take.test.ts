@@ -2,13 +2,13 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type Browser, type Page } from "playwright";
+import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/run";
-import { startDaemon, type Daemon } from "../../src/daemon";
+import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
-import { FFMPEG, QUADRANTS, makeTake } from "../support/take";
+import { FFMPEG, makeTake, QUADRANTS } from "../support/take";
 
 /** The take compositor, editor and export, checked against a synthetic take whose pixels are known. */
 const root = path.resolve("examples/vite-app");
@@ -17,16 +17,21 @@ const made: string[] = [];
 let server: ViteDevServer, daemon: Daemon, browser: Browser, page: Page, origin: string, projectFile: string;
 
 // Canvas geometry for the default edit: 1920x1080, 6% padding, a 640x360 source.
-const SCALE = 2.64, BOX = { x: 115.2, y: 64.8 };
+const SCALE = 2.64,
+  BOX = { x: 115.2, y: 64.8 };
 const at = (x: number, y: number) => [BOX.x + x * SCALE, BOX.y + y * SCALE] as const;
 const CAM = [1787, 947] as const;
 const pixel = (x: number, y: number) =>
-  page.evaluate(([px, py]) => {
-    const canvas = document.querySelector("[data-flick-chrome]")!.shadowRoot!.querySelector("canvas")!;
-    return [...canvas.getContext("2d")!.getImageData(Math.round(px!), Math.round(py!), 1, 1).data.slice(0, 3)];
-  }, [x, y]);
+  page.evaluate(
+    ([px, py]) => {
+      const canvas = document.querySelector("[data-flick-chrome]")!.shadowRoot!.querySelector("canvas")!;
+      return [...canvas.getContext("2d")!.getImageData(Math.round(px!), Math.round(py!), 1, 1).data.slice(0, 3)];
+    },
+    [x, y],
+  );
 const seek = (ms: number) => page.evaluate((time) => (window as any).__FLICK__.seek(time), ms);
-const near = (actual: number[], expected: readonly number[], tolerance = 40) => expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
+const near = (actual: number[], expected: readonly number[], tolerance = 40) =>
+  expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
 const takeFile = (id: string) => path.join(root, ".flick/takes", id, "take.json");
 
 beforeAll(async () => {
@@ -68,7 +73,13 @@ describe("take compositor", () => {
   it("zooms to the click, with the click at the centre and the cursor drawn on it", async () => {
     await seek(2000);
     // The yellow quadrant now fills the frame, including where red and green were.
-    for (const [x, y] of [[160, 90], [480, 90], [160, 270], [600, 40]] as const) expect(near(await pixel(...at(x, y)), QUADRANTS.yellow), `${x},${y}`).toBe(true);
+    for (const [x, y] of [
+      [160, 90],
+      [480, 90],
+      [160, 270],
+      [600, 40],
+    ] as const)
+      expect(near(await pixel(...at(x, y)), QUADRANTS.yellow), `${x},${y}`).toBe(true);
     // The click point is at the centre of the canvas; the cursor's body sits just below its tip.
     expect(near(await pixel(960, 560), [255, 255, 255], 25), "cursor").toBe(true);
     await seek(3900); // after the hold, the view has eased back out
@@ -87,7 +98,9 @@ describe("take compositor", () => {
 describe("take editor", () => {
   const toggle = (label: string) => page.getByLabel(label, { exact: true }).click();
   const saved = async (read: (edit: any) => unknown, expected: unknown) =>
-    expect.poll(async () => read(JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit), { timeout: 10_000 }).toEqual(expected);
+    expect
+      .poll(async () => read(JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit), { timeout: 10_000 })
+      .toEqual(expected);
 
   it("applies edits to the preview at once and saves them to take.json", async () => {
     await seek(2000);
@@ -113,11 +126,18 @@ describe("take editor", () => {
   }, 60_000);
 
   it("adds generated music, picks a new tune, and plays it with the preview", async () => {
-    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("lofi");
+    await page
+      .locator("label.field", { hasText: /^Music/ })
+      .locator("select")
+      .selectOption("lofi");
     await saved((edit) => edit.music, { style: "lofi", gain: 0.5, duck: true, sync: true }); // its own tune, from the take's name
     expect(await page.getByLabel(/Sync the beat to 1 moment/).isChecked()).toBe(true); // the take has one click
     await page.getByRole("button", { name: "New tune" }).click();
-    await expect.poll(async () => typeof JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit.music.seed, { timeout: 10_000 }).toBe("number");
+    await expect
+      .poll(async () => typeof JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit.music.seed, {
+        timeout: 10_000,
+      })
+      .toBe("number");
     // Playing with music on must not disturb playback.
     await seek(0);
     await page.getByRole("button", { name: "Play" }).click();
@@ -126,8 +146,15 @@ describe("take editor", () => {
     expect(await page.locator(".transport .time").textContent()).not.toMatch(/^0\.00s/);
     await page.getByRole("button", { name: "Listen" }).click();
     await page.getByRole("button", { name: "Stop", exact: true }).click();
-    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("off");
-    await expect.poll(async () => "music" in JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit, { timeout: 10_000 }).toBe(false);
+    await page
+      .locator("label.field", { hasText: /^Music/ })
+      .locator("select")
+      .selectOption("off");
+    await expect
+      .poll(async () => "music" in JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit, {
+        timeout: 10_000,
+      })
+      .toBe(false);
   }, 60_000);
 
   it("plays, and trims from the playhead", async () => {
@@ -167,16 +194,44 @@ describe("exporting from the editor", () => {
 
 describe("take export", () => {
   /** Average colour of a region of one frame of a file. */
-  const colour = (file: string, at: number, crop: string) =>
-    [...execFileSync(FFMPEG, ["-loglevel", "error", "-ss", String(at), "-i", path.join(root, file), "-vf", `crop=${crop},scale=1:1`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).subarray(0, 3)];
+  const colour = (file: string, at: number, crop: string) => [
+    ...execFileSync(FFMPEG, [
+      "-loglevel",
+      "error",
+      "-ss",
+      String(at),
+      "-i",
+      path.join(root, file),
+      "-vf",
+      `crop=${crop},scale=1:1`,
+      "-frames:v",
+      "1",
+      "-f",
+      "rawvideo",
+      "-pix_fmt",
+      "rgb24",
+      "-",
+    ]).subarray(0, 3),
+  ];
 
   it("renders the composited take to an MP4 with the voice track", async () => {
     const output = ".flick/exports/zz-test-take.mp4";
     made.push(output);
     const progress: number[] = [];
-    const result = await exportTake({ takeId: "zz-test-export", url: origin, output, fps: 30, height: 360 }, { root, onProgress: (done) => progress.push(done) });
+    const result = await exportTake(
+      { takeId: "zz-test-export", url: origin, output, fps: 30, height: 360 },
+      { root, onProgress: (done) => progress.push(done) },
+    );
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
-    expect(result.data).toMatchObject({ output, fps: 30, frames: 120, durationMs: 4000, width: 640, height: 360, audio: true });
+    expect(result.data).toMatchObject({
+      output,
+      fps: 30,
+      frames: 120,
+      durationMs: 4000,
+      width: 640,
+      height: 360,
+      audio: true,
+    });
     expect(progress.at(-1)).toBe(120);
     expect(await probeVideo(output, root)).toMatchObject({ frames: 120, width: 640, height: 360, fps: 30 });
     expect(await probeMedia(output, root)).toMatchObject({ hasVideo: true, hasAudio: true, durationMs: 4000 });
@@ -185,16 +240,28 @@ describe("take export", () => {
     expect(near(colour(output, 2.0, "20:20:170:95"), QUADRANTS.yellow, 50)).toBe(true);
     expect(near(colour(output, 2.0, "8:8:2:2"), [11, 11, 15], 12)).toBe(true);
     expect(near(colour(output, 2.0, "16:16:588:308"), [255, 0, 255], 50), "camera bubble").toBe(true);
-    expect(await exportTake({ takeId: "zz-test-export", url: origin, output, fps: 30 }, { root })).toMatchObject({ ok: false, issues: [{ code: "output-exists" }] });
+    expect(await exportTake({ takeId: "zz-test-export", url: origin, output, fps: 30 }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "output-exists" }],
+    });
   }, 240_000);
 
   it("puts generated music under the voice", async () => {
     const file = takeFile("zz-test-export");
     const take = JSON.parse(await readFile(file, "utf8"));
-    await writeFile(file, JSON.stringify({ ...take, edit: { ...take.edit, music: { style: "lofi" }, audio: { ...take.edit.audio, muted: true } } }));
+    await writeFile(
+      file,
+      JSON.stringify({
+        ...take,
+        edit: { ...take.edit, music: { style: "lofi" }, audio: { ...take.edit.audio, muted: true } },
+      }),
+    );
     const musicOnly = ".flick/exports/zz-test-take-music.mp4";
     made.push(musicOnly);
-    const result = await exportTake({ takeId: "zz-test-export", url: origin, output: musicOnly, fps: 30, height: 360 }, { root });
+    const result = await exportTake(
+      { takeId: "zz-test-export", url: origin, output: musicOnly, fps: 30, height: 360 },
+      { root },
+    );
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     // The voice is muted, so any sound in the file is the music.
     expect(result.data.audio).toBe(true);
@@ -203,9 +270,22 @@ describe("take export", () => {
     await writeFile(file, JSON.stringify({ ...take, edit: { ...take.edit, music: { style: "lofi" } } }));
     const both = ".flick/exports/zz-test-take-music-voice.mp4";
     made.push(both);
-    const mixed = await exportTake({ takeId: "zz-test-export", url: origin, output: both, fps: 30, height: 360 }, { root });
+    const mixed = await exportTake(
+      { takeId: "zz-test-export", url: origin, output: both, fps: 30, height: 360 },
+      { root },
+    );
     expect(mixed.ok && mixed.data.audio).toBe(true);
-    const off = await exportTake({ takeId: "zz-test-export", url: origin, output: ".flick/exports/zz-test-take-nomusic.mp4", fps: 30, height: 360, music: false }, { root });
+    const off = await exportTake(
+      {
+        takeId: "zz-test-export",
+        url: origin,
+        output: ".flick/exports/zz-test-take-nomusic.mp4",
+        fps: 30,
+        height: 360,
+        music: false,
+      },
+      { root },
+    );
     made.push(".flick/exports/zz-test-take-nomusic.mp4");
     expect(off.ok && off.data.audio).toBe(true); // the voice alone
     await writeFile(file, JSON.stringify(take));
@@ -224,8 +304,14 @@ describe("take export", () => {
     expect(result.data).toMatchObject({ frames: 30, durationMs: 1000, audio: false });
     expect(await probeMedia(output, root)).toMatchObject({ hasAudio: false, durationMs: 1000 });
     expect(near(colour(output, 0.5, "20:20:170:95"), QUADRANTS.yellow, 50)).toBe(true); // clip 0.5 s is take 2.0 s
-    expect(await exportTake({ takeId: "nope", url: origin }, { root })).toMatchObject({ ok: false, issues: [{ code: "unknown-take" }] });
-    expect(await exportTake({ takeId: "zz-test-export", url: origin, fps: 24 }, { root })).toMatchObject({ ok: false, issues: [{ code: "invalid-export" }] });
+    expect(await exportTake({ takeId: "nope", url: origin }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "unknown-take" }],
+    });
+    expect(await exportTake({ takeId: "zz-test-export", url: origin, fps: 24 }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "invalid-export" }],
+    });
     expect(existsSync(path.join(root, ".flick/exports/nope.mp4"))).toBe(false);
   }, 240_000);
 });
@@ -233,7 +319,12 @@ describe("take export", () => {
 describe("flick zoom", () => {
   const flick = async (...args: string[]) => {
     const out: string[] = [];
-    const code = await run(args, { cwd: root, out: (text) => out.push(text), err: (text) => out.push(text), version: "test" });
+    const code = await run(args, {
+      cwd: root,
+      out: (text) => out.push(text),
+      err: (text) => out.push(text),
+      version: "test",
+    });
     return { code, out: out.join("\n") };
   };
   it("shows the automatic zooms and stores them as editable keyframes", async () => {

@@ -19,7 +19,8 @@ async function host(files: Record<string, string> = {}) {
   return root;
 }
 async function flick(cwd: string, ...args: string[]) {
-  const out: string[] = [], err: string[] = [];
+  const out: string[] = [],
+    err: string[] = [];
   const code = await run(args, { cwd, out: (text) => out.push(text), err: (text) => err.push(text), version: "9.9.9" });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
@@ -67,10 +68,17 @@ describe("flick cli", () => {
 
   it("lists scenes and exits non-zero while any scene file is broken", async () => {
     const guide = getGuide();
-    const cwd = await host({ ...VITE, [guide.example.recipePath]: JSON.stringify(guide.example.recipe), [guide.example.componentPath]: guide.example.component });
+    const cwd = await host({
+      ...VITE,
+      [guide.example.recipePath]: JSON.stringify(guide.example.recipe),
+      [guide.example.componentPath]: guide.example.component,
+    });
     expect(await flick(cwd, "scenes")).toMatchObject({ code: 0 });
     expect((await flick(cwd, "scenes")).out).toContain("page-survey");
-    await writeFile(path.join(cwd, "src/flick/scenes/half.scene.json"), JSON.stringify({ ...guide.example.recipe, id: "half" }));
+    await writeFile(
+      path.join(cwd, "src/flick/scenes/half.scene.json"),
+      JSON.stringify({ ...guide.example.recipe, id: "half" }),
+    );
     const broken = await flick(cwd, "scenes");
     expect(broken.code).toBe(1);
     expect(broken.out).toContain("needs a component next to it");
@@ -82,11 +90,19 @@ describe("flick cli", () => {
     expect((await flick(cwd, "takes")).out).toContain("No takes yet");
     const controller = new AbortController();
     const out: string[] = [];
-    const running = run(["dev", "--port", "0", "--json"], { cwd, out: (text) => out.push(text), err: () => {}, signal: controller.signal, version: "9.9.9" });
+    const running = run(["dev", "--port", "0", "--json"], {
+      cwd,
+      out: (text) => out.push(text),
+      err: () => {},
+      signal: controller.signal,
+      version: "9.9.9",
+    });
     await expect.poll(() => out.length).toBe(1);
     const { data } = JSON.parse(out[0]!) as { data: { port: number; token: string; link: string } };
     expect(data.link).toBe(`http://127.0.0.1:5173/?flick=1#flick-daemon=${data.port}.${data.token}`);
-    const status = await fetch(`http://127.0.0.1:${data.port}/v1/status`, { headers: { authorization: `Bearer ${data.token}` } });
+    const status = await fetch(`http://127.0.0.1:${data.port}/v1/status`, {
+      headers: { authorization: `Bearer ${data.token}` },
+    });
     expect(((await status.json()) as { data: { version: string } }).data.version).toBe("9.9.9");
     controller.abort();
     expect(await running).toBe(0);

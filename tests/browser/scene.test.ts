@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from "playwright";
+import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -48,7 +48,11 @@ describe.each(["page-survey", "plating"])("scene %s", (scene) => {
 describe("depth of field", () => {
   it("uses a depth-varying filter on a tilted surface and none when blur is off", async () => {
     await open("page-survey");
-    const filter = () => page.locator("[data-flick-leaf]").first().evaluate((element) => (element as HTMLElement).style.filter);
+    const filter = () =>
+      page
+        .locator("[data-flick-leaf]")
+        .first()
+        .evaluate((element) => (element as HTMLElement).style.filter);
     expect(await filter()).toMatch(/^url\(/);
     expect(await page.locator("filter feGaussianBlur").count()).toBeGreaterThan(1);
   }, 60_000);
@@ -98,7 +102,12 @@ describe("studio", () => {
 
   it("uses one uniform blur per flat layer and moves it with the focus track", async () => {
     await open("rack-focus");
-    const blur = (id: string) => page.locator(`[data-flick-id="${id}"] [data-flick-leaf]`).evaluate((element) => parseFloat(/blur\(([\d.]+)px\)/.exec((element as HTMLElement).style.filter)?.[1] ?? "0"));
+    const blur = (id: string) =>
+      page
+        .locator(`[data-flick-id="${id}"] [data-flick-leaf]`)
+        .evaluate((element) =>
+          parseFloat(/blur\(([\d.]+)px\)/.exec((element as HTMLElement).style.filter)?.[1] ?? "0"),
+        );
     await seek(0);
     const [cardStart, tableStart] = [await blur("card"), await blur("table")];
     await seek(1500);
@@ -112,11 +121,35 @@ describe("studio", () => {
 
   it("exposes a capture bridge that rejects times outside the scene", async () => {
     await open("rack-focus");
-    const bridge = await page.evaluate(() => { const b = (window as any).__FLICK__; return { version: b.version, kind: b.kind, durationMs: b.durationMs, width: b.width, height: b.height, selector: b.selector }; });
-    expect(bridge).toEqual({ version: 1, kind: "scene", durationMs: 1500, width: 1000, height: 600, selector: '[data-flick-capture="scene"]' });
+    const bridge = await page.evaluate(() => {
+      const b = (window as any).__FLICK__;
+      return {
+        version: b.version,
+        kind: b.kind,
+        durationMs: b.durationMs,
+        width: b.width,
+        height: b.height,
+        selector: b.selector,
+      };
+    });
+    expect(bridge).toEqual({
+      version: 1,
+      kind: "scene",
+      durationMs: 1500,
+      width: 1000,
+      height: 600,
+      selector: '[data-flick-capture="scene"]',
+    });
     await page.evaluate(() => (window as any).__FLICK__.seek(750));
     expect(await page.locator(".time").textContent()).toBe("0.75s / 1.50s");
-    expect(await page.evaluate(() => (window as any).__FLICK__.seek(9999).then(() => "ok", (e: Error) => e.message))).toContain("outside the scene");
+    expect(
+      await page.evaluate(() =>
+        (window as any).__FLICK__.seek(9999).then(
+          () => "ok",
+          (e: Error) => e.message,
+        ),
+      ),
+    ).toContain("outside the scene");
   }, 60_000);
 });
 

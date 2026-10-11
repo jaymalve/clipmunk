@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { ClipIdSchema } from "./recipe";
 import { LoopbackOriginSchema } from "./project";
+import { ClipIdSchema } from "./recipe";
 
 /** Requests for local rendering. Validated here, executed by the export module. */
 export const EXPORT_FPS = [30, 60, 120] as const;
@@ -8,10 +8,18 @@ export const EXPORT_FPS = [30, 60, 120] as const;
 const dimension = z.number().int().min(64).max(3840).multipleOf(2);
 /** A project-relative path with no traversal; outputs never leave the project. */
 const relativeFile = (extension: string) =>
-  z.string().min(1).endsWith(extension).refine(
-    (value) => !value.includes("\\") && !value.includes("\0") && !/^[A-Za-z]:/.test(value) && value.split("/").every((part) => part !== "" && part !== "." && part !== ".."),
-    `Use a project-relative ${extension} path without "..".`,
-  );
+  z
+    .string()
+    .min(1)
+    .endsWith(extension)
+    .refine(
+      (value) =>
+        !value.includes("\\") &&
+        !value.includes("\0") &&
+        !/^[A-Za-z]:/.test(value) &&
+        value.split("/").every((part) => part !== "" && part !== "." && part !== ".."),
+      `Use a project-relative ${extension} path without "..".`,
+    );
 
 export const ExportSceneSchema = z.strictObject({
   sceneId: ClipIdSchema,
@@ -28,7 +36,18 @@ export const ExportSceneSchema = z.strictObject({
   music: z.boolean().default(true),
 });
 export type ExportSceneInput = z.input<typeof ExportSceneSchema>;
-export type ExportSceneResult = { output: string; fps: number; frames: number; durationMs: number; width: number; height: number; workers: number; audio: boolean; elapsedMs: number; warnings?: string[] };
+export type ExportSceneResult = {
+  output: string;
+  fps: number;
+  frames: number;
+  durationMs: number;
+  width: number;
+  height: number;
+  workers: number;
+  audio: boolean;
+  elapsedMs: number;
+  warnings?: string[];
+};
 
 export const SnapshotSceneSchema = z.strictObject({
   sceneId: ClipIdSchema,
@@ -51,11 +70,30 @@ export const ExportTakeSchema = z.strictObject({
   /** Include the take's generated music. */
   music: z.boolean().default(true),
 });
-export type ExportTakeResult = { output: string; fps: number; frames: number; durationMs: number; width: number; height: number; codec: string; audio: boolean; elapsedMs: number };
+export type ExportTakeResult = {
+  output: string;
+  fps: number;
+  frames: number;
+  durationMs: number;
+  width: number;
+  height: number;
+  codec: string;
+  audio: boolean;
+  elapsedMs: number;
+};
 
 export const ExportSequenceSchema = z.strictObject({
   sequenceId: ClipIdSchema,
   url: LoopbackOriginSchema,
   output: relativeFile(".mp4").optional(),
 });
-export type ExportSequenceResult = { output: string; fps: number; durationMs: number; width: number; height: number; items: number; audio: boolean; elapsedMs: number };
+export type ExportSequenceResult = {
+  output: string;
+  fps: number;
+  durationMs: number;
+  width: number;
+  height: number;
+  items: number;
+  audio: boolean;
+  elapsedMs: number;
+};

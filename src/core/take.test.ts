@@ -1,12 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { TakeEventSchema, defaultEdit, summarizeTake, takeId, validateTake } from "./index";
+import { defaultEdit, summarizeTake, TakeEventSchema, takeId, validateTake } from "./index";
 
 const source = {
-  width: 1280, height: 720, dpr: 2, durationMs: 5000, background: "rgb(255, 255, 255)",
+  width: 1280,
+  height: 720,
+  dpr: 2,
+  durationMs: 5000,
+  background: "rgb(255, 255, 255)",
   screen: { file: "screen.webm", offsetMs: 0, latencyMs: 40, width: 2560, height: 1440 },
   events: { file: "events.jsonl", count: 12 },
 };
-const take = (overrides: Record<string, unknown> = {}) => ({ version: 1, id: "take-20261005-142233", title: "Demo", createdAt: "2026-10-05T14:22:33.000Z", source, edit: defaultEdit(5000), ...overrides });
+const take = (overrides: Record<string, unknown> = {}) => ({
+  version: 1,
+  id: "take-20261005-142233",
+  title: "Demo",
+  createdAt: "2026-10-05T14:22:33.000Z",
+  source,
+  edit: defaultEdit(5000),
+  ...overrides,
+});
 
 describe("take schema", () => {
   it("starts every take untrimmed on a 16:9 canvas with auto-zoom", () => {
@@ -20,7 +32,16 @@ describe("take schema", () => {
       cam: { shape: "circle", corner: "br" },
       audio: { muted: false, normalize: true },
     });
-    expect(summarizeTake(result.data)).toEqual({ id: "take-20261005-142233", title: "Demo", createdAt: "2026-10-05T14:22:33.000Z", durationMs: 5000, width: 2560, height: 1440, hasCam: false, hasAudio: false });
+    expect(summarizeTake(result.data)).toEqual({
+      id: "take-20261005-142233",
+      title: "Demo",
+      createdAt: "2026-10-05T14:22:33.000Z",
+      durationMs: 5000,
+      width: 2560,
+      height: 1440,
+      hasCam: false,
+      hasAudio: false,
+    });
   });
   it("rejects a trim outside the recording and unknown keys", () => {
     expect(validateTake(take({ edit: { ...defaultEdit(5000), trim: { startMs: 0, endMs: 9000 } } })).ok).toBe(false);
@@ -44,11 +65,14 @@ describe("take events", () => {
       { t: 50, k: "scroll", x: 0, y: 300 },
       { t: 60, k: "focus", rect: [0, 0, 10, 10], editable: true },
       { t: 70, k: "type", rect: [0, 0, 10, 10] },
-    ]) expect(TakeEventSchema.safeParse(event).success, event.k).toBe(true);
+    ])
+      expect(TakeEventSchema.safeParse(event).success, event.k).toBe(true);
   });
   it("has no field that could carry typed text", () => {
     expect(TakeEventSchema.safeParse({ t: 1, k: "type", rect: [0, 0, 1, 1], key: "a" }).success).toBe(false);
-    expect(TakeEventSchema.safeParse({ t: 1, k: "focus", rect: [0, 0, 1, 1], editable: true, value: "hunter2" }).success).toBe(false);
+    expect(
+      TakeEventSchema.safeParse({ t: 1, k: "focus", rect: [0, 0, 1, 1], editable: true, value: "hunter2" }).success,
+    ).toBe(false);
     expect(TakeEventSchema.safeParse({ t: -1, k: "move", x: 0, y: 0 }).success).toBe(false);
     expect(TakeEventSchema.safeParse({ t: 1, k: "keydown" }).success).toBe(false);
   });

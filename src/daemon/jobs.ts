@@ -4,8 +4,18 @@ import type { Issue, Result } from "../core";
 /** Long-running work started by the studio. Each job keeps its events so a listener that
  * connects late still sees the latest progress and the outcome.
  */
-export type JobEvent = { type: "progress"; done: number; total: number } | { type: "done"; data: unknown } | { type: "failed"; issues: Issue[] };
-type Job = { id: string; kind: string; last?: JobEvent; finished: boolean; listeners: Set<(event: JobEvent) => void>; controller: AbortController };
+export type JobEvent =
+  | { type: "progress"; done: number; total: number }
+  | { type: "done"; data: unknown }
+  | { type: "failed"; issues: Issue[] };
+type Job = {
+  id: string;
+  kind: string;
+  last?: JobEvent;
+  finished: boolean;
+  listeners: Set<(event: JobEvent) => void>;
+  controller: AbortController;
+};
 
 export function createJobs() {
   const jobs = new Map<string, Job>();
@@ -15,12 +25,26 @@ export function createJobs() {
     for (const listener of [...job.listeners]) listener(event);
   };
   return {
-    start<T>(kind: string, work: (signal: AbortSignal, progress: (done: number, total: number) => void) => Promise<Result<T>>): string {
-      const job: Job = { id: randomBytes(8).toString("hex"), kind, finished: false, listeners: new Set(), controller: new AbortController() };
+    start<T>(
+      kind: string,
+      work: (signal: AbortSignal, progress: (done: number, total: number) => void) => Promise<Result<T>>,
+    ): string {
+      const job: Job = {
+        id: randomBytes(8).toString("hex"),
+        kind,
+        finished: false,
+        listeners: new Set(),
+        controller: new AbortController(),
+      };
       jobs.set(job.id, job);
       work(job.controller.signal, (done, total) => emit(job, { type: "progress", done, total })).then(
-        (result) => emit(job, result.ok ? { type: "done", data: result.data } : { type: "failed", issues: result.issues }),
-        (error: unknown) => emit(job, { type: "failed", issues: [{ code: "job-failed", message: error instanceof Error ? error.message : String(error) }] }),
+        (result) =>
+          emit(job, result.ok ? { type: "done", data: result.data } : { type: "failed", issues: result.issues }),
+        (error: unknown) =>
+          emit(job, {
+            type: "failed",
+            issues: [{ code: "job-failed", message: error instanceof Error ? error.message : String(error) }],
+          }),
       );
       return job.id;
     },

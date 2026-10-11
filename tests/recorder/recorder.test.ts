@@ -2,11 +2,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { type Browser, type BrowserContext, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { TakeEventSchema, validateTake, type Take, type TakeEvent } from "../../src/core";
-import { startDaemon, type Daemon } from "../../src/daemon";
+import { type Take, type TakeEvent, TakeEventSchema, validateTake } from "../../src/core";
+import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
 
 /** Records the example app for real: headed Chromium capturing its own tab, the HUD,
@@ -21,18 +21,45 @@ let projectFile = "";
 const hud = () => page.locator("flick-recorder");
 /** Wait for the recorder to be recording; on failure, report what the HUD says instead of a bare timeout. */
 async function recording() {
-  await hud().locator("button.action", { hasText: "Stop" }).waitFor({ timeout: 20_000 }).catch(async () => {
-    throw new Error(`Recording did not start. HUD says: "${await hud().locator(".status").textContent()}" / button "${await hud().locator("button.action").textContent()}"`);
-  });
+  await hud()
+    .locator("button.action", { hasText: "Stop" })
+    .waitFor({ timeout: 20_000 })
+    .catch(async () => {
+      throw new Error(
+        `Recording did not start. HUD says: "${await hud().locator(".status").textContent()}" / button "${await hud().locator("button.action").textContent()}"`,
+      );
+    });
 }
 
 /** Average colour of a region of one video frame, as [r, g, b]. */
 function colourAt(file: string, seconds: number, crop: string): number[] {
-  const bytes = execFileSync(ffmpeg, ["-loglevel", "error", "-ss", String(seconds), "-i", file, "-vf", `crop=${crop},scale=1:1`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]);
+  const bytes = execFileSync(ffmpeg, [
+    "-loglevel",
+    "error",
+    "-ss",
+    String(seconds),
+    "-i",
+    file,
+    "-vf",
+    `crop=${crop},scale=1:1`,
+    "-frames:v",
+    "1",
+    "-f",
+    "rawvideo",
+    "-pix_fmt",
+    "rgb24",
+    "-",
+  ]);
   return [...bytes.subarray(0, 3)];
 }
-async function record(options: { camera: boolean; microphone: boolean }, during: () => Promise<void>): Promise<{ take: Take; events: TakeEvent[]; dir: string }> {
-  for (const [name, wanted] of [["mic", options.microphone], ["camera", options.camera]] as const) {
+async function record(
+  options: { camera: boolean; microphone: boolean },
+  during: () => Promise<void>,
+): Promise<{ take: Take; events: TakeEvent[]; dir: string }> {
+  for (const [name, wanted] of [
+    ["mic", options.microphone],
+    ["camera", options.camera],
+  ] as const) {
     const button = hud().locator(`button.${name}`);
     if ((await button.getAttribute("aria-pressed")) !== String(wanted)) await button.click();
   }
@@ -46,7 +73,10 @@ async function record(options: { camera: boolean; microphone: boolean }, during:
   const dir = path.join(root, ".flick/takes", id);
   const take = validateTake(JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")));
   if (!take.ok) throw new Error(JSON.stringify(take.issues));
-  const events = (await readFile(path.join(dir, "events.jsonl"), "utf8")).trim().split("\n").map((line) => TakeEventSchema.parse(JSON.parse(line)));
+  const events = (await readFile(path.join(dir, "events.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => TakeEventSchema.parse(JSON.parse(line)));
   return { take: take.data, events, dir };
 }
 
@@ -57,7 +87,10 @@ beforeAll(async () => {
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
   daemon = await startDaemon({ root, port: 0, announce: false }); // the example may have a real daemon running
-  browser = await chromium.launch({ headless: false, args: ["--auto-accept-this-tab-capture", "--use-fake-device-for-media-stream", "--window-size=1300,900"] });
+  browser = await chromium.launch({
+    headless: false,
+    args: ["--auto-accept-this-tab-capture", "--use-fake-device-for-media-stream", "--window-size=1300,900"],
+  });
   context = await browser.newContext({ viewport: null, permissions: ["camera", "microphone"] });
   page = await context.newPage();
   page.on("pageerror", (error) => console.error("pageerror:", error.message));
@@ -75,7 +108,9 @@ afterAll(async () => {
 describe("recorder", () => {
   it("connects from the daemon link, hides the token, and mounts its HUD outside <body>", async () => {
     expect(new URL(page.url()).hash).toBe("");
-    expect(await page.evaluate(() => document.querySelector("flick-recorder")!.parentElement === document.documentElement)).toBe(true);
+    expect(
+      await page.evaluate(() => document.querySelector("flick-recorder")!.parentElement === document.documentElement),
+    ).toBe(true);
     expect(await page.evaluate(() => document.body.contains(document.querySelector("flick-recorder")))).toBe(false);
   });
 
@@ -84,7 +119,14 @@ describe("recorder", () => {
     const box = (await button.boundingBox())!;
     const { take, events, dir } = await record({ camera: false, microphone: false }, async () => {
       // The page is prepared for capture only while recording.
-      expect(await page.evaluate(() => [getComputedStyle(document.body).cursor, getComputedStyle(document.querySelector(".btn")!).cursor, document.body.style.isolation, !!document.querySelector("[data-flick-recorder=backdrop]")])).toEqual(["none", "none", "isolate", true]);
+      expect(
+        await page.evaluate(() => [
+          getComputedStyle(document.body).cursor,
+          getComputedStyle(document.querySelector(".btn")!).cursor,
+          document.body.style.isolation,
+          !!document.querySelector("[data-flick-recorder=backdrop]"),
+        ]),
+      ).toEqual(["none", "none", "isolate", true]);
       await page.mouse.move(300, 300, { steps: 5 });
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
       await button.click();
@@ -93,9 +135,20 @@ describe("recorder", () => {
       await page.waitForTimeout(600);
     });
 
-    expect(await page.evaluate(() => [document.body.style.isolation, !!document.querySelector("[data-flick-recorder]"), getComputedStyle(document.body).cursor])).toEqual(["", false, "auto"]);
+    expect(
+      await page.evaluate(() => [
+        document.body.style.isolation,
+        !!document.querySelector("[data-flick-recorder]"),
+        getComputedStyle(document.body).cursor,
+      ]),
+    ).toEqual(["", false, "auto"]);
     const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-    expect(take.source).toMatchObject({ width: viewport.width, height: viewport.height, screen: { file: "screen.webm" }, events: { count: events.length } });
+    expect(take.source).toMatchObject({
+      width: viewport.width,
+      height: viewport.height,
+      screen: { file: "screen.webm" },
+      events: { count: events.length },
+    });
     // Chrome may round the captured element down by a pixel.
     expect(Math.abs(take.source.screen.width - viewport.width)).toBeLessThanOrEqual(2);
     expect(Math.abs(take.source.screen.height - viewport.height)).toBeLessThanOrEqual(2);
@@ -111,13 +164,19 @@ describe("recorder", () => {
     const click = events.find((event) => event.k === "down")!;
     expect(click).toMatchObject({ k: "down", button: 0 });
     // The click carries the box of the button that was pressed, which is what auto-zoom targets.
-    if (click.k === "down") for (const [index, expected] of [box.x, box.y, box.width, box.height].entries()) expect(click.rect[index]).toBeCloseTo(expected, 0);
+    if (click.k === "down")
+      for (const [index, expected] of [box.x, box.y, box.width, box.height].entries())
+        expect(click.rect[index]).toBeCloseTo(expected, 0);
     expect(events.some((event) => event.k === "cursor" && event.style === "pointer")).toBe(true);
     expect(events.filter((event) => event.k === "type")).toHaveLength(6);
     expect(await readFile(path.join(dir, "events.jsonl"), "utf8")).not.toMatch(/secret|"key"/);
 
     // Where the HUD bar sat, the video shows the light page, not the dark bar.
-    const bar = colourAt(path.join(dir, "screen.webm"), 1, `120:20:${Math.round(viewport.width / 2 - 60)}:${viewport.height - 50}`);
+    const bar = colourAt(
+      path.join(dir, "screen.webm"),
+      1,
+      `120:20:${Math.round(viewport.width / 2 - 60)}:${viewport.height - 50}`,
+    );
     expect(Math.min(...bar)).toBeGreaterThan(200);
     expect(existsSync(path.join(dir, "screen.raw.webm"))).toBe(false);
   }, 120_000);
@@ -133,17 +192,21 @@ describe("recorder", () => {
     expect(take.source.audio).toMatchObject({ file: "audio.wav" });
     expect(take.source.mic).toBeUndefined();
     expect(Math.abs(take.source.cam!.offsetMs)).toBeLessThan(1500);
-    for (const file of ["screen.webm", "cam.webm", "audio.wav", "events.jsonl", "take.json"]) expect(existsSync(path.join(dir, file)), file).toBe(true);
+    for (const file of ["screen.webm", "cam.webm", "audio.wav", "events.jsonl", "take.json"])
+      expect(existsSync(path.join(dir, file)), file).toBe(true);
   }, 120_000);
 
   it("keeps the video and the event log on one clock, even when the page is still at the start", async () => {
     // A box that turns red the instant the pointer goes down: the same moment the log records.
     await page.evaluate(() => {
       const box = Object.assign(document.createElement("div"), { id: "sync-box" });
-      box.style.cssText = "position:fixed;left:40px;top:300px;width:120px;height:120px;background:rgb(0,160,0);z-index:5";
+      box.style.cssText =
+        "position:fixed;left:40px;top:300px;width:120px;height:120px;background:rgb(0,160,0);z-index:5";
       document.body.append(box);
       // Only the click on the page counts, not the one on the recorder's own Record button.
-      addEventListener("pointerdown", (event) => event.clientX === 700 && (box.style.background = "rgb(255,0,0)"), { capture: true });
+      addEventListener("pointerdown", (event) => event.clientX === 700 && (box.style.background = "rgb(255,0,0)"), {
+        capture: true,
+      });
     });
     const { take, events, dir } = await record({ camera: false, microphone: false }, async () => {
       await page.waitForTimeout(1800); // nothing repaints: a tab capture emits no frames here
@@ -153,15 +216,29 @@ describe("recorder", () => {
     await page.evaluate(() => document.getElementById("sync-box")!.remove());
     const down = events.find((event) => event.k === "down")!;
     // First video frame in which the box is red, from FFmpeg's per-frame report of the cropped region.
-    const report = spawnSync(ffmpeg, ["-hide_banner", "-i", path.join(dir, "screen.webm"), "-vf", "crop=60:60:70:330,showinfo", "-f", "null", "-"], { encoding: "utf8" }).stderr;
-    const frames = [...report.matchAll(/pts_time:([\d.]+).*?mean:\[(\d+) (\d+) (\d+)\]/g)].map((match) => ({ t: Number(match[1]) * 1000, cr: Number(match[4]) }));
+    const report = spawnSync(
+      ffmpeg,
+      ["-hide_banner", "-i", path.join(dir, "screen.webm"), "-vf", "crop=60:60:70:330,showinfo", "-f", "null", "-"],
+      { encoding: "utf8" },
+    ).stderr;
+    const frames = [...report.matchAll(/pts_time:([\d.]+).*?mean:\[(\d+) (\d+) (\d+)\]/g)].map((match) => ({
+      t: Number(match[1]) * 1000,
+      cr: Number(match[4]),
+    }));
     expect(frames.length).toBeGreaterThan(3);
     expect(frames[0]!.cr).toBeLessThan(120); // green at the start
     const turnedRed = frames.find((frame) => frame.cr > 180)!;
     expect(turnedRed, "the click is visible in the video").toBeDefined();
-    const facts = `click logged at ${down.t} ms, visible in video at ${Math.round(turnedRed.t)} ms, measured capture delay ${take.source.screen.latencyMs} ms, first frames at ${frames.slice(0, 4).map((frame) => Math.round(frame.t)).join(", ")} ms`;
+    const facts = `click logged at ${down.t} ms, visible in video at ${Math.round(turnedRed.t)} ms, measured capture delay ${take.source.screen.latencyMs} ms, first frames at ${frames
+      .slice(0, 4)
+      .map((frame) => Math.round(frame.t))
+      .join(", ")} ms`;
     // The picture changes no earlier than the logged click and within a few frames of it.
-    writeFileSync("/tmp/flick-sync-facts.txt", `${facts}; all frame times: ${frames.map((frame) => `${Math.round(frame.t)}${frame.cr > 180 ? "R" : ""}`).join(" ")}\n`, { flag: "a" });
+    writeFileSync(
+      "/tmp/flick-sync-facts.txt",
+      `${facts}; all frame times: ${frames.map((frame) => `${Math.round(frame.t)}${frame.cr > 180 ? "R" : ""}`).join(" ")}\n`,
+      { flag: "a" },
+    );
     expect(turnedRed.t - down.t, facts).toBeGreaterThan(-40);
     expect(turnedRed.t - down.t, facts).toBeLessThan(120);
     expect(take.source.screen.latencyMs).toBeLessThan(400);
@@ -174,7 +251,9 @@ describe("recorder", () => {
     await page.waitForTimeout(1200);
     await page.keyboard.press("Alt+Shift+KeyR");
     await hud().locator(".status a").waitFor({ timeout: 30_000 });
-    const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get("flick-take")!;
+    const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get(
+      "flick-take",
+    )!;
     takes.push(id);
     const log = await readFile(path.join(root, ".flick/takes", id, "recorder.log"), "utf8");
     expect(log).toMatch(/ start \d+x\d+@/);
@@ -194,7 +273,9 @@ describe("recorder", () => {
     expect(await hud().locator("button.discard").isVisible()).toBe(true);
     await hud().locator("button.action").click();
     await hud().locator(".status a").waitFor({ timeout: 30_000 });
-    const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get("flick-take")!;
+    const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get(
+      "flick-take",
+    )!;
     takes.push(id);
     const dir = path.join(root, ".flick/takes", id);
     const take = validateTake(JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")));
@@ -232,7 +313,9 @@ describe("recorder", () => {
       return { width: canvas.width, height: canvas.height, centre: [centre[0], centre[1], centre[2]] };
     });
     expect(drawn).toMatchObject({ width: 1920, height: 1080 });
-    expect(Math.max(...(drawn.centre as number[])), "the recording is drawn, not just the dark canvas").toBeGreaterThan(120);
+    expect(Math.max(...(drawn.centre as number[])), "the recording is drawn, not just the dark canvas").toBeGreaterThan(
+      120,
+    );
 
     const output = ".flick/exports/zz-test-recorded.mp4";
     const result = await exportTake({ takeId: withCamera, url: origin, output, fps: 30, height: 540 }, { root });

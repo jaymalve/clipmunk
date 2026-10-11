@@ -40,7 +40,11 @@ const within = <T>(ms: number, message: string, work: Promise<T>): Promise<T> =>
 const transparent = (color: string) => color === "transparent" || /rgba\([^)]*,\s*0\)$/.test(color);
 
 export function isSupported(): string | undefined {
-  if (typeof RestrictionTarget === "undefined" || !navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined")
+  if (
+    typeof RestrictionTarget === "undefined" ||
+    !navigator.mediaDevices?.getDisplayMedia ||
+    typeof MediaRecorder === "undefined"
+  )
     return "Recording needs a recent Chromium-based browser (Chrome or Edge 132+).";
   return undefined;
 }
@@ -48,7 +52,8 @@ export function isSupported(): string | undefined {
 /** Changes made to the page for the duration of a recording, with one function to undo them all. */
 function preparePage() {
   const body = document.body;
-  const html = getComputedStyle(document.documentElement), own = getComputedStyle(body);
+  const html = getComputedStyle(document.documentElement),
+    own = getComputedStyle(body);
   // A background on <html> or <body> paints on the canvas, outside the captured element.
   const source = !transparent(html.backgroundColor) || html.backgroundImage !== "none" ? html : own;
   const background = transparent(source.backgroundColor) ? "rgb(255, 255, 255)" : source.backgroundColor;
@@ -110,7 +115,11 @@ async function measureLatency(stream: MediaStream): Promise<number> {
   type FrameInfo = { now: number; captureTime?: number };
   const nextFrame = (ms: number) =>
     Promise.race([
-      new Promise<FrameInfo | undefined>((resolve) => video.requestVideoFrameCallback((now, metadata) => resolve({ now, captureTime: (metadata as { captureTime?: number }).captureTime }))),
+      new Promise<FrameInfo | undefined>((resolve) =>
+        video.requestVideoFrameCallback((now, metadata) =>
+          resolve({ now, captureTime: (metadata as { captureTime?: number }).captureTime }),
+        ),
+      ),
       new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms)),
     ]);
   try {
@@ -119,7 +128,10 @@ async function measureLatency(stream: MediaStream): Promise<number> {
     void video.play().catch(() => {});
     const canvas = new OffscreenCanvas(8, 8);
     const context = canvas.getContext("2d", { willReadFrequently: true })!;
-    const colours = [[255, 0, 255], [0, 255, 255]] as const;
+    const colours = [
+      [255, 0, 255],
+      [0, 255, 255],
+    ] as const;
     const shows = (colour: readonly [number, number, number]) => {
       if (!video.videoWidth) return false;
       const scale = video.videoWidth / innerWidth;
@@ -170,7 +182,11 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
       set({ phase: "saving" });
       const saved = await client.post<Take>(`/v1/takes/${takeId}/finalize`, payload);
       if (saved.ok) sessionStorage.removeItem(MARKER_KEY);
-      set(saved.ok ? { phase: "saved", take: saved.data } : { phase: "error", message: saved.issues[0]!.message, retry: save });
+      set(
+        saved.ok
+          ? { phase: "saved", take: saved.data }
+          : { phase: "error", message: saved.issues[0]!.message, retry: save },
+      );
     };
     return save;
   };
@@ -184,7 +200,11 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
     const status = await client.get<DaemonStatus>("/v1/status");
     if (!status.ok) return set({ phase: "error", message: status.issues[0]!.message });
     if (!status.data.ffmpeg)
-      return set({ phase: "error", message: "The Flick daemon cannot find FFmpeg, which it needs to save a recording. Install FFmpeg, or run `npm install -D ffmpeg-static` in your project, then restart `npx flick dev`." });
+      return set({
+        phase: "error",
+        message:
+          "The Flick daemon cannot find FFmpeg, which it needs to save a recording. Install FFmpeg, or run `npm install -D ffmpeg-static` in your project, then restart `npx flick dev`.",
+      });
     const streams: MediaStream[] = [];
     let page: ReturnType<typeof preparePage> | undefined;
     const cleanup = () => {
@@ -211,18 +231,30 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
       } as DisplayMediaStreamOptions);
       streams.push(display);
       const screenTrack = display.getVideoTracks()[0] as RestrictableTrack;
-      if (screenTrack.getSettings().displaySurface !== "browser") throw new Error("Choose “This tab” in the sharing dialog. Flick records the app's own tab.");
+      if (screenTrack.getSettings().displaySurface !== "browser")
+        throw new Error("Choose “This tab” in the sharing dialog. Flick records the app's own tab.");
       set({ phase: "starting", step: "Preparing the capture…" });
       page = preparePage();
       // Chrome leaves this pending forever if it cannot restrict the capture; never leave the recorder stuck on it.
-      await within(8000, "Chrome did not restrict the capture to this page. Reload the page and try again.", (async () => screenTrack.restrictTo(await RestrictionTarget!.fromElement(document.body)))());
+      await within(
+        8000,
+        "Chrome did not restrict the capture to this page. Reload the page and try again.",
+        (async () => screenTrack.restrictTo(await RestrictionTarget!.fromElement(document.body)))(),
+      );
       const latencyMs = await measureLatency(display);
 
-      const created = await client.post<{ id: string }>("/v1/takes", { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, background: page.background });
+      const created = await client.post<{ id: string }>("/v1/takes", {
+        width: innerWidth,
+        height: innerHeight,
+        dpr: devicePixelRatio,
+        background: page.background,
+      });
       if (!created.ok) throw new Error(created.issues[0]!.message);
       const takeId = created.data.id;
       const note = (text: string) => client.note(`/v1/takes/${takeId}/log`, text);
-      note(`start ${innerWidth}x${innerHeight}@${devicePixelRatio} latency=${latencyMs}ms camera=${options.camera} microphone=${options.microphone} url=${location.pathname}${location.search} ua=${navigator.userAgent}`);
+      note(
+        `start ${innerWidth}x${innerHeight}@${devicePixelRatio} latency=${latencyMs}ms camera=${options.camera} microphone=${options.microphone} url=${location.pathname}${location.search} ua=${navigator.userAgent}`,
+      );
 
       // Each track uploads its chunks strictly in order; a failed chunk is retried before the next is sent.
       let uploadError: string | undefined;
@@ -263,12 +295,30 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
       page.hideCursor();
       page.pulse(800);
       const pixels = screenTrack.getSettings().width! * screenTrack.getSettings().height!;
-      const screen = record("screen", display, pick(SCREEN_TYPES), Math.round(Math.min(24e6, Math.max(6e6, pixels * 4))));
-      const hasCamera = !!voice?.getVideoTracks().length, hasVoice = !!voice?.getAudioTracks().length;
-      const side = voice ? record(hasCamera ? "cam" : "mic", voice, pick(hasCamera ? ["video/webm;codecs=vp8,opus", "video/webm"] : ["audio/webm;codecs=opus", "audio/webm"]), hasCamera ? 2.5e6 : 128e3) : undefined;
+      const screen = record(
+        "screen",
+        display,
+        pick(SCREEN_TYPES),
+        Math.round(Math.min(24e6, Math.max(6e6, pixels * 4))),
+      );
+      const hasCamera = !!voice?.getVideoTracks().length,
+        hasVoice = !!voice?.getAudioTracks().length;
+      const side = voice
+        ? record(
+            hasCamera ? "cam" : "mic",
+            voice,
+            pick(hasCamera ? ["video/webm;codecs=vp8,opus", "video/webm"] : ["audio/webm;codecs=opus", "audio/webm"]),
+            hasCamera ? 2.5e6 : 128e3,
+          )
+        : undefined;
       const startedAt = screen.started; // zero of the take clock
       const sideOffset = side ? Math.round(side.started - startedAt) : 0;
-      const log = createEventLog({ clock: () => performance.now() - startedAt, flush: (lines) => upload("events", new Blob([lines])), cursorOf: page.cursorOf, ignore });
+      const log = createEventLog({
+        clock: () => performance.now() - startedAt,
+        flush: (lines) => upload("events", new Blob([lines])),
+        cursorOf: page.cursorOf,
+        ignore,
+      });
       log.start();
 
       const payloadFor = (durationMs: number) => ({
@@ -278,13 +328,26 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
         ...(side && !hasCamera ? { mic: { offsetMs: sideOffset } } : {}),
       });
       // A full page load ends a tab capture. Keep enough in sessionStorage to save what was uploaded.
-      const mark = () => sessionStorage.setItem(MARKER_KEY, JSON.stringify({ takeId, startedAt: Date.now() - (performance.now() - startedAt), aliveAt: Date.now(), payload: payloadFor(0) } satisfies Marker));
+      const mark = () =>
+        sessionStorage.setItem(
+          MARKER_KEY,
+          JSON.stringify({
+            takeId,
+            startedAt: Date.now() - (performance.now() - startedAt),
+            aliveAt: Date.now(),
+            payload: payloadFor(0),
+          } satisfies Marker),
+        );
       mark();
       const heartbeat = setInterval(mark, 1000);
       const watch: [EventTarget, string, (event: any) => void][] = [
         [window, "pagehide", () => note("pagehide: the page is unloading (reload or navigation) while recording")],
         [window, "error", (event: ErrorEvent) => note(`window error: ${event.message}`)],
-        [window, "unhandledrejection", (event: PromiseRejectionEvent) => note(`unhandled rejection: ${String(event.reason)}`)],
+        [
+          window,
+          "unhandledrejection",
+          (event: PromiseRejectionEvent) => note(`unhandled rejection: ${String(event.reason)}`),
+        ],
         [document, "visibilitychange", () => note(`visibility ${document.visibilityState}`)],
         [screenTrack, "mute", () => note("screen track muted")],
       ];
@@ -304,7 +367,12 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
         await Promise.all([...queues.values()].map((queue) => queue.tail));
         const save = saver(takeId, payloadFor(durationMs));
         // What reached the daemon before an upload failed is still a usable recording.
-        if (uploadError) return set({ phase: "error", message: `Recording stopped because uploading to the daemon failed: ${uploadError} You can save the part that was uploaded.`, retry: save });
+        if (uploadError)
+          return set({
+            phase: "error",
+            message: `Recording stopped because uploading to the daemon failed: ${uploadError} You can save the part that was uploaded.`,
+            retry: save,
+          });
         await save();
       };
       // The browser's own "Stop sharing" button ends the recording the same way ours does.
@@ -316,7 +384,14 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
     } catch (error) {
       cleanup();
       const denied = error instanceof DOMException && error.name === "NotAllowedError";
-      set({ phase: "error", message: denied ? "Recording was not allowed. Approve the sharing, camera and microphone prompts and try again." : error instanceof Error ? error.message : String(error) });
+      set({
+        phase: "error",
+        message: denied
+          ? "Recording was not allowed. Approve the sharing, camera and microphone prompts and try again."
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      });
     }
   }
 

@@ -1,6 +1,23 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { MUSIC_STYLES, MusicSchema, SceneRecipeSchema, SequenceSchema, TakeEditSchema, defaultEdit, encodeWav, fitTempo, planMusic, renderMusic, sceneMoments, seedFor, styleTempo, takeMoments, validateRecipe, type TakeEvent } from "./index";
+import { describe, expect, it } from "vitest";
+import {
+  defaultEdit,
+  encodeWav,
+  fitTempo,
+  MUSIC_STYLES,
+  MusicSchema,
+  planMusic,
+  renderMusic,
+  SceneRecipeSchema,
+  SequenceSchema,
+  sceneMoments,
+  seedFor,
+  styleTempo,
+  TakeEditSchema,
+  type TakeEvent,
+  takeMoments,
+  validateRecipe,
+} from "./index";
 
 const rms = (samples: Float32Array, from = 0, to = samples.length) => {
   let sum = 0;
@@ -8,7 +25,8 @@ const rms = (samples: Float32Array, from = 0, to = samples.length) => {
   return Math.sqrt(sum / Math.max(1, to - from));
 };
 const peak = (samples: Float32Array) => samples.reduce((max, value) => Math.max(max, Math.abs(value)), 0);
-const same = (a: Float32Array, b: Float32Array) => a.length === b.length && a.every((value, index) => value === b[index]);
+const same = (a: Float32Array, b: Float32Array) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
 
 describe("generated music", () => {
   it("is exactly as long as asked, in stereo, and never clips", () => {
@@ -82,16 +100,28 @@ describe("music settings", () => {
   });
   it("is accepted on scenes, takes and sequences", () => {
     const music = { style: "upbeat", seed: 42 };
-    expect(SceneRecipeSchema.safeParse({ version: 1, id: "a", title: "A", definition: { scene: { nodes: [] } }, music }).success).toBe(true);
+    expect(
+      SceneRecipeSchema.safeParse({ version: 1, id: "a", title: "A", definition: { scene: { nodes: [] } }, music })
+        .success,
+    ).toBe(true);
     expect(TakeEditSchema.safeParse({ trim: { startMs: 0, endMs: 1000 }, music }).success).toBe(true);
-    expect(SequenceSchema.safeParse({ version: 1, id: "s", title: "S", items: [{ clip: { kind: "scene", id: "a" } }], music }).success).toBe(true);
+    expect(
+      SequenceSchema.safeParse({
+        version: 1,
+        id: "s",
+        title: "S",
+        items: [{ clip: { kind: "scene", id: "a" } }],
+        music,
+      }).success,
+    ).toBe(true);
   });
 });
 
 describe("a tune for every clip", () => {
   it("derives a stable, different tune from each clip's name unless one was chosen", () => {
     const music = MusicSchema.parse({ style: "upbeat" });
-    const a = planMusic(music, { key: "scene:intro", durationMs: 5000 }), b = planMusic(music, { key: "scene:pricing", durationMs: 5000 });
+    const a = planMusic(music, { key: "scene:intro", durationMs: 5000 }),
+      b = planMusic(music, { key: "scene:pricing", durationMs: 5000 });
     expect(a.seed).toBe(seedFor("scene:intro"));
     expect(a.seed).toBe(planMusic(music, { key: "scene:intro", durationMs: 9000 }).seed);
     expect(a.seed).not.toBe(b.seed);
@@ -119,7 +149,12 @@ describe("syncing music to the picture", () => {
       expect(Math.abs(position - Math.round(position)) * (60_000 / fit.bpm)).toBeLessThan(25);
     }
     // The same moments are far from the beat at the unfitted tempo.
-    const unfitted = moments.reduce((sum, moment) => sum + Math.abs(moment / (60_000 / base) - Math.round(moment / (60_000 / base))) * (60_000 / base), 0) / moments.length;
+    const unfitted =
+      moments.reduce(
+        (sum, moment) =>
+          sum + Math.abs(moment / (60_000 / base) - Math.round(moment / (60_000 / base))) * (60_000 / base),
+        0,
+      ) / moments.length;
     expect(unfitted).toBeGreaterThan(fit.errorMs * 4);
   });
 
@@ -138,7 +173,9 @@ describe("syncing music to the picture", () => {
     expect(synced.accentsMs).toEqual([2000, 4100]); // the first and last sit in the fades
     expect(synced.accentLevel).toBe(0.6);
     expect(Math.abs(synced.bpm! - 82) / 82).toBeLessThanOrEqual(0.08 + 1e-9);
-    expect(planMusic({ ...music, sync: false }, { key: "k", durationMs: 8000, momentsMs: [2000, 4100] })).toEqual(plain);
+    expect(planMusic({ ...music, sync: false }, { key: "k", durationMs: 8000, momentsMs: [2000, 4100] })).toEqual(
+      plain,
+    );
     // A fitted render really moves the beat: it differs from the plain one and reports its tempo.
     const rendered = renderMusic(synced);
     expect(rendered.bpm).toBe(synced.bpm);
@@ -150,12 +187,18 @@ describe("syncing music to the picture", () => {
     // Moments on the beats of 121 beats per minute, starting off the beat: reachable from 118.
     const beat = 60_000 / 121;
     const moments = [4, 8, 13].map((count) => Math.round(count * beat - 200));
-    const plan = planMusic(MusicSchema.parse({ style: "upbeat", seed: 5 }), { key: "k", durationMs: 9000, momentsMs: moments });
+    const plan = planMusic(MusicSchema.parse({ style: "upbeat", seed: 5 }), {
+      key: "k",
+      durationMs: 9000,
+      momentsMs: moments,
+    });
     expect(fitTempo(styleTempo("upbeat"), moments).errorMs).toBeLessThan(6);
     // Accents off, so what is measured is the kick drum itself landing there.
     const music = renderMusic({ ...plan, accentLevel: 0 });
-    const window = (fromMs: number, toMs: number) => rms(music.left, Math.round((fromMs / 1000) * 44100), Math.round((toMs / 1000) * 44100));
-    for (const moment of moments) expect(window(moment, moment + 50), `hit at ${moment}`).toBeGreaterThan(window(moment - 70, moment - 20) * 1.5);
+    const window = (fromMs: number, toMs: number) =>
+      rms(music.left, Math.round((fromMs / 1000) * 44100), Math.round((toMs / 1000) * 44100));
+    for (const moment of moments)
+      expect(window(moment, moment + 50), `hit at ${moment}`).toBeGreaterThan(window(moment - 70, moment - 20) * 1.5);
   });
 
   it("gets as close as the tempo range allows for moments that do not share a beat, and says how close", () => {
@@ -165,15 +208,30 @@ describe("syncing music to the picture", () => {
     expect(fit.errorMs).toBeLessThan(45);
     // Better than leaving the tempo alone.
     const beatMs = 60_000 / 118;
-    const untouched = moments.reduce((sum, moment) => sum + Math.min(Math.abs(moment / beatMs - Math.round(moment / beatMs)) * beatMs, Math.abs((moment / beatMs) * 2 - Math.round((moment / beatMs) * 2)) * (beatMs / 2) + 12), 0) / moments.length;
+    const untouched =
+      moments.reduce(
+        (sum, moment) =>
+          sum +
+          Math.min(
+            Math.abs(moment / beatMs - Math.round(moment / beatMs)) * beatMs,
+            Math.abs((moment / beatMs) * 2 - Math.round((moment / beatMs) * 2)) * (beatMs / 2) + 12,
+          ),
+        0,
+      ) / moments.length;
     expect(fit.errorMs).toBeLessThan(untouched);
     // The accents are on the moments exactly, whatever the fit.
-    expect(planMusic(MusicSchema.parse({ style: "upbeat" }), { key: "k", durationMs: 9000, momentsMs: moments }).accentsMs).toEqual(moments);
+    expect(
+      planMusic(MusicSchema.parse({ style: "upbeat" }), { key: "k", durationMs: 9000, momentsMs: moments }).accentsMs,
+    ).toEqual(moments);
   });
 
   it("finds when each part of a scene arrives, ignoring camera travel", () => {
     const recipe = (name: string) => {
-      const result = validateRecipe(JSON.parse(readFileSync(new URL(`../../examples/vite-app/src/flick/scenes/${name}.scene.json`, import.meta.url), "utf8")));
+      const result = validateRecipe(
+        JSON.parse(
+          readFileSync(new URL(`../../examples/vite-app/src/flick/scenes/${name}.scene.json`, import.meta.url), "utf8"),
+        ),
+      );
       if (!result.ok) throw new Error(JSON.stringify(result.issues));
       return result.data.definition;
     };
@@ -186,8 +244,18 @@ describe("syncing music to the picture", () => {
 
   it("finds the first click of each burst in a take, on the trimmed clock", () => {
     const click = (t: number): TakeEvent => ({ t, k: "down", x: 1, y: 1, button: 0, rect: [0, 0, 1, 1] });
-    const events: TakeEvent[] = [click(500), click(2000), click(2400), click(3000), click(6000), { t: 6100, k: "move", x: 1, y: 1 }, click(9500)];
+    const events: TakeEvent[] = [
+      click(500),
+      click(2000),
+      click(2400),
+      click(3000),
+      click(6000),
+      { t: 6100, k: "move", x: 1, y: 1 },
+      click(9500),
+    ];
     expect(takeMoments({ edit: defaultEdit(10_000) }, events)).toEqual([500, 2000, 6000, 9500]);
-    expect(takeMoments({ edit: { ...defaultEdit(10_000), trim: { startMs: 1000, endMs: 7000 } } }, events)).toEqual([1000, 5000]);
+    expect(takeMoments({ edit: { ...defaultEdit(10_000), trim: { startMs: 1000, endMs: 7000 } } }, events)).toEqual([
+      1000, 5000,
+    ]);
   });
 });

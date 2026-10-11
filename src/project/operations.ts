@@ -1,25 +1,25 @@
 import path from "node:path";
 import {
-  FLICK_DIR,
-  HANDOFF_FILE,
-  PROJECT_FILE,
-  ProjectFileSchema,
-  SCENES_DIR,
-  STATE_DIR,
-  fail,
-  handoffDocument,
-  loadSceneCatalog,
-  ok,
-  studioUrl,
   type Adapter,
   type CatalogScene,
+  FLICK_DIR,
+  fail,
+  HANDOFF_FILE,
+  handoffDocument,
   type Issue,
+  loadSceneCatalog,
+  ok,
+  PROJECT_FILE,
   type ProjectFile,
+  ProjectFileSchema,
   type Result,
+  SCENES_DIR,
   type SceneCatalog,
+  STATE_DIR,
+  studioUrl,
 } from "../core";
 import { wrapRootRender } from "./entry";
-import { Fault, exists, listFiles, readText, sha256, toIssues, toPosix, writeText } from "./services";
+import { exists, Fault, listFiles, readText, sha256, toIssues, toPosix, writeText } from "./services";
 import * as templates from "./templates";
 
 /** Project operations: connect a host app, discover its scenes, keep generated files current.
@@ -29,31 +29,43 @@ import * as templates from "./templates";
 export type Context = { root: string };
 type Host = { adapter: Adapter; typed: boolean; appDir?: string; pagesDir?: string };
 
-const DEFAULT_URL: Record<Adapter, string> = { vite: "http://127.0.0.1:5173", "next-app": "http://127.0.0.1:3000", "next-pages": "http://127.0.0.1:3000", react: "http://127.0.0.1:3000" };
+const DEFAULT_URL: Record<Adapter, string> = {
+  vite: "http://127.0.0.1:5173",
+  "next-app": "http://127.0.0.1:3000",
+  "next-pages": "http://127.0.0.1:3000",
+  react: "http://127.0.0.1:3000",
+};
 
 async function detectHost(root: string, forced?: Adapter): Promise<Host> {
   const manifest = await readText(root, "package.json");
   if (!manifest) throw new Fault("no-project", "No package.json here. Run flick init from your app's root directory.");
   let dependencies: Record<string, string>;
   try {
-    const parsed = JSON.parse(manifest) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    const parsed = JSON.parse(manifest) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
     dependencies = { ...parsed.dependencies, ...parsed.devDependencies };
   } catch {
     throw new Fault("no-project", "package.json is not valid JSON.");
   }
-  if (!dependencies["react-dom"]) throw new Fault("unsupported-host", "Flick scenes need a React DOM app: react-dom is not in package.json.");
+  if (!dependencies["react-dom"])
+    throw new Fault("unsupported-host", "Flick scenes need a React DOM app: react-dom is not in package.json.");
   const typed = await exists(root, "tsconfig.json");
   const firstDir = async (...candidates: string[]) => {
     for (const candidate of candidates) if (await exists(root, candidate)) return candidate;
     return undefined;
   };
-  const appDir = await firstDir("src/app", "app"), pagesDir = await firstDir("src/pages", "pages");
+  const appDir = await firstDir("src/app", "app"),
+    pagesDir = await firstDir("src/pages", "pages");
   let adapter: Adapter = "react";
   if (dependencies.next) adapter = appDir ? "next-app" : "next-pages";
   else if (dependencies.vite) adapter = "vite";
   if (forced) adapter = forced;
-  if (adapter === "next-app" && !appDir) throw new Fault("unsupported-host", "The next-app adapter needs an app/ or src/app/ directory.");
-  if (adapter === "next-pages" && !pagesDir) throw new Fault("unsupported-host", "The next-pages adapter needs a pages/ or src/pages/ directory.");
+  if (adapter === "next-app" && !appDir)
+    throw new Fault("unsupported-host", "The next-app adapter needs an app/ or src/app/ directory.");
+  if (adapter === "next-pages" && !pagesDir)
+    throw new Fault("unsupported-host", "The next-pages adapter needs a pages/ or src/pages/ directory.");
   return { adapter, typed, appDir, pagesDir };
 }
 
@@ -64,10 +76,19 @@ export async function readProject(root: string): Promise<ProjectFile | undefined
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Fault("invalid-project", `${PROJECT_FILE} is not valid JSON. Delete it and run flick init again.`, PROJECT_FILE);
+    throw new Fault(
+      "invalid-project",
+      `${PROJECT_FILE} is not valid JSON. Delete it and run flick init again.`,
+      PROJECT_FILE,
+    );
   }
   const parsed = ProjectFileSchema.safeParse(json);
-  if (!parsed.success) throw new Fault("invalid-project", `${PROJECT_FILE} is not a Flick project record. Delete it and run flick init again.`, PROJECT_FILE);
+  if (!parsed.success)
+    throw new Fault(
+      "invalid-project",
+      `${PROJECT_FILE} is not a Flick project record. Delete it and run flick init again.`,
+      PROJECT_FILE,
+    );
   return parsed.data;
 }
 const requireProject = async (root: string): Promise<ProjectFile> => {
@@ -78,7 +99,12 @@ const requireProject = async (root: string): Promise<ProjectFile> => {
 
 type FileStatus = "created" | "updated" | "verified";
 /** Write a generated file only if it is absent, already identical, or still exactly what Flick last wrote. */
-async function ownFile(root: string, record: Record<string, string>, relative: string, content: string): Promise<FileStatus> {
+async function ownFile(
+  root: string,
+  record: Record<string, string>,
+  relative: string,
+  content: string,
+): Promise<FileStatus> {
   const current = await readText(root, relative);
   const hash = sha256(content);
   if (current === undefined) {
@@ -95,7 +121,11 @@ async function ownFile(root: string, record: Record<string, string>, relative: s
     record[relative] = hash;
     return "updated";
   }
-  throw new Fault("file-conflict", `${relative} exists and was not generated by Flick (or was edited since). Move it aside and run flick init again.`, relative);
+  throw new Fault(
+    "file-conflict",
+    `${relative} exists and was not generated by Flick (or was edited since). Move it aside and run flick init again.`,
+    relative,
+  );
 }
 
 const relativeImport = (fromFile: string, toFile: string) => {
@@ -112,7 +142,8 @@ async function viteEntry(root: string): Promise<string | undefined> {
 }
 
 // Only valid pairs are imported, so one broken scene cannot break the host build.
-const catalogFiles = (catalog: SceneCatalog) => catalog.scenes.flatMap((scene) => [path.posix.basename(scene.source), path.posix.basename(scene.binding)]);
+const catalogFiles = (catalog: SceneCatalog) =>
+  catalog.scenes.flatMap((scene) => [path.posix.basename(scene.source), path.posix.basename(scene.binding)]);
 
 export type InitResult = {
   adapter: Adapter;
@@ -134,7 +165,8 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
     const extension = host.typed ? "tsx" : "jsx";
     const studioFile = `${FLICK_DIR}/Studio.${extension}`;
     const files: InitResult["files"] = [];
-    const own = async (relative: string, content: string) => files.push({ path: relative, status: await ownFile(root, record, relative, content) });
+    const own = async (relative: string, content: string) =>
+      files.push({ path: relative, status: await ownFile(root, record, relative, content) });
     const isNext = host.adapter === "next-app" || host.adapter === "next-pages";
 
     await own(HANDOFF_FILE, handoffDocument());
@@ -144,16 +176,27 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
       const catalogFile = `${FLICK_DIR}/catalog.${host.typed ? "ts" : "js"}`;
       await own(catalogFile, templates.catalog(catalogFiles(await discoverScenes(context)), host.typed));
     }
-    await own(studioFile, host.adapter === "vite" ? templates.viteStudio(host.typed) : isNext ? templates.nextStudio() : templates.reactStudio(host.typed));
+    await own(
+      studioFile,
+      host.adapter === "vite"
+        ? templates.viteStudio(host.typed)
+        : isNext
+          ? templates.nextStudio()
+          : templates.reactStudio(host.typed),
+    );
 
     let recorder: InitResult["recorder"] = { status: "automatic" };
     if (isNext) {
       const recorderFile = `${FLICK_DIR}/Recorder.${extension}`;
       await own(recorderFile, templates.nextRecorder());
-      const layout = host.adapter === "next-app" ? `${host.appDir}/layout.${extension}` : `${host.pagesDir}/_app.${extension}`;
+      const layout =
+        host.adapter === "next-app" ? `${host.appDir}/layout.${extension}` : `${host.pagesDir}/_app.${extension}`;
       const wired = (await readText(root, layout))?.includes("FlickRecorder");
       if (!wired)
-        recorder = { status: "manual", instruction: `To record your app, add the recorder once to ${layout}:\n\n  import { FlickRecorder } from "${relativeImport(layout, recorderFile)}";\n\n  <FlickRecorder />   // anywhere inside the layout; it renders nothing` };
+        recorder = {
+          status: "manual",
+          instruction: `To record your app, add the recorder once to ${layout}:\n\n  import { FlickRecorder } from "${relativeImport(layout, recorderFile)}";\n\n  <FlickRecorder />   // anywhere inside the layout; it renders nothing`,
+        };
     }
     let entry: InitResult["entry"];
     let entryPath = previous?.entry;
@@ -167,10 +210,15 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
       entry = { status: "route", path: page };
     } else {
       const candidate = host.adapter === "vite" ? await viteEntry(root) : undefined;
-      const importPath = candidate ? relativeImport(candidate, studioFile) : `./${path.posix.relative("src", studioFile).replace(/\.(tsx|jsx)$/, "")}`;
+      const importPath = candidate
+        ? relativeImport(candidate, studioFile)
+        : `./${path.posix.relative("src", studioFile).replace(/\.(tsx|jsx)$/, "")}`;
       const instruction = templates.wiringInstruction(host.adapter, importPath);
       const source = candidate ? await readText(root, candidate) : undefined;
-      const edit = source === undefined ? ({ status: "manual", reason: "no standard entry file was found" } as const) : wrapRootRender(source, importPath);
+      const edit =
+        source === undefined
+          ? ({ status: "manual", reason: "no standard entry file was found" } as const)
+          : wrapRootRender(source, importPath);
       if (edit.status === "wrapped") {
         await writeText(root, candidate!, edit.source);
         entryPath = candidate;
@@ -179,8 +227,15 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
         entryPath = candidate;
         entry = { status: "already", path: candidate };
       } else {
-        entry = { status: "manual", path: candidate, instruction: `Flick did not edit your entry file because ${edit.reason}.\n${instruction}` };
-        recorder = { status: "manual", instruction: "The recorder becomes available once FlickStudioHost wraps your app." };
+        entry = {
+          status: "manual",
+          path: candidate,
+          instruction: `Flick did not edit your entry file because ${edit.reason}.\n${instruction}`,
+        };
+        recorder = {
+          status: "manual",
+          instruction: "The recorder becomes available once FlickStudioHost wraps your app.",
+        };
       }
     }
 
@@ -202,7 +257,8 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
       recorder,
       studioUrl: studioUrl(project.devUrl, project.studioPath),
       handoff: HANDOFF_FILE,
-      prompt: "Read FLICK.md and run `npx flick guide`. Inspect this app's main page and create a cinematic Flick scene from its existing components. Verify it in the studio, save a snapshot, and give me the scene URL.",
+      prompt:
+        "Read FLICK.md and run `npx flick guide`. Inspect this app's main page and create a cinematic Flick scene from its existing components. Verify it in the studio, save a snapshot, and give me the scene URL.",
     });
   } catch (error) {
     return fail(toIssues(error, "init-failed"));
@@ -236,7 +292,13 @@ export async function listScenes(context: Context): Promise<Result<SceneCatalog>
   }
 }
 
-export type SyncResult = { adapter: Adapter; catalog?: string; status: FileStatus | "not-needed"; scenes: number; issues: Issue[] };
+export type SyncResult = {
+  adapter: Adapter;
+  catalog?: string;
+  status: FileStatus | "not-needed";
+  scenes: number;
+  issues: Issue[];
+};
 
 export async function syncProject(context: Context): Promise<Result<SyncResult>> {
   try {
@@ -244,13 +306,25 @@ export async function syncProject(context: Context): Promise<Result<SyncResult>>
     const project = await requireProject(root);
     const discovered = await discoverScenes(context);
     if (project.adapter === "vite")
-      return ok({ adapter: project.adapter, status: "not-needed", scenes: discovered.scenes.length, issues: discovered.issues });
+      return ok({
+        adapter: project.adapter,
+        status: "not-needed",
+        scenes: discovered.scenes.length,
+        issues: discovered.issues,
+      });
     const typed = await exists(root, "tsconfig.json");
     const catalogFile = `${FLICK_DIR}/catalog.${typed ? "ts" : "js"}`;
     const record = { ...project.files };
     const status = await ownFile(root, record, catalogFile, templates.catalog(catalogFiles(discovered), typed));
-    if (status !== "verified") await writeText(root, PROJECT_FILE, `${JSON.stringify({ ...project, files: record }, null, 2)}\n`);
-    return ok({ adapter: project.adapter, catalog: catalogFile, status, scenes: discovered.scenes.length, issues: discovered.issues });
+    if (status !== "verified")
+      await writeText(root, PROJECT_FILE, `${JSON.stringify({ ...project, files: record }, null, 2)}\n`);
+    return ok({
+      adapter: project.adapter,
+      catalog: catalogFile,
+      status,
+      scenes: discovered.scenes.length,
+      issues: discovered.issues,
+    });
   } catch (error) {
     return fail(toIssues(error, "sync-failed"));
   }
@@ -259,7 +333,10 @@ export async function syncProject(context: Context): Promise<Result<SyncResult>>
 export type OpenResult = { url: string; reachable: boolean };
 
 /** Resolve the studio URL for this project, remember the dev server origin, and check it answers. */
-export async function resolveStudio(input: { url?: string; sceneId?: string }, context: Context): Promise<Result<OpenResult & { project: ProjectFile; scene?: CatalogScene }>> {
+export async function resolveStudio(
+  input: { url?: string; sceneId?: string },
+  context: Context,
+): Promise<Result<OpenResult & { project: ProjectFile; scene?: CatalogScene }>> {
   try {
     const project = await requireProject(context.root);
     let origin = project.devUrl;
@@ -267,16 +344,25 @@ export async function resolveStudio(input: { url?: string; sceneId?: string }, c
       const parsed = ProjectFileSchema.shape.devUrl.safeParse(input.url);
       if (!parsed.success) return fail([{ code: "invalid-url", message: parsed.error.issues[0]!.message }]);
       origin = parsed.data;
-      if (origin !== project.devUrl) await writeText(context.root, PROJECT_FILE, `${JSON.stringify({ ...project, devUrl: origin }, null, 2)}\n`);
+      if (origin !== project.devUrl)
+        await writeText(context.root, PROJECT_FILE, `${JSON.stringify({ ...project, devUrl: origin }, null, 2)}\n`);
     }
     let scene: CatalogScene | undefined;
     if (input.sceneId) {
       const catalog = await discoverScenes(context, input.sceneId);
-      if (!catalog.selected) return fail(catalog.issues.length ? catalog.issues : [{ code: "unknown-scene", message: `No scene named "${input.sceneId}".` }]);
+      if (!catalog.selected)
+        return fail(
+          catalog.issues.length
+            ? catalog.issues
+            : [{ code: "unknown-scene", message: `No scene named "${input.sceneId}".` }],
+        );
       scene = catalog.selected;
     }
     const url = studioUrl(origin, project.studioPath, input.sceneId);
-    const reachable = await fetch(url, { signal: AbortSignal.timeout(4000) }).then((response) => response.ok, () => false);
+    const reachable = await fetch(url, { signal: AbortSignal.timeout(4000) }).then(
+      (response) => response.ok,
+      () => false,
+    );
     return ok({ url, reachable, project: { ...project, devUrl: origin }, scene });
   } catch (error) {
     return fail(toIssues(error, "open-failed"));

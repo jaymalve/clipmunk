@@ -8,7 +8,11 @@ import type { TakeEvent } from "./take";
 export type CursorStyle = "default" | "pointer" | "text";
 export type CursorState = { x: number; y: number; style: CursorStyle; visible: boolean; pressed: boolean };
 export type CursorClick = { t: number; x: number; y: number };
-export type CursorPath = { at(timeMs: number): CursorState; clicks: CursorClick[]; lastMoveBefore(timeMs: number): number };
+export type CursorPath = {
+  at(timeMs: number): CursorState;
+  clicks: CursorClick[];
+  lastMoveBefore(timeMs: number): number;
+};
 
 const STEP_MS = 1000 / 120;
 /** How far either side of a click the path is pulled toward the click position. */
@@ -49,17 +53,21 @@ export function prepareCursor(events: readonly TakeEvent[], smoothing: number): 
     }
     return found;
   };
-  if (!points.length) return { at: () => ({ x: 0, y: 0, style: "default", visible: false, pressed: false }), clicks, lastMoveBefore };
+  if (!points.length)
+    return { at: () => ({ x: 0, y: 0, style: "default", visible: false, pressed: false }), clicks, lastMoveBefore };
 
   // Resample to a fixed rate so the filter behaves the same whatever the event rate was.
   // Held for a moment past the last event, so the smoothed path settles on the true final position.
-  const start = points[0]!.t, end = points.at(-1)!.t + 600;
+  const start = points[0]!.t,
+    end = points.at(-1)!.t + 600;
   const count = Math.max(1, Math.ceil((end - start) / STEP_MS) + 1);
-  const xs = new Float64Array(count), ys = new Float64Array(count);
+  const xs = new Float64Array(count),
+    ys = new Float64Array(count);
   for (let i = 0, segment = 0; i < count; i++) {
     const t = Math.min(end, start + i * STEP_MS);
     while (segment < points.length - 2 && points[segment + 1]!.t <= t) segment++;
-    const a = points[segment]!, b = points[Math.min(segment + 1, points.length - 1)]!;
+    const a = points[segment]!,
+      b = points[Math.min(segment + 1, points.length - 1)]!;
     const weight = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 0;
     xs[i] = a.x + (b.x - a.x) * weight;
     ys[i] = a.y + (b.y - a.y) * weight;
@@ -74,7 +82,8 @@ export function prepareCursor(events: readonly TakeEvent[], smoothing: number): 
     }
     // Smoothing rounds off the corner at a click; pull the path back so it passes through the click exactly.
     for (const click of clicks) {
-      const from = Math.max(0, Math.floor((click.t - PIN_MS - start) / STEP_MS)), to = Math.min(count - 1, Math.ceil((click.t + PIN_MS - start) / STEP_MS));
+      const from = Math.max(0, Math.floor((click.t - PIN_MS - start) / STEP_MS)),
+        to = Math.min(count - 1, Math.ceil((click.t + PIN_MS - start) / STEP_MS));
       for (let i = from; i <= to; i++) {
         const distance = Math.abs(start + i * STEP_MS - click.t) / PIN_MS;
         const pull = distance >= 1 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * distance);
@@ -88,7 +97,9 @@ export function prepareCursor(events: readonly TakeEvent[], smoothing: number): 
     lastMoveBefore,
     at(timeMs) {
       const position = Math.min(count - 1, Math.max(0, (timeMs - start) / STEP_MS));
-      const i = Math.floor(position), j = Math.min(count - 1, i + 1), weight = position - i;
+      const i = Math.floor(position),
+        j = Math.min(count - 1, i + 1),
+        weight = position - i;
       return {
         x: xs[i]! + (xs[j]! - xs[i]!) * weight,
         y: ys[i]! + (ys[j]! - ys[i]!) * weight,
@@ -101,7 +112,10 @@ export function prepareCursor(events: readonly TakeEvent[], smoothing: number): 
 }
 
 /** Parse events.jsonl, keeping only lines that match the schema. */
-export function parseEvents(text: string, schema: { safeParse(input: unknown): { success: true; data: TakeEvent } | { success: false } }): TakeEvent[] {
+export function parseEvents(
+  text: string,
+  schema: { safeParse(input: unknown): { success: true; data: TakeEvent } | { success: false } },
+): TakeEvent[] {
   const events: TakeEvent[] = [];
   for (const line of text.split("\n")) {
     if (!line) continue;

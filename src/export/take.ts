@@ -1,7 +1,22 @@
 import { link, mkdir, mkdtemp, open, rm } from "node:fs/promises";
 import path from "node:path";
-import { DAEMON_HASH, EXPORTS_DIR, ExportTakeSchema, TAKES_DIR, TAKE_PARAM, TakeEventSchema, TakeSchema, fail, ok, parseEvents, takeMoments, zodIssues, type ExportTakeResult, type Result } from "../core";
-import { Fault, exists, readText, resolveInside, resolveStudio, toIssues } from "../project";
+import {
+  DAEMON_HASH,
+  EXPORTS_DIR,
+  type ExportTakeResult,
+  ExportTakeSchema,
+  fail,
+  ok,
+  parseEvents,
+  type Result,
+  TAKE_PARAM,
+  TAKES_DIR,
+  TakeEventSchema,
+  TakeSchema,
+  takeMoments,
+  zodIssues,
+} from "../core";
+import { exists, Fault, readText, resolveInside, resolveStudio, toIssues } from "../project";
 import { launchBrowser } from "./browser";
 import { finishTake } from "./ffmpeg";
 import { writeMusic } from "./music";
@@ -32,12 +47,20 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
     check();
     const source = `${TAKES_DIR}/${request.takeId}/take.json`;
     const text = await readText(root, source);
-    if (text === undefined) throw new Fault("unknown-take", `No take named "${request.takeId}". Run flick takes to list them.`);
+    if (text === undefined)
+      throw new Fault("unknown-take", `No take named "${request.takeId}". Run flick takes to list them.`);
     const take = TakeSchema.safeParse(JSON.parse(text));
-    if (!take.success) return fail(zodIssues(take.error, "invalid-take").map((issue) => ({ ...issue, path: `${source}: ${issue.path}` })));
+    if (!take.success)
+      return fail(
+        zodIssues(take.error, "invalid-take").map((issue) => ({ ...issue, path: `${source}: ${issue.path}` })),
+      );
     const { edit, source: media } = take.data;
     if (request.output && (await exists(root, request.output)))
-      throw new Fault("output-exists", `${request.output} already exists. Choose another --output; Flick never overwrites a file.`, request.output);
+      throw new Fault(
+        "output-exists",
+        `${request.output} already exists. Choose another --output; Flick never overwrites a file.`,
+        request.output,
+      );
     const studio = await resolveStudio({ url: request.url }, context);
     if (!studio.ok) return studio;
     let output = request.output;
@@ -72,34 +95,62 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
         const bytes = Buffer.from(base64, "base64");
         await file.write(bytes, 0, bytes.length, position);
       });
-      await tab.exposeFunction("__FLICK_PROGRESS__", (done: number, total: number) => context.onProgress?.(done, total));
+      await tab.exposeFunction("__FLICK_PROGRESS__", (done: number, total: number) =>
+        context.onProgress?.(done, total),
+      );
       try {
         await tab.goto(page.toString(), { waitUntil: "load", timeout: 30_000 });
       } catch {
-        throw new Fault("server-unreachable", `Could not open ${studio.data.url}. Start your dev server, or pass its address with --url.`);
+        throw new Fault(
+          "server-unreachable",
+          `Could not open ${studio.data.url}. Start your dev server, or pass its address with --url.`,
+        );
       }
       try {
-        await tab.waitForFunction(() => (window as { __FLICK__?: { kind?: string; encode?: unknown } }).__FLICK__?.kind === "take", undefined, { timeout: 45_000 });
+        await tab.waitForFunction(
+          () => (window as { __FLICK__?: { kind?: string; encode?: unknown } }).__FLICK__?.kind === "take",
+          undefined,
+          { timeout: 45_000 },
+        );
       } catch {
-        const shown = await tab.evaluate(() => document.querySelector("[data-flick-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "");
-        throw new Fault("clip-not-ready", `The take did not open at ${studio.data.url}. ${shown || errors[0] || "Check that the app was connected with flick init."}`);
+        const shown = await tab.evaluate(
+          () => document.querySelector("[data-flick-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "",
+        );
+        throw new Fault(
+          "clip-not-ready",
+          `The take did not open at ${studio.data.url}. ${shown || errors[0] || "Check that the app was connected with flick init."}`,
+        );
       }
       check();
       let encoded: Encoded;
       try {
         encoded = await tab.evaluate(
-          (job) => (window as unknown as { __FLICK__: { encode(job: unknown): Promise<Encoded> } }).__FLICK__.encode(job),
+          (job) =>
+            (window as unknown as { __FLICK__: { encode(job: unknown): Promise<Encoded> } }).__FLICK__.encode(job),
           { fps: request.fps, width: request.width, height: request.height },
         );
       } catch (error) {
         check();
-        throw new Fault("encoding-failed", `The browser could not render the take: ${(error as Error).message.split("\n")[0]!.replace(/^page\.evaluate: (Error: )?/, "")}`);
+        throw new Fault(
+          "encoding-failed",
+          `The browser could not render the take: ${(error as Error).message.split("\n")[0]!.replace(/^page\.evaluate: (Error: )?/, "")}`,
+        );
       }
       await file.close();
       check();
       const voice = media.audio && !edit.audio.muted ? media.audio : undefined;
-      const events = parseEvents((await readText(root, `${TAKES_DIR}/${request.takeId}/${media.events.file}`)) ?? "", TakeEventSchema);
-      const music = request.music && edit.music ? await writeMusic(temporary, edit.music, { key: `take:${request.takeId}`, durationMs: encoded.durationMs, momentsMs: takeMoments(take.data, events) }) : undefined;
+      const events = parseEvents(
+        (await readText(root, `${TAKES_DIR}/${request.takeId}/${media.events.file}`)) ?? "",
+        TakeEventSchema,
+      );
+      const music =
+        request.music && edit.music
+          ? await writeMusic(temporary, edit.music, {
+              key: `take:${request.takeId}`,
+              durationMs: encoded.durationMs,
+              momentsMs: takeMoments(take.data, events),
+            })
+          : undefined;
       const finished = path.join(temporary, "finished.mp4");
       await finishTake({
         video,
@@ -108,16 +159,32 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
         durationMs: encoded.durationMs,
         copyVideo: encoded.codec === "avc",
         music,
-        audio: voice && { file: await resolveInside(root, `${TAKES_DIR}/${request.takeId}/${voice.file}`), startMs: edit.trim.startMs - voice.offsetMs, gain: edit.audio.gain, normalize: edit.audio.normalize },
+        audio: voice && {
+          file: await resolveInside(root, `${TAKES_DIR}/${request.takeId}/${voice.file}`),
+          startMs: edit.trim.startMs - voice.offsetMs,
+          gain: edit.audio.gain,
+          normalize: edit.audio.normalize,
+        },
       });
       check();
       try {
         await link(finished, target);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
+        if ((error as NodeJS.ErrnoException).code === "EEXIST")
+          throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
         throw error;
       }
-      return ok({ output, fps: request.fps, frames: encoded.frames, durationMs: encoded.durationMs, width: encoded.width, height: encoded.height, codec: encoded.codec, audio: !!voice || !!music, elapsedMs: Date.now() - started });
+      return ok({
+        output,
+        fps: request.fps,
+        frames: encoded.frames,
+        durationMs: encoded.durationMs,
+        width: encoded.width,
+        height: encoded.height,
+        codec: encoded.codec,
+        audio: !!voice || !!music,
+        elapsedMs: Date.now() - started,
+      });
     } finally {
       await file.close().catch(() => {});
     }

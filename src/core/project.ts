@@ -20,7 +20,10 @@ export type Adapter = z.output<typeof AdapterSchema>;
 /** Only loopback HTTP origins: Flick drives the developer's own local dev server. */
 export const LoopbackOriginSchema = z
   .string()
-  .regex(/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?\/?$/, "Use a local dev server origin such as http://127.0.0.1:5173.")
+  .regex(
+    /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?\/?$/,
+    "Use a local dev server origin such as http://127.0.0.1:5173.",
+  )
   .transform((value) => value.replace(/\/$/, ""));
 
 /** The ownership record: which files Flick generated and what it last wrote to each. */

@@ -7,7 +7,8 @@ import type { Take, TakeEvent } from "./take";
  */
 const merge = (times: number[], gapMs: number): number[] => {
   const out: number[] = [];
-  for (const time of [...times].sort((a, b) => a - b)) if (!out.length || time - out.at(-1)! >= gapMs) out.push(Math.round(time));
+  for (const time of [...times].sort((a, b) => a - b))
+    if (!out.length || time - out.at(-1)! >= gapMs) out.push(Math.round(time));
   return out;
 };
 
@@ -25,12 +26,17 @@ export function sceneMoments(definition: Pick<SceneDefinition, "motion">): numbe
     arrivals.set(track.target.id, Math.max(arrivals.get(track.target.id) ?? 0, frames.at(-1)!.timeMs));
   }
   // Authored time runs at `speed`; the clip's clock is presentation time.
-  return merge([...arrivals.values()].map((time) => time / motion.speed), 250);
+  return merge(
+    [...arrivals.values()].map((time) => time / motion.speed),
+    250,
+  );
 }
 
 /** The first click of each burst of activity, on the trimmed clip's clock. */
 export function takeMoments(take: Pick<Take, "edit">, events: readonly TakeEvent[]): number[] {
   const { startMs, endMs } = take.edit.trim;
-  const clicks = events.filter((event) => event.k === "down" && event.t >= startMs && event.t <= endMs).map((event) => event.t - startMs);
+  const clicks = events
+    .filter((event) => event.k === "down" && event.t >= startMs && event.t <= endMs)
+    .map((event) => event.t - startMs);
   return merge(clicks, 1200);
 }

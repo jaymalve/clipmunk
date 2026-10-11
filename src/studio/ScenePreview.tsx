@@ -1,10 +1,27 @@
-import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Component,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { flushSync } from "react-dom";
 import { CAPTURE_SELECTOR, installBridge } from "../bridge";
-import { motionDuration, sceneMoments, validateDefinition, type AudioClip, type Issue, type Music, type SceneDefinition } from "../core";
-import { Scene, createClock } from "../react";
+import {
+  type AudioClip,
+  type Issue,
+  type Music,
+  motionDuration,
+  type SceneDefinition,
+  sceneMoments,
+  validateDefinition,
+} from "../core";
+import { createClock, Scene } from "../react";
 import { Chrome } from "./Chrome";
-import { ExportPanel, type DaemonState } from "./daemon";
+import { type DaemonState, ExportPanel } from "./daemon";
 import { MusicControls, useMusicPreview } from "./music";
 import { useNarration } from "./narration";
 import { useClipSession } from "./session";
@@ -31,7 +48,16 @@ export type ScenePreviewProps = {
 
 const formatTime = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
 
-export function ScenePreview({ definition, title, backHref, sceneId, daemon, audio, music: recipeMusic, children }: ScenePreviewProps) {
+export function ScenePreview({
+  definition,
+  title,
+  backHref,
+  sceneId,
+  daemon,
+  audio,
+  music: recipeMusic,
+  children,
+}: ScenePreviewProps) {
   const result = useMemo(() => validateDefinition(definition), [definition]);
   // Keep the last valid definition on screen while the source is broken.
   const accepted = useRef<SceneDefinition | null>(null);
@@ -45,7 +71,8 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
   const durationMs = current?.motion ? motionDuration(current.motion) : 0;
   const valid = !!current && result.ok && issues.length === 0 && !failure;
   const session = useClipSession(clock, durationMs, valid);
-  const width = current?.width ?? 1400, height = current?.height ?? 980;
+  const width = current?.width ?? 1400,
+    height = current?.height ?? 980;
   const [exporting, setExporting] = useState(false);
   // The recipe file is the source of truth; this mirrors it until the dev server reloads the module.
   const [music, setMusic] = useState(recipeMusic);
@@ -57,13 +84,30 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
     setMusic(next);
     clearTimeout(saveMusic.current);
     saveMusic.current = setTimeout(async () => {
-      const result = await daemon!.client!.put<unknown>(`/v1/scenes/${sceneId}/music`, new Blob([JSON.stringify({ music: next ?? null })], { type: "application/json" }));
+      const result = await daemon!.client!.put<unknown>(
+        `/v1/scenes/${sceneId}/music`,
+        new Blob([JSON.stringify({ music: next ?? null })], { type: "application/json" }),
+      );
       setMusicIssue(result.ok ? undefined : result.issues[0]!.message);
     }, 400);
   };
   const moments = useMemo(() => (current ? sceneMoments(current) : []), [current]);
-  useMusicPreview({ music, clip: { key: `scene:${sceneId ?? ""}`, durationMs, momentsMs: moments }, clock, playing: session.playing });
-  const narration = useNarration({ sceneId, audio, client: daemon?.client, clock, durationMs, playing: session.playing, seek: session.seek, toggle: session.toggle });
+  useMusicPreview({
+    music,
+    clip: { key: `scene:${sceneId ?? ""}`, durationMs, momentsMs: moments },
+    clock,
+    playing: session.playing,
+  });
+  const narration = useNarration({
+    sceneId,
+    audio,
+    client: daemon?.client,
+    clock,
+    durationMs,
+    playing: session.playing,
+    seek: session.seek,
+    toggle: session.toggle,
+  });
 
   // The exporter drives this same clock. Capture refuses a scene with unresolved issues.
   const validRef = useRef(valid);
@@ -86,11 +130,13 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
       selector: CAPTURE_SELECTOR,
       ready: settled,
       async seek(timeMs) {
-        if (!Number.isFinite(timeMs) || timeMs < 0 || timeMs > durationMs + 1e-6) throw new Error(`Time ${timeMs} is outside the scene (0 to ${durationMs} ms).`);
+        if (!Number.isFinite(timeMs) || timeMs < 0 || timeMs > durationMs + 1e-6)
+          throw new Error(`Time ${timeMs} is outside the scene (0 to ${durationMs} ms).`);
         // flushSync commits components that read useSceneTime before the frame is captured.
         flushSync(() => session.seek(timeMs));
         await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
-        if (!validRef.current) throw new Error("The scene has unresolved issues. Open it in the studio and fix them before capturing.");
+        if (!validRef.current)
+          throw new Error("The scene has unresolved issues. Open it in the studio and fix them before capturing.");
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,7 +148,11 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
     const element = viewport.current!;
     const update = () => {
       const scale = Math.min(element.clientWidth / width, element.clientHeight / height) || 1;
-      setFit({ scale, left: (element.clientWidth - width * scale) / 2, top: (element.clientHeight - height * scale) / 2 });
+      setFit({
+        scale,
+        left: (element.clientWidth - width * scale) / 2,
+        top: (element.clientHeight - height * scale) / 2,
+      });
     };
     update();
     const observer = new ResizeObserver(update);
@@ -117,7 +167,16 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
           <div
             data-flick-capture="scene"
             data-flick-scene-id={sceneId}
-            style={{ position: "absolute", left: fit.left, top: fit.top, width, height, overflow: "hidden", transform: `scale(${fit.scale})`, transformOrigin: "0 0" }}
+            style={{
+              position: "absolute",
+              left: fit.left,
+              top: fit.top,
+              width,
+              height,
+              overflow: "hidden",
+              transform: `scale(${fit.scale})`,
+              transformOrigin: "0 0",
+            }}
           >
             <SceneBoundary resetKey={definition} onError={setFailure}>
               <Scene
@@ -153,16 +212,39 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
         )}
         {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
         {exporting && sceneId && <ExportPanel clip={{ sceneId }} daemon={daemon} frame={{ width, height }} />}
-        {narration.state.phase === "error" && <div className="issues" role="alert">{narration.state.message}</div>}
-        {musicIssue && <div className="issues" role="alert">{musicIssue}</div>}
-        {choosingMusic && sceneId && daemon?.client && (
-          <div className="musicbox">
-            <MusicControls value={music} hasVoice={narration.hasNarration} clipKey={`scene:${sceneId}`} moments={moments.length} onChange={changeMusic} />
+        {narration.state.phase === "error" && (
+          <div className="issues" role="alert">
+            {narration.state.message}
           </div>
         )}
-        <Controls clock={clock} durationMs={durationMs} title={title} backHref={backHref} disabled={!valid} {...session}
-          onExport={sceneId ? () => setExporting((value) => !value) : undefined} narration={narration}
-          onMusic={sceneId && daemon?.client && durationMs > 0 ? () => setChoosingMusic((value) => !value) : undefined} hasMusic={!!music} />
+        {musicIssue && (
+          <div className="issues" role="alert">
+            {musicIssue}
+          </div>
+        )}
+        {choosingMusic && sceneId && daemon?.client && (
+          <div className="musicbox">
+            <MusicControls
+              value={music}
+              hasVoice={narration.hasNarration}
+              clipKey={`scene:${sceneId}`}
+              moments={moments.length}
+              onChange={changeMusic}
+            />
+          </div>
+        )}
+        <Controls
+          clock={clock}
+          durationMs={durationMs}
+          title={title}
+          backHref={backHref}
+          disabled={!valid}
+          {...session}
+          onExport={sceneId ? () => setExporting((value) => !value) : undefined}
+          narration={narration}
+          onMusic={sceneId && daemon?.client && durationMs > 0 ? () => setChoosingMusic((value) => !value) : undefined}
+          hasMusic={!!music}
+        />
       </Chrome>
     </div>
   );
@@ -207,23 +289,49 @@ function Controls(props: {
       {props.narration?.available && (
         <>
           {props.narration.state.phase === "recording" ? (
-            <button type="button" onClick={props.narration.stop}>Stop narrating</button>
+            <button type="button" onClick={props.narration.stop}>
+              Stop narrating
+            </button>
           ) : (
-            <button type="button" onClick={() => void props.narration!.start()} disabled={disabled || props.playing || props.narration.state.phase === "saving"} title="Plays the scene from the start and records your microphone over it">
-              {props.narration.state.phase === "saving" ? "Saving…" : props.narration.hasNarration ? "Re-record narration" : "Narrate"}
+            <button
+              type="button"
+              onClick={() => void props.narration!.start()}
+              disabled={disabled || props.playing || props.narration.state.phase === "saving"}
+              title="Plays the scene from the start and records your microphone over it"
+            >
+              {props.narration.state.phase === "saving"
+                ? "Saving…"
+                : props.narration.hasNarration
+                  ? "Re-record narration"
+                  : "Narrate"}
             </button>
           )}
-          {props.narration.hasNarration && props.narration.state.phase === "idle" && <button type="button" onClick={() => void props.narration!.remove()} disabled={props.playing}>Remove narration</button>}
+          {props.narration.hasNarration && props.narration.state.phase === "idle" && (
+            <button type="button" onClick={() => void props.narration!.remove()} disabled={props.playing}>
+              Remove narration
+            </button>
+          )}
         </>
       )}
-      {props.onMusic && <button type="button" onClick={props.onMusic}>{props.hasMusic ? "Music ♪" : "Music"}</button>}
-      {props.onExport && <button type="button" onClick={props.onExport} disabled={disabled}>Export</button>}
+      {props.onMusic && (
+        <button type="button" onClick={props.onMusic}>
+          {props.hasMusic ? "Music ♪" : "Music"}
+        </button>
+      )}
+      {props.onExport && (
+        <button type="button" onClick={props.onExport} disabled={disabled}>
+          Export
+        </button>
+      )}
     </div>
   );
 }
 
 /** Catches a throwing scene component; a changed definition or a hot reload retries it. */
-class SceneBoundary extends Component<{ resetKey: unknown; onError: (error: Error | null) => void; children: ReactNode }, { error: Error | null }> {
+class SceneBoundary extends Component<
+  { resetKey: unknown; onError: (error: Error | null) => void; children: ReactNode },
+  { error: Error | null }
+> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { error };

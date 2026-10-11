@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { MUSIC_STYLES, MusicSchema, planMusic, renderMusic, type Music, type MusicRequest, type MusicStyle } from "../core";
+import {
+  MUSIC_STYLES,
+  type Music,
+  type MusicRequest,
+  MusicSchema,
+  type MusicStyle,
+  planMusic,
+  renderMusic,
+} from "../core";
 import type { Clock } from "../react";
 
 /** Generated music in the studio: the controls that choose it, and playback alongside a
@@ -25,7 +33,9 @@ export function useMusicPreview(options: { music?: Music; clip: MusicClip; clock
   const { music, clock, playing } = options;
   const [buffer, setBuffer] = useState<AudioBuffer>();
   // Only what changes the sound: volume and ducking do not need a new render.
-  const plan = music ? JSON.stringify(planMusic(music, { ...options.clip, durationMs: Math.round(options.clip.durationMs) })) : "";
+  const plan = music
+    ? JSON.stringify(planMusic(music, { ...options.clip, durationMs: Math.round(options.clip.durationMs) }))
+    : "";
   useEffect(() => {
     setBuffer(undefined);
     if (!plan) return;
@@ -60,7 +70,19 @@ export function useMusicPreview(options: { music?: Music; clip: MusicClip; clock
 }
 
 /** Style, volume, a new tune in the same style, and a short listen. `onChange(undefined)` turns music off. */
-export function MusicControls({ value, onChange, hasVoice, clipKey, moments = 0 }: { value: Music | undefined; onChange: (music: Music | undefined) => void; hasVoice?: boolean; clipKey: string; moments?: number }) {
+export function MusicControls({
+  value,
+  onChange,
+  hasVoice,
+  clipKey,
+  moments = 0,
+}: {
+  value: Music | undefined;
+  onChange: (music: Music | undefined) => void;
+  hasVoice?: boolean;
+  clipKey: string;
+  moments?: number;
+}) {
   const [listening, setListening] = useState(false);
   const stop = useRef<(() => void) | undefined>(undefined);
   useEffect(() => () => stop.current?.(), []);
@@ -69,7 +91,8 @@ export function MusicControls({ value, onChange, hasVoice, clipKey, moments = 0 
     if (stop.current) return stop.current();
     const context = audio();
     void context.resume();
-    const source = context.createBufferSource(), gain = context.createGain();
+    const source = context.createBufferSource(),
+      gain = context.createGain();
     gain.gain.value = value.gain;
     source.buffer = toBuffer(planMusic(value, { key: clipKey, durationMs: 12_000 }));
     source.connect(gain).connect(context.destination);
@@ -92,33 +115,71 @@ export function MusicControls({ value, onChange, hasVoice, clipKey, moments = 0 
     <>
       <label className="field">
         <span>Music</span>
-        <select value={value?.style ?? "off"} onChange={(event) => change(event.currentTarget.value === "off" ? undefined : MusicSchema.parse({ ...value, style: event.currentTarget.value }))}>
+        <select
+          value={value?.style ?? "off"}
+          onChange={(event) =>
+            change(
+              event.currentTarget.value === "off"
+                ? undefined
+                : MusicSchema.parse({ ...value, style: event.currentTarget.value }),
+            )
+          }
+        >
           <option value="off">Off</option>
-          {MUSIC_STYLES.map((style) => <option key={style} value={style}>{NAMES[style]}</option>)}
+          {MUSIC_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {NAMES[style]}
+            </option>
+          ))}
         </select>
       </label>
       {value && (
         <>
           <label className="field">
             <span>Volume</span>
-            <input type="range" min={0} max={1.5} step={0.05} value={value.gain} onChange={(event) => onChange({ ...value, gain: Number(event.currentTarget.value) })} />
+            <input
+              type="range"
+              min={0}
+              max={1.5}
+              step={0.05}
+              value={value.gain}
+              onChange={(event) => onChange({ ...value, gain: Number(event.currentTarget.value) })}
+            />
             <output>{Math.round(value.gain * 100)}%</output>
           </label>
           {hasVoice && (
             <label className="field check">
-              <input type="checkbox" checked={value.duck} onChange={(event) => onChange({ ...value, duck: event.currentTarget.checked })} />
+              <input
+                type="checkbox"
+                checked={value.duck}
+                onChange={(event) => onChange({ ...value, duck: event.currentTarget.checked })}
+              />
               <span>Lower under voice (on export)</span>
             </label>
           )}
           {moments > 0 && (
             <label className="field check">
-              <input type="checkbox" checked={value.sync} onChange={(event) => change({ ...value, sync: event.currentTarget.checked })} />
-              <span>Sync the beat to {moments} moment{moments === 1 ? "" : "s"} in this clip</span>
+              <input
+                type="checkbox"
+                checked={value.sync}
+                onChange={(event) => change({ ...value, sync: event.currentTarget.checked })}
+              />
+              <span>
+                Sync the beat to {moments} moment{moments === 1 ? "" : "s"} in this clip
+              </span>
             </label>
           )}
           <div className="field tune">
-            <button type="button" onClick={() => change({ ...value, seed: Math.floor(Math.random() * 1_000_000) })} title="A different tune in the same style">New tune</button>
-            <button type="button" onClick={listen}>{listening ? "Stop" : "Listen"}</button>
+            <button
+              type="button"
+              onClick={() => change({ ...value, seed: Math.floor(Math.random() * 1_000_000) })}
+              title="A different tune in the same style"
+            >
+              New tune
+            </button>
+            <button type="button" onClick={listen}>
+              {listening ? "Stop" : "Listen"}
+            </button>
           </div>
           <p className="hint">Generated by Flick from code, so it is yours to use anywhere.</p>
         </>

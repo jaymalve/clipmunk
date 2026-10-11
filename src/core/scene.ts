@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fail, ok, zodIssues, type Result } from "./result";
+import { fail, ok, type Result, zodIssues } from "./result";
 
 /** Scene geometry: a camera, a focus plane and a tree of surfaces.
  * Units are pixels and degrees. +x is right, +y is down, +z is toward the viewer.
@@ -59,7 +59,9 @@ export const DEFAULT_CAMERA: Camera = Object.freeze(CameraSchema.parse({}));
 export const DEFAULT_FOCUS: Focus = Object.freeze(FocusSchema.parse({}));
 
 /** Tree rules shared by the schema and the live registry: unique ids, existing parents, no cycles. */
-export function nodeTreeIssues(nodes: readonly { id: string; parentId?: string }[]): { index: number; field: "id" | "parentId"; message: string }[] {
+export function nodeTreeIssues(
+  nodes: readonly { id: string; parentId?: string }[],
+): { index: number; field: "id" | "parentId"; message: string }[] {
   const issues: { index: number; field: "id" | "parentId"; message: string }[] = [];
   const byId = new Map<string, { id: string; parentId?: string }>();
   nodes.forEach((node, index) => {
@@ -91,7 +93,11 @@ export const SceneSchema = z
   })
   .superRefine((scene, ctx) => {
     if (scene.focus.distance <= scene.focus.focalLength)
-      ctx.addIssue({ code: "custom", path: ["focus", "distance"], message: "Focus distance must exceed focal length." });
+      ctx.addIssue({
+        code: "custom",
+        path: ["focus", "distance"],
+        message: "Focus distance must exceed focal length.",
+      });
     for (const issue of nodeTreeIssues(scene.nodes))
       ctx.addIssue({ code: "custom", path: ["nodes", issue.index, issue.field], message: issue.message });
   });

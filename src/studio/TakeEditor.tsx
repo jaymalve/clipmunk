@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { PROGRESS_BINDING, WRITE_BINDING, installBridge } from "../bridge";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { installBridge, PROGRESS_BINDING, WRITE_BINDING } from "../bridge";
 import { createTakeRenderer, type TakeRenderer } from "../compositor";
-import { TakeEventSchema, parseEvents, resolveZoomTracks, takeMoments, zoomSegments, type Issue, type Take, type TakeEdit, type TakeEvent } from "../core";
-import { createClock, type Clock } from "../react";
+import {
+  type Issue,
+  parseEvents,
+  resolveZoomTracks,
+  type Take,
+  type TakeEdit,
+  type TakeEvent,
+  TakeEventSchema,
+  takeMoments,
+  zoomSegments,
+} from "../core";
+import { type Clock, createClock } from "../react";
 import type { DaemonClient } from "../recorder";
 import { Chrome } from "./Chrome";
-import { ExportPanel, type DaemonState } from "./daemon";
+import { type DaemonState, ExportPanel } from "./daemon";
 import { MusicControls, useMusicPreview } from "./music";
 import { useClipSession } from "./session";
 
@@ -32,7 +42,10 @@ export function TakeEditor({ id, daemon, backHref }: { id: string; daemon: Daemo
       const result = await client.get<{ take: Take; revision: string }>(`/v1/takes/${id}`);
       if (!current) return;
       if (!result.ok) return setIssues(result.issues);
-      const log = await fetch(client.url(`/v1/takes/${id}/files/${result.data.take.source.events.file}`)).then((response) => (response.ok ? response.text() : ""), () => "");
+      const log = await fetch(client.url(`/v1/takes/${id}/files/${result.data.take.source.events.file}`)).then(
+        (response) => (response.ok ? response.text() : ""),
+        () => "",
+      );
       if (current) setLoaded({ ...result.data, events: parseEvents(log, TakeEventSchema) });
     })();
     return () => {
@@ -51,7 +64,11 @@ export function TakeEditor({ id, daemon, backHref }: { id: string; daemon: Daemo
         {daemon?.problem && <p className="note">The daemon is not connected. {daemon.problem.message}</p>}
         {issues && (
           <div className="issues" role="alert">
-            <ul>{issues.map((issue, index) => <li key={index}>{issue.message}</li>)}</ul>
+            <ul>
+              {issues.map((issue, index) => (
+                <li key={index}>{issue.message}</li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
@@ -59,7 +76,14 @@ export function TakeEditor({ id, daemon, backHref }: { id: string; daemon: Daemo
   );
 }
 
-function Editor(props: { take: Take; revision: string; events: TakeEvent[]; client: DaemonClient; daemon: DaemonState; backHref: string }) {
+function Editor(props: {
+  take: Take;
+  revision: string;
+  events: TakeEvent[];
+  client: DaemonClient;
+  daemon: DaemonState;
+  backHref: string;
+}) {
   const { client, events } = props;
   const [take, setTake] = useState(props.take);
   const [renderer, setRenderer] = useState<TakeRenderer>();
@@ -110,7 +134,11 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
       pending.current = pending.current.then(async () => {
         if (next === saved.current) return;
         setSaveState("saving");
-        const result = await client.patch<{ take: Take; revision: string }>(`/v1/takes/${next.id}`, { edit: next.edit, title: next.title, revision: revision.current });
+        const result = await client.patch<{ take: Take; revision: string }>(`/v1/takes/${next.id}`, {
+          edit: next.edit,
+          title: next.title,
+          revision: revision.current,
+        });
         if (result.ok) {
           revision.current = result.data.revision;
           saved.current = next;
@@ -142,7 +170,12 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
   }, [session.playing, voice, take.edit.audio, take.edit.trim.startMs, clock]);
 
   const moments = useMemo(() => takeMoments(take, events), [take.edit.trim, events]); // eslint-disable-line react-hooks/exhaustive-deps
-  useMusicPreview({ music: take.edit.music, clip: { key: `take:${take.id}`, durationMs, momentsMs: moments }, clock, playing: session.playing });
+  useMusicPreview({
+    music: take.edit.music,
+    clip: { key: `take:${take.id}`, durationMs, momentsMs: moments },
+    clock,
+    playing: session.playing,
+  });
 
   // The exporter drives this page through the same renderer the preview uses.
   useEffect(() => {
@@ -161,11 +194,19 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
       },
       async encode(job) {
         const bindings = window as unknown as Record<string, ((...args: unknown[]) => Promise<void>) | undefined>;
-        const write = bindings[WRITE_BINDING], progress = bindings[PROGRESS_BINDING];
+        const write = bindings[WRITE_BINDING],
+          progress = bindings[PROGRESS_BINDING];
         if (!write) throw new Error("No writer is attached to this page.");
-        const scale = job.height ? job.height / take.edit.canvas.height : job.width ? job.width / take.edit.canvas.width : 1;
+        const scale = job.height
+          ? job.height / take.edit.canvas.height
+          : job.width
+            ? job.width / take.edit.canvas.width
+            : 1;
         const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
-        const size = { width: job.width ?? even(take.edit.canvas.width * scale), height: job.height ?? even(take.edit.canvas.height * scale) };
+        const size = {
+          width: job.width ?? even(take.edit.canvas.width * scale),
+          height: job.height ?? even(take.edit.canvas.height * scale),
+        };
         return renderer.encode(
           { fps: job.fps, ...size },
           async (data, position) => {
@@ -181,10 +222,14 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderer, take.edit.canvas.width, take.edit.canvas.height, durationMs, session.seek]);
 
-  const edit = (change: (edit: TakeEdit) => TakeEdit) => setTake((current) => ({ ...current, edit: change(current.edit) }));
+  const edit = (change: (edit: TakeEdit) => TakeEdit) =>
+    setTake((current) => ({ ...current, edit: change(current.edit) }));
   const { edit: e, source } = take;
   // Derived here, not read back from the renderer, which only learns of an edit after this render.
-  const segments = useMemo(() => zoomSegments(resolveZoomTracks({ zoom: e.zoom }, events, source)), [e.zoom, events, source]);
+  const segments = useMemo(
+    () => zoomSegments(resolveZoomTracks({ zoom: e.zoom }, events, source)),
+    [e.zoom, events, source],
+  );
   const setTrim = (startMs: number, endMs: number) => {
     const start = Math.max(0, Math.min(startMs, source.durationMs - 100));
     const end = Math.max(start + 100, Math.min(endMs, source.durationMs));
@@ -197,88 +242,300 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
       <div className="editor">
         <header>
           <a href={props.backHref}>← Library</a>
-          <input className="title" aria-label="Take title" value={take.title} onChange={(event) => setTake((current) => ({ ...current, title: event.currentTarget.value || current.title }))} />
-          <span className={saveState === "saved" || saveState === "saving" ? "save" : "save bad"}>{saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving…" : saveState}</span>
-          <button type="button" onClick={() => setExporting((value) => !value)} disabled={!renderer}>Export</button>
+          <input
+            className="title"
+            aria-label="Take title"
+            value={take.title}
+            onChange={(event) =>
+              setTake((current) => ({ ...current, title: event.currentTarget.value || current.title }))
+            }
+          />
+          <span className={saveState === "saved" || saveState === "saving" ? "save" : "save bad"}>
+            {saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving…" : saveState}
+          </span>
+          <button type="button" onClick={() => setExporting((value) => !value)} disabled={!renderer}>
+            Export
+          </button>
           <button
             type="button"
-            onClick={() => confirm("Delete this take and its media?") && void client.remove(`/v1/takes/${take.id}`).then(() => location.assign(props.backHref))}
+            onClick={() =>
+              confirm("Delete this take and its media?") &&
+              void client.remove(`/v1/takes/${take.id}`).then(() => location.assign(props.backHref))
+            }
           >
             Delete
           </button>
         </header>
-        {exporting && <ExportPanel clip={{ takeId: take.id }} daemon={props.daemon} before={() => save(latest.current)} frame={e.canvas} />}
+        {exporting && (
+          <ExportPanel
+            clip={{ takeId: take.id }}
+            daemon={props.daemon}
+            before={() => save(latest.current)}
+            frame={e.canvas}
+          />
+        )}
         <div className="stage">
           <canvas ref={setCanvas} data-flick-take={take.id} width={e.canvas.width} height={e.canvas.height} />
-          {failure && <div className="issues" role="alert"><strong>This take cannot be previewed.</strong> {failure}</div>}
+          {failure && (
+            <div className="issues" role="alert">
+              <strong>This take cannot be previewed.</strong> {failure}
+            </div>
+          )}
           {!renderer && !failure && <p className="note">Loading the recording…</p>}
         </div>
         <aside>
           <Group title="Zoom">
-            <Select label="Mode" value={e.zoom.mode} options={e.zoom.mode === "manual" ? ["auto", "manual", "off"] : ["auto", "off"]}
-              onChange={(mode) => edit((c) => ({ ...c, zoom: mode === "auto" ? { mode: "auto", params: c.zoom.mode === "auto" ? c.zoom.params : AUTO } : mode === "off" ? { mode: "off" } : c.zoom }))} />
+            <Select
+              label="Mode"
+              value={e.zoom.mode}
+              options={e.zoom.mode === "manual" ? ["auto", "manual", "off"] : ["auto", "off"]}
+              onChange={(mode) =>
+                edit((c) => ({
+                  ...c,
+                  zoom:
+                    mode === "auto"
+                      ? { mode: "auto", params: c.zoom.mode === "auto" ? c.zoom.params : AUTO }
+                      : mode === "off"
+                        ? { mode: "off" }
+                        : c.zoom,
+                }))
+              }
+            />
             {e.zoom.mode === "auto" && (
               <>
-                <Slider label="Strength" value={e.zoom.params.maxScale} min={1} max={4} step={0.1} format={(v) => `${v.toFixed(1)}×`}
-                  onChange={(maxScale) => edit((c) => (c.zoom.mode === "auto" ? { ...c, zoom: { ...c.zoom, params: { ...c.zoom.params, maxScale, minScale: Math.min(c.zoom.params.minScale, maxScale) } } } : c))} />
-                <Slider label="Hold after action" value={e.zoom.params.holdMs} min={300} max={4000} step={100} format={seconds}
-                  onChange={(holdMs) => edit((c) => (c.zoom.mode === "auto" ? { ...c, zoom: { ...c.zoom, params: { ...c.zoom.params, holdMs } } } : c))} />
-                <p className="hint">{segments.length ? `${segments.length} zoom${segments.length === 1 ? "" : "s"} from your clicks and typing` : "No clicks or typing in this take, so there is nothing to zoom to."}</p>
+                <Slider
+                  label="Strength"
+                  value={e.zoom.params.maxScale}
+                  min={1}
+                  max={4}
+                  step={0.1}
+                  format={(v) => `${v.toFixed(1)}×`}
+                  onChange={(maxScale) =>
+                    edit((c) =>
+                      c.zoom.mode === "auto"
+                        ? {
+                            ...c,
+                            zoom: {
+                              ...c.zoom,
+                              params: {
+                                ...c.zoom.params,
+                                maxScale,
+                                minScale: Math.min(c.zoom.params.minScale, maxScale),
+                              },
+                            },
+                          }
+                        : c,
+                    )
+                  }
+                />
+                <Slider
+                  label="Hold after action"
+                  value={e.zoom.params.holdMs}
+                  min={300}
+                  max={4000}
+                  step={100}
+                  format={seconds}
+                  onChange={(holdMs) =>
+                    edit((c) =>
+                      c.zoom.mode === "auto" ? { ...c, zoom: { ...c.zoom, params: { ...c.zoom.params, holdMs } } } : c,
+                    )
+                  }
+                />
+                <p className="hint">
+                  {segments.length
+                    ? `${segments.length} zoom${segments.length === 1 ? "" : "s"} from your clicks and typing`
+                    : "No clicks or typing in this take, so there is nothing to zoom to."}
+                </p>
               </>
             )}
             {e.zoom.mode === "manual" && <p className="hint">Zoom keyframes are hand-written in take.json.</p>}
           </Group>
           <Group title="Cursor">
-            <Check label="Show cursor" value={e.cursor.visible} onChange={(visible) => edit((c) => ({ ...c, cursor: { ...c.cursor, visible } }))} />
-            <Slider label="Size" value={e.cursor.size} min={0.5} max={4} step={0.1} format={(v) => `${v.toFixed(1)}×`} onChange={(size) => edit((c) => ({ ...c, cursor: { ...c.cursor, size } }))} />
-            <Slider label="Smoothing" value={e.cursor.smoothing} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(smoothing) => edit((c) => ({ ...c, cursor: { ...c.cursor, smoothing } }))} />
-            <Check label="Click ripple" value={e.cursor.clickEffect === "ripple"} onChange={(on) => edit((c) => ({ ...c, cursor: { ...c.cursor, clickEffect: on ? "ripple" : "none" } }))} />
+            <Check
+              label="Show cursor"
+              value={e.cursor.visible}
+              onChange={(visible) => edit((c) => ({ ...c, cursor: { ...c.cursor, visible } }))}
+            />
+            <Slider
+              label="Size"
+              value={e.cursor.size}
+              min={0.5}
+              max={4}
+              step={0.1}
+              format={(v) => `${v.toFixed(1)}×`}
+              onChange={(size) => edit((c) => ({ ...c, cursor: { ...c.cursor, size } }))}
+            />
+            <Slider
+              label="Smoothing"
+              value={e.cursor.smoothing}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(smoothing) => edit((c) => ({ ...c, cursor: { ...c.cursor, smoothing } }))}
+            />
+            <Check
+              label="Click ripple"
+              value={e.cursor.clickEffect === "ripple"}
+              onChange={(on) => edit((c) => ({ ...c, cursor: { ...c.cursor, clickEffect: on ? "ripple" : "none" } }))}
+            />
           </Group>
           {source.cam && (
             <Group title="Camera">
-              <Check label="Show camera" value={e.cam.visible} onChange={(visible) => edit((c) => ({ ...c, cam: { ...c.cam, visible } }))} />
-              <Select label="Shape" value={e.cam.shape} options={["circle", "rounded"]} onChange={(shape) => edit((c) => ({ ...c, cam: { ...c.cam, shape: shape as TakeEdit["cam"]["shape"] } }))} />
-              <Select label="Corner" value={e.cam.corner} options={["br", "bl", "tr", "tl"]} names={{ br: "Bottom right", bl: "Bottom left", tr: "Top right", tl: "Top left" }}
-                onChange={(corner) => edit((c) => ({ ...c, cam: { ...c.cam, corner: corner as TakeEdit["cam"]["corner"] } }))} />
-              <Slider label="Size" value={e.cam.size} min={0.08} max={0.5} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(size) => edit((c) => ({ ...c, cam: { ...c.cam, size } }))} />
-              <Check label="Mirror" value={e.cam.mirror} onChange={(mirror) => edit((c) => ({ ...c, cam: { ...c.cam, mirror } }))} />
+              <Check
+                label="Show camera"
+                value={e.cam.visible}
+                onChange={(visible) => edit((c) => ({ ...c, cam: { ...c.cam, visible } }))}
+              />
+              <Select
+                label="Shape"
+                value={e.cam.shape}
+                options={["circle", "rounded"]}
+                onChange={(shape) =>
+                  edit((c) => ({ ...c, cam: { ...c.cam, shape: shape as TakeEdit["cam"]["shape"] } }))
+                }
+              />
+              <Select
+                label="Corner"
+                value={e.cam.corner}
+                options={["br", "bl", "tr", "tl"]}
+                names={{ br: "Bottom right", bl: "Bottom left", tr: "Top right", tl: "Top left" }}
+                onChange={(corner) =>
+                  edit((c) => ({ ...c, cam: { ...c.cam, corner: corner as TakeEdit["cam"]["corner"] } }))
+                }
+              />
+              <Slider
+                label="Size"
+                value={e.cam.size}
+                min={0.08}
+                max={0.5}
+                step={0.01}
+                format={(v) => `${Math.round(v * 100)}%`}
+                onChange={(size) => edit((c) => ({ ...c, cam: { ...c.cam, size } }))}
+              />
+              <Check
+                label="Mirror"
+                value={e.cam.mirror}
+                onChange={(mirror) => edit((c) => ({ ...c, cam: { ...c.cam, mirror } }))}
+              />
             </Group>
           )}
           <Group title="Frame">
-            <Select label="Shape" value={CANVASES.find((c) => c.width === e.canvas.width && c.height === e.canvas.height)?.label ?? "custom"}
-              options={[...CANVASES.map((c) => c.label), ...(CANVASES.some((c) => c.width === e.canvas.width && c.height === e.canvas.height) ? [] : ["custom"])]}
+            <Select
+              label="Shape"
+              value={
+                CANVASES.find((c) => c.width === e.canvas.width && c.height === e.canvas.height)?.label ?? "custom"
+              }
+              options={[
+                ...CANVASES.map((c) => c.label),
+                ...(CANVASES.some((c) => c.width === e.canvas.width && c.height === e.canvas.height) ? [] : ["custom"]),
+              ]}
               onChange={(label) => {
                 const size = CANVASES.find((c) => c.label === label);
                 if (size) edit((c) => ({ ...c, canvas: { ...c.canvas, width: size.width, height: size.height } }));
-              }} />
+              }}
+            />
             <label className="field">
               <span>Background</span>
-              <input type="color" value={/^#[0-9a-f]{6}$/i.test(e.canvas.background) ? e.canvas.background : "#0b0b0f"} onChange={(event) => { const background = event.currentTarget.value; edit((c) => ({ ...c, canvas: { ...c.canvas, background } })); }} />
+              <input
+                type="color"
+                value={/^#[0-9a-f]{6}$/i.test(e.canvas.background) ? e.canvas.background : "#0b0b0f"}
+                onChange={(event) => {
+                  const background = event.currentTarget.value;
+                  edit((c) => ({ ...c, canvas: { ...c.canvas, background } }));
+                }}
+              />
             </label>
-            <Slider label="Padding" value={e.canvas.padding} min={0} max={0.3} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(padding) => edit((c) => ({ ...c, canvas: { ...c.canvas, padding } }))} />
-            <Slider label="Corner radius" value={e.canvas.radius} min={0} max={80} step={1} format={(v) => `${v}px`} onChange={(radius) => edit((c) => ({ ...c, canvas: { ...c.canvas, radius } }))} />
-            <Slider label="Shadow" value={e.canvas.shadow} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(shadow) => edit((c) => ({ ...c, canvas: { ...c.canvas, shadow } }))} />
+            <Slider
+              label="Padding"
+              value={e.canvas.padding}
+              min={0}
+              max={0.3}
+              step={0.01}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(padding) => edit((c) => ({ ...c, canvas: { ...c.canvas, padding } }))}
+            />
+            <Slider
+              label="Corner radius"
+              value={e.canvas.radius}
+              min={0}
+              max={80}
+              step={1}
+              format={(v) => `${v}px`}
+              onChange={(radius) => edit((c) => ({ ...c, canvas: { ...c.canvas, radius } }))}
+            />
+            <Slider
+              label="Shadow"
+              value={e.canvas.shadow}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(shadow) => edit((c) => ({ ...c, canvas: { ...c.canvas, shadow } }))}
+            />
           </Group>
           <Group title="Music">
-            <MusicControls value={e.music} hasVoice={!!voice} clipKey={`take:${take.id}`} moments={moments.length} onChange={(music) => edit(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
+            <MusicControls
+              value={e.music}
+              hasVoice={!!voice}
+              clipKey={`take:${take.id}`}
+              moments={moments.length}
+              onChange={(music) => edit(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))}
+            />
           </Group>
           {voice && (
             <Group title="Voice">
-              <Check label="Mute" value={e.audio.muted} onChange={(muted) => edit((c) => ({ ...c, audio: { ...c.audio, muted } }))} />
-              <Slider label="Volume" value={e.audio.gain} min={0} max={2} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(gain) => edit((c) => ({ ...c, audio: { ...c.audio, gain } }))} />
-              <Check label="Even out loudness on export" value={e.audio.normalize} onChange={(normalize) => edit((c) => ({ ...c, audio: { ...c.audio, normalize } }))} />
+              <Check
+                label="Mute"
+                value={e.audio.muted}
+                onChange={(muted) => edit((c) => ({ ...c, audio: { ...c.audio, muted } }))}
+              />
+              <Slider
+                label="Volume"
+                value={e.audio.gain}
+                min={0}
+                max={2}
+                step={0.05}
+                format={(v) => `${Math.round(v * 100)}%`}
+                onChange={(gain) => edit((c) => ({ ...c, audio: { ...c.audio, gain } }))}
+              />
+              <Check
+                label="Even out loudness on export"
+                value={e.audio.normalize}
+                onChange={(normalize) => edit((c) => ({ ...c, audio: { ...c.audio, normalize } }))}
+              />
             </Group>
           )}
         </aside>
         <footer>
           <div className="transport">
-            <button type="button" onClick={session.toggle} disabled={!renderer}>{session.playing ? "Pause" : "Play"}</button>
+            <button type="button" onClick={session.toggle} disabled={!renderer}>
+              {session.playing ? "Pause" : "Play"}
+            </button>
             <Time clock={clock} durationMs={durationMs} />
             <span className="spacer" />
             <span className="hint">Trim</span>
-            <button type="button" onClick={() => setTrim(e.trim.startMs + clock.get(), e.trim.endMs)} disabled={!renderer}>Start here</button>
-            <button type="button" onClick={() => setTrim(e.trim.startMs, e.trim.startMs + clock.get())} disabled={!renderer}>End here</button>
-            <button type="button" onClick={() => setTrim(0, source.durationMs)} disabled={e.trim.startMs === 0 && e.trim.endMs === source.durationMs}>Reset</button>
+            <button
+              type="button"
+              onClick={() => setTrim(e.trim.startMs + clock.get(), e.trim.endMs)}
+              disabled={!renderer}
+            >
+              Start here
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrim(e.trim.startMs, e.trim.startMs + clock.get())}
+              disabled={!renderer}
+            >
+              End here
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrim(0, source.durationMs)}
+              disabled={e.trim.startMs === 0 && e.trim.endMs === source.durationMs}
+            >
+              Reset
+            </button>
           </div>
           <Timeline clock={clock} take={take} segments={segments} onSeek={session.seek} />
         </footer>
@@ -292,11 +549,25 @@ const AUTO = { minScale: 1.25, maxScale: 2.2, mergeGapMs: 2500, leadMs: 300, hol
 
 function Time({ clock, durationMs }: { clock: Clock; durationMs: number }) {
   const timeMs = useSyncExternalStore(clock.subscribe, clock.get, clock.get);
-  return <span className="time">{(timeMs / 1000).toFixed(2)}s / {(durationMs / 1000).toFixed(2)}s</span>;
+  return (
+    <span className="time">
+      {(timeMs / 1000).toFixed(2)}s / {(durationMs / 1000).toFixed(2)}s
+    </span>
+  );
 }
 
 /** The whole recording left to right: the kept part, where it zooms, and the playhead. Click or drag to seek. */
-function Timeline({ clock, take, segments, onSeek }: { clock: Clock; take: Take; segments: { startMs: number; endMs: number }[]; onSeek: (clipMs: number) => void }) {
+function Timeline({
+  clock,
+  take,
+  segments,
+  onSeek,
+}: {
+  clock: Clock;
+  take: Take;
+  segments: { startMs: number; endMs: number }[];
+  onSeek: (clipMs: number) => void;
+}) {
   const timeMs = useSyncExternalStore(clock.subscribe, clock.get, clock.get);
   const total = Math.max(1, take.source.durationMs);
   const { startMs, endMs } = take.edit.trim;
@@ -326,7 +597,12 @@ function Timeline({ clock, take, segments, onSeek }: { clock: Clock; take: Take;
     >
       <div className="kept" style={{ left: percent(startMs), width: percent(endMs - startMs) }} />
       {segments.map((segment, index) => (
-        <div key={index} className="zoom" title="Zoom" style={{ left: percent(segment.startMs), width: percent(segment.endMs - segment.startMs) }} />
+        <div
+          key={index}
+          className="zoom"
+          title="Zoom"
+          style={{ left: percent(segment.startMs), width: percent(segment.endMs - segment.startMs) }}
+        />
       ))}
       <div className="playhead" style={{ left: percent(startMs + timeMs) }} />
     </div>
@@ -341,11 +617,26 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
     </section>
   );
 }
-function Slider(props: { label: string; value: number; min: number; max: number; step: number; format: (value: number) => string; onChange: (value: number) => void }) {
+function Slider(props: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (value: number) => string;
+  onChange: (value: number) => void;
+}) {
   return (
     <label className="field">
       <span>{props.label}</span>
-      <input type="range" min={props.min} max={props.max} step={props.step} value={props.value} onChange={(event) => props.onChange(Number(event.currentTarget.value))} />
+      <input
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={props.value}
+        onChange={(event) => props.onChange(Number(event.currentTarget.value))}
+      />
       <output>{props.format(props.value)}</output>
     </label>
   );
@@ -358,12 +649,28 @@ function Check({ label, value, onChange }: { label: string; value: boolean; onCh
     </label>
   );
 }
-function Select({ label, value, options, names, onChange }: { label: string; value: string; options: string[]; names?: Record<string, string>; onChange: (value: string) => void }) {
+function Select({
+  label,
+  value,
+  options,
+  names,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  names?: Record<string, string>;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="field">
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.currentTarget.value)}>
-        {options.map((option) => <option key={option} value={option}>{names?.[option] ?? option[0]!.toUpperCase() + option.slice(1)}</option>)}
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {names?.[option] ?? option[0]!.toUpperCase() + option.slice(1)}
+          </option>
+        ))}
       </select>
     </label>
   );

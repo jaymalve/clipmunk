@@ -1,14 +1,14 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type Browser } from "playwright";
+import { type Browser, chromium } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/run";
-import { startDaemon, type Daemon } from "../../src/daemon";
+import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportScene, exportSequence, probeMedia, probeVideo } from "../../src/export";
-import { FFMPEG, QUADRANTS, makeTake } from "../support/take";
+import { FFMPEG, makeTake, QUADRANTS } from "../support/take";
 
 /** Narration over a scene and sequences of scenes and takes, end to end on the example app. */
 const root = path.resolve("examples/vite-app");
@@ -16,7 +16,13 @@ const TAKE = "zz-test-seq";
 const recipePath = path.join(root, "src/flick/scenes/rack-focus.scene.json");
 const sequenceFile = (id: string) => path.join(root, "src/flick/sequences", `${id}.sequence.json`);
 const made: string[] = [];
-let server: ViteDevServer, daemon: Daemon, origin: string, projectFile: string, recipeFile: string, hadSequences: boolean, hadAudio: boolean;
+let server: ViteDevServer,
+  daemon: Daemon,
+  origin: string,
+  projectFile: string,
+  recipeFile: string,
+  hadSequences: boolean,
+  hadAudio: boolean;
 
 const call = async (method: string, route: string, body?: Buffer | object) => {
   const response = await fetch(`${daemon.origin}${route}`, {
@@ -24,15 +30,49 @@ const call = async (method: string, route: string, body?: Buffer | object) => {
     headers: { authorization: `Bearer ${daemon.token}`, origin },
     body: body === undefined ? undefined : Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body),
   });
-  return { status: response.status, type: response.headers.get("content-type"), json: response.headers.get("content-type")?.includes("json") ? ((await response.json()) as any) : undefined };
+  return {
+    status: response.status,
+    type: response.headers.get("content-type"),
+    json: response.headers.get("content-type")?.includes("json") ? ((await response.json()) as any) : undefined,
+  };
 };
-const tone = (seconds: number, format: string[]) => execFileSync(FFMPEG, ["-loglevel", "error", "-f", "lavfi", "-i", `sine=frequency=330:duration=${seconds}`, ...format, "-"], { maxBuffer: 16e6 });
-const colour = (file: string, at: number, crop: string) =>
-  [...execFileSync(FFMPEG, ["-loglevel", "error", "-ss", String(at), "-i", path.join(root, file), "-vf", `crop=${crop},scale=1:1`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).subarray(0, 3)];
-const near = (actual: number[], expected: readonly number[], tolerance = 50) => expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
+const tone = (seconds: number, format: string[]) =>
+  execFileSync(
+    FFMPEG,
+    ["-loglevel", "error", "-f", "lavfi", "-i", `sine=frequency=330:duration=${seconds}`, ...format, "-"],
+    { maxBuffer: 16e6 },
+  );
+const colour = (file: string, at: number, crop: string) => [
+  ...execFileSync(FFMPEG, [
+    "-loglevel",
+    "error",
+    "-ss",
+    String(at),
+    "-i",
+    path.join(root, file),
+    "-vf",
+    `crop=${crop},scale=1:1`,
+    "-frames:v",
+    "1",
+    "-f",
+    "rawvideo",
+    "-pix_fmt",
+    "rgb24",
+    "-",
+  ]).subarray(0, 3),
+];
+const near = (actual: number[], expected: readonly number[], tolerance = 50) =>
+  expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
 const out = (name: string) => (made.push(name), name);
 /** Mean loudness of a file's sound in decibels, from FFmpeg's own measurement. */
-const loudness = (file: string) => Number(/mean_volume: (-?[\d.]+) dB/.exec(spawnSync(FFMPEG, ["-hide_banner", "-i", path.join(root, file), "-af", "volumedetect", "-f", "null", "-"], { encoding: "utf8" }).stderr)?.[1] ?? Number.NaN);
+const loudness = (file: string) =>
+  Number(
+    /mean_volume: (-?[\d.]+) dB/.exec(
+      spawnSync(FFMPEG, ["-hide_banner", "-i", path.join(root, file), "-af", "volumedetect", "-f", "null", "-"], {
+        encoding: "utf8",
+      }).stderr,
+    )?.[1] ?? Number.NaN,
+  );
 
 beforeAll(async () => {
   process.env.FLICK_FFMPEG ??= FFMPEG;
@@ -59,10 +99,15 @@ afterAll(async () => {
 });
 
 describe("narration over a scene", () => {
-  const audioOf = async () => (JSON.parse(await readFile(recipePath, "utf8")).audio ?? []) as { file: string; offsetMs: number; gain: number }[];
+  const audioOf = async () =>
+    (JSON.parse(await readFile(recipePath, "utf8")).audio ?? []) as { file: string; offsetMs: number; gain: number }[];
 
   it("stores the recording as WAV, points the recipe at it, and exports the scene with sound", async () => {
-    const stored = await call("PUT", "/v1/scenes/rack-focus/narration?offset=-120", tone(1.5, ["-c:a", "libopus", "-f", "webm"]));
+    const stored = await call(
+      "PUT",
+      "/v1/scenes/rack-focus/narration?offset=-120",
+      tone(1.5, ["-c:a", "libopus", "-f", "webm"]),
+    );
     expect(stored.json).toMatchObject({ ok: true, data: { audio: [{ offsetMs: -120, gain: 1 }] } });
     const [clip] = await audioOf();
     expect(clip!.file).toMatch(/^rack-focus-narration-\d{14}\.wav$/);
@@ -74,7 +119,10 @@ describe("narration over a scene", () => {
     expect(JSON.parse(await readFile(recipePath, "utf8")).definition).toEqual(JSON.parse(recipeFile).definition);
 
     const output = out(".flick/exports/zz-test-narrated.mp4");
-    const result = await exportScene({ sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 }, { root });
+    const result = await exportScene(
+      { sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 },
+      { root },
+    );
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data).toMatchObject({ frames: 45, audio: true });
     expect(await probeMedia(output, root)).toMatchObject({ hasVideo: true, hasAudio: true, durationMs: 1500 });
@@ -88,11 +136,16 @@ describe("narration over a scene", () => {
     expect(after).toHaveLength(1);
     expect(after[0]!.file).not.toBe(first!.file);
     expect(existsSync(path.join(root, ".flick/audio", first!.file))).toBe(false);
-    expect((await call("DELETE", "/v1/scenes/rack-focus/narration")).json).toMatchObject({ ok: true, data: { audio: [] } });
+    expect((await call("DELETE", "/v1/scenes/rack-focus/narration")).json).toMatchObject({
+      ok: true,
+      data: { audio: [] },
+    });
     expect(await audioOf()).toEqual([]);
     expect(existsSync(path.join(root, ".flick/audio", after[0]!.file))).toBe(false);
     expect("audio" in JSON.parse(await readFile(recipePath, "utf8"))).toBe(false);
-    expect((await call("PUT", "/v1/scenes/nope/narration", tone(0.2, ["-c:a", "libopus", "-f", "webm"]))).status).toBe(404);
+    expect((await call("PUT", "/v1/scenes/nope/narration", tone(0.2, ["-c:a", "libopus", "-f", "webm"]))).status).toBe(
+      404,
+    );
     expect((await call("GET", "/v1/audio/..%2F..%2Fpackage.json")).status).toBe(404);
   }, 60_000);
 
@@ -100,7 +153,10 @@ describe("narration over a scene", () => {
     const recipe = JSON.parse(recipeFile);
     await writeFile(recipePath, JSON.stringify({ ...recipe, audio: [{ file: "lost.wav" }] }, null, 2));
     const output = out(".flick/exports/zz-test-missing-audio.mp4");
-    const result = await exportScene({ sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 }, { root });
+    const result = await exportScene(
+      { sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 },
+      { root },
+    );
     await writeFile(recipePath, recipeFile);
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data.audio).toBe(false);
@@ -112,13 +168,21 @@ describe("generated music", () => {
   const recipe = async () => JSON.parse(await readFile(recipePath, "utf8"));
 
   it("is set on a scene through the daemon and heard in its export", async () => {
-    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "techno" } })).json).toMatchObject({ ok: false, issues: [{ code: "invalid-music" }] });
-    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "upbeat", seed: 9 } })).json).toMatchObject({ ok: true, data: { music: { style: "upbeat", seed: 9, gain: 0.5, duck: true, sync: true } } });
+    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "techno" } })).json).toMatchObject({
+      ok: false,
+      issues: [{ code: "invalid-music" }],
+    });
+    expect(
+      (await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "upbeat", seed: 9 } })).json,
+    ).toMatchObject({ ok: true, data: { music: { style: "upbeat", seed: 9, gain: 0.5, duck: true, sync: true } } });
     expect((await recipe()).music).toEqual({ style: "upbeat", seed: 9, gain: 0.5, duck: true, sync: true });
     expect((await recipe()).definition).toEqual(JSON.parse(recipeFile).definition);
 
     const output = out(".flick/exports/zz-test-music-scene.mp4");
-    const result = await exportScene({ sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 }, { root });
+    const result = await exportScene(
+      { sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 },
+      { root },
+    );
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data.audio).toBe(true);
     expect(await probeMedia(output, root)).toMatchObject({ hasAudio: true, durationMs: 1500 });
@@ -126,12 +190,36 @@ describe("generated music", () => {
 
     // A caller can leave the music out, which is what a sequence with its own music does.
     const silent = out(".flick/exports/zz-test-music-off.mp4");
-    const without = await exportScene({ sceneId: "rack-focus", url: origin, output: silent, fps: 30, width: 500, height: 300, workers: 1, music: false }, { root });
+    const without = await exportScene(
+      {
+        sceneId: "rack-focus",
+        url: origin,
+        output: silent,
+        fps: 30,
+        width: 500,
+        height: 300,
+        workers: 1,
+        music: false,
+      },
+      { root },
+    );
     expect(without.ok && without.data.audio).toBe(false);
   }, 240_000);
 
   it("plays over a whole sequence in place of its clips' own music", async () => {
-    await call("PUT", "/v1/sequences/zz-test-music", { version: 1, id: "zz-test-music", title: "Music", width: 640, height: 360, fps: 30, music: { style: "lofi", gain: 0.6 }, items: [{ clip: { kind: "scene", id: "rack-focus" } }, { clip: { kind: "scene", id: "rack-focus" }, transition: { kind: "fade", ms: 400 } }] });
+    await call("PUT", "/v1/sequences/zz-test-music", {
+      version: 1,
+      id: "zz-test-music",
+      title: "Music",
+      width: 640,
+      height: 360,
+      fps: 30,
+      music: { style: "lofi", gain: 0.6 },
+      items: [
+        { clip: { kind: "scene", id: "rack-focus" } },
+        { clip: { kind: "scene", id: "rack-focus" }, transition: { kind: "fade", ms: 400 } },
+      ],
+    });
     const output = out(".flick/exports/zz-test-music-sequence.mp4");
     const result = await exportSequence({ sequenceId: "zz-test-music", url: origin, output }, { root });
     await rm(sequenceFile("zz-test-music"), { force: true });
@@ -139,7 +227,10 @@ describe("generated music", () => {
     expect(result.data).toMatchObject({ durationMs: 2600, audio: true });
     expect(loudness(output)).toBeGreaterThan(-35);
 
-    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: null })).json).toMatchObject({ ok: true, data: { music: null } });
+    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: null })).json).toMatchObject({
+      ok: true,
+      data: { music: null },
+    });
     expect("music" in (await recipe())).toBe(false);
   }, 400_000);
 });
@@ -156,12 +247,18 @@ describe("narrating in the studio", () => {
     page.on("pageerror", (error) => console.error("pageerror:", error.message));
     await page.goto(`${origin}/?flick=1&flick-scene=rack-focus#flick-daemon=${daemon.port}.${daemon.token}`);
     await page.waitForSelector('[data-flick-scene][data-flick-valid="true"]');
-    const narrated = async () => ((JSON.parse(await readFile(recipePath, "utf8")).audio ?? []) as { file: string }[]).length;
+    const narrated = async () =>
+      ((JSON.parse(await readFile(recipePath, "utf8")).audio ?? []) as { file: string }[]).length;
     expect(await narrated()).toBe(0);
     await page.getByRole("button", { name: "Narrate", exact: true }).click();
-    await page.getByRole("button", { name: "Stop narrating" }).waitFor({ timeout: 10_000 }).catch(async () => {
-      throw new Error(`Narration did not start. Page shows: ${JSON.stringify(await page.locator(".issues, .bar button").allTextContents())}`);
-    });
+    await page
+      .getByRole("button", { name: "Stop narrating" })
+      .waitFor({ timeout: 10_000 })
+      .catch(async () => {
+        throw new Error(
+          `Narration did not start. Page shows: ${JSON.stringify(await page.locator(".issues, .bar button").allTextContents())}`,
+        );
+      });
     // The scene is 1.5 s long; recording stops by itself when it ends.
     await expect.poll(narrated, { timeout: 20_000 }).toBe(1);
     const [clip] = JSON.parse(await readFile(recipePath, "utf8")).audio as { file: string; offsetMs: number }[];
@@ -177,28 +274,48 @@ describe("narrating in the studio", () => {
     // Music from the scene player: choosing a style writes it to the recipe, and Off removes it.
     const music = async () => JSON.parse(await readFile(recipePath, "utf8")).music;
     await page.getByRole("button", { name: "Music", exact: true }).click();
-    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("lofi");
+    await page
+      .locator("label.field", { hasText: /^Music/ })
+      .locator("select")
+      .selectOption("lofi");
     await expect.poll(music, { timeout: 10_000 }).toEqual({ style: "lofi", gain: 0.5, duck: true, sync: true });
     await page.getByRole("button", { name: "Music ♪" }).waitFor({ timeout: 10_000 });
     await page.getByRole("button", { name: /^(Play|Replay)$/ }).click(); // plays with the music running
     await page.waitForTimeout(500);
-    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("off");
+    await page
+      .locator("label.field", { hasText: /^Music/ })
+      .locator("select")
+      .selectOption("off");
     await expect.poll(music, { timeout: 10_000 }).toBeUndefined();
   }, 120_000);
 });
 
 describe("sequences", () => {
   const sequence = (transition: object, extra: object = {}) => ({
-    version: 1, id: "zz-test-launch", title: "Launch", width: 640, height: 360, fps: 30,
+    version: 1,
+    id: "zz-test-launch",
+    title: "Launch",
+    width: 640,
+    height: 360,
+    fps: 30,
     items: [{ clip: { kind: "scene", id: "rack-focus" } }, { clip: { kind: "take", id: TAKE }, transition }],
     ...extra,
   });
 
   it("saves through the daemon only when every clip exists", async () => {
-    expect((await call("PUT", "/v1/sequences/zz-test-launch", { ...sequence({ kind: "fade" }), items: [{ clip: { kind: "take", id: "no-such-take" } }] })).json).toMatchObject({ ok: false, issues: [{ code: "unknown-clip" }] });
+    expect(
+      (
+        await call("PUT", "/v1/sequences/zz-test-launch", {
+          ...sequence({ kind: "fade" }),
+          items: [{ clip: { kind: "take", id: "no-such-take" } }],
+        })
+      ).json,
+    ).toMatchObject({ ok: false, issues: [{ code: "unknown-clip" }] });
     expect(existsSync(sequenceFile("zz-test-launch"))).toBe(false);
     expect((await call("PUT", "/v1/sequences/zz-test-launch", sequence({ kind: "fade", ms: 500 }))).status).toBe(200);
-    expect((await call("GET", "/v1/sequences")).json.data.sequences.map((entry: { id: string }) => entry.id)).toContain("zz-test-launch");
+    expect((await call("GET", "/v1/sequences")).json.data.sequences.map((entry: { id: string }) => entry.id)).toContain(
+      "zz-test-launch",
+    );
     expect((await call("GET", "/v1/sequences/missing")).status).toBe(404);
   });
 
@@ -207,7 +324,15 @@ describe("sequences", () => {
     const result = await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     // 1.5 s scene + 4 s take, overlapped by the 0.5 s fade.
-    expect(result.data).toMatchObject({ output, items: 2, width: 640, height: 360, fps: 30, durationMs: 5000, audio: true });
+    expect(result.data).toMatchObject({
+      output,
+      items: 2,
+      width: 640,
+      height: 360,
+      fps: 30,
+      durationMs: 5000,
+      audio: true,
+    });
     expect(await probeVideo(output, root)).toMatchObject({ frames: 150, width: 640, height: 360, fps: 30 });
     const media = await probeMedia(output, root);
     expect(media.hasAudio).toBe(true);
@@ -216,19 +341,30 @@ describe("sequences", () => {
     expect(near(colour(output, 3.0, "20:20:170:95"), QUADRANTS.yellow)).toBe(true);
     expect(near(colour(output, 0.4, "20:20:170:95"), QUADRANTS.yellow)).toBe(false); // still the scene
     // Halfway through the fade the picture is a mix: no longer the scene alone, not yet the take alone.
-    const scene = colour(output, 0.9, "20:20:170:95"), mixed = colour(output, 1.25, "20:20:170:95"), take = colour(output, 1.6, "20:20:170:95");
+    const scene = colour(output, 0.9, "20:20:170:95"),
+      mixed = colour(output, 1.25, "20:20:170:95"),
+      take = colour(output, 1.6, "20:20:170:95");
     const distance = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
     expect(distance(mixed, scene)).toBeGreaterThan(25);
     expect(distance(mixed, take)).toBeGreaterThan(25);
-    expect(existsSync(path.join(root, ".flick/exports")) && (await readdir(path.join(root, ".flick/exports"))).filter((name) => name.startsWith(".flick-"))).toEqual([]);
-    expect(await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root })).toMatchObject({ ok: false, issues: [{ code: "output-exists" }] });
+    expect(
+      existsSync(path.join(root, ".flick/exports")) &&
+        (await readdir(path.join(root, ".flick/exports"))).filter((name) => name.startsWith(".flick-")),
+    ).toEqual([]);
+    expect(await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "output-exists" }],
+    });
   }, 400_000);
 
   it("butts clips together on a cut, lays music over the whole, and explains a missing file", async () => {
     await mkdir(path.join(root, ".flick/audio"), { recursive: true });
     await writeFile(path.join(root, ".flick/audio/zz-test-music.wav"), tone(8, ["-f", "wav"]));
     made.push(".flick/audio/zz-test-music.wav");
-    await writeFile(sequenceFile("zz-test-launch"), JSON.stringify(sequence({ kind: "cut" }, { audio: [{ file: "zz-test-music.wav", gain: 0.3 }] })));
+    await writeFile(
+      sequenceFile("zz-test-launch"),
+      JSON.stringify(sequence({ kind: "cut" }, { audio: [{ file: "zz-test-music.wav", gain: 0.3 }] })),
+    );
     const output = out(".flick/exports/zz-test-sequence-cut.mp4");
     const result = await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
@@ -238,15 +374,29 @@ describe("sequences", () => {
     expect(Math.abs(joined.durationMs - 5500)).toBeLessThanOrEqual(40); // the last audio frame may run a few milliseconds over
     expect(near(colour(output, 3.5, "20:20:170:95"), QUADRANTS.yellow)).toBe(true); // take time 2.0 s again
 
-    await writeFile(sequenceFile("zz-test-launch"), JSON.stringify(sequence({ kind: "cut" }, { audio: [{ file: "not-here.wav" }] })));
-    expect(await exportSequence({ sequenceId: "zz-test-launch", url: origin }, { root })).toMatchObject({ ok: false, issues: [{ code: "missing-audio" }] });
-    expect(await exportSequence({ sequenceId: "nope", url: origin }, { root })).toMatchObject({ ok: false, issues: [{ code: "unknown-sequence" }] });
+    await writeFile(
+      sequenceFile("zz-test-launch"),
+      JSON.stringify(sequence({ kind: "cut" }, { audio: [{ file: "not-here.wav" }] })),
+    );
+    expect(await exportSequence({ sequenceId: "zz-test-launch", url: origin }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "missing-audio" }],
+    });
+    expect(await exportSequence({ sequenceId: "nope", url: origin }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "unknown-sequence" }],
+    });
     await writeFile(sequenceFile("zz-test-launch"), JSON.stringify(sequence({ kind: "fade", ms: 500 })));
   }, 400_000);
 
   it("is listed by the CLI", async () => {
     const lines: string[] = [];
-    const code = await run(["sequences"], { cwd: root, out: (text) => lines.push(text), err: (text) => lines.push(text), version: "test" });
+    const code = await run(["sequences"], {
+      cwd: root,
+      out: (text) => lines.push(text),
+      err: (text) => lines.push(text),
+      version: "test",
+    });
     expect(code).toBe(0);
     expect(lines.join("\n")).toMatch(/zz-test-launch\s+2 clips\s+640x360@30\s+Launch/);
   });
@@ -268,12 +418,28 @@ describe("sequence builder in the studio", () => {
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByLabel("Fade length into clip 2, milliseconds").fill("800");
     await page.getByLabel("Shape").selectOption("1:1");
-    await expect.poll(async () => (existsSync(sequenceFile("zz-built-here")) ? JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8")) : undefined), { timeout: 10_000 }).toMatchObject({
-      id: "zz-built-here", title: "ZZ built here", width: 1080, height: 1080,
-      items: [{ clip: { kind: "scene" } }, { clip: { kind: "take", id: TAKE }, transition: { kind: "fade", ms: 800 } }],
-    });
+    await expect
+      .poll(
+        async () =>
+          existsSync(sequenceFile("zz-built-here"))
+            ? JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8"))
+            : undefined,
+        { timeout: 10_000 },
+      )
+      .toMatchObject({
+        id: "zz-built-here",
+        title: "ZZ built here",
+        width: 1080,
+        height: 1080,
+        items: [
+          { clip: { kind: "scene" } },
+          { clip: { kind: "take", id: TAKE }, transition: { kind: "fade", ms: 800 } },
+        ],
+      });
     await page.getByRole("button", { name: "Move up" }).nth(1).click();
-    await expect.poll(async () => JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8")).items[0].clip.kind).toBe("take");
+    await expect
+      .poll(async () => JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8")).items[0].clip.kind)
+      .toBe("take");
     await page.goto(`${origin}/?flick=1`);
     await page.locator(".row", { hasText: "ZZ built here" }).waitFor({ timeout: 15_000 });
   }, 120_000);

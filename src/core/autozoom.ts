@@ -22,7 +22,8 @@ function activities(events: readonly TakeEvent[], source: Size): Activity[] {
     const [left, top, width, height] = event.rect;
     // A click on the page background reports a box as large as the page: aim at the pointer instead.
     const huge = width * height > source.width * source.height * 0.45;
-    if (event.k === "down" && (huge || width <= 0 || height <= 0)) out.push({ t: event.t, x: event.x, y: event.y, width: source.width * 0.3, height: source.height * 0.3 });
+    if (event.k === "down" && (huge || width <= 0 || height <= 0))
+      out.push({ t: event.t, x: event.x, y: event.y, width: source.width * 0.3, height: source.height * 0.3 });
     else out.push({ t: event.t, x: left + width / 2, y: top + height / 2, width, height });
   }
   return out.sort((a, b) => a.t - b.t);
@@ -33,11 +34,20 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 /** Keep the zoomed view inside the recording. At scale 1 the only valid centre is the middle. */
 export function clampView(view: ZoomView, source: Size): ZoomView {
   const scale = Math.max(1, view.scale);
-  const halfWidth = source.width / (2 * scale), halfHeight = source.height / (2 * scale);
-  return { scale, x: clamp(view.x, halfWidth, source.width - halfWidth), y: clamp(view.y, halfHeight, source.height - halfHeight) };
+  const halfWidth = source.width / (2 * scale),
+    halfHeight = source.height / (2 * scale);
+  return {
+    scale,
+    x: clamp(view.x, halfWidth, source.width - halfWidth),
+    y: clamp(view.y, halfHeight, source.height - halfHeight),
+  };
 }
 
-export function generateZoomTracks(events: readonly TakeEvent[], source: Size & { durationMs: number }, params: AutoZoomParams): ZoomTrack[] {
+export function generateZoomTracks(
+  events: readonly TakeEvent[],
+  source: Size & { durationMs: number },
+  params: AutoZoomParams,
+): ZoomTrack[] {
   const list = activities(events, source);
   if (!list.length || params.maxScale <= 1) return [];
   const segments: Activity[][] = [];
@@ -58,9 +68,14 @@ export function generateZoomTracks(events: readonly TakeEvent[], source: Size & 
 
   for (const segment of segments) {
     // One magnification per segment, small enough that its largest target still fits comfortably.
-    const scale = clamp(Math.min(...segment.map((a) => Math.min(source.width / a.width, source.height / a.height) * 0.5)), params.minScale, params.maxScale);
+    const scale = clamp(
+      Math.min(...segment.map((a) => Math.min(source.width / a.width, source.height / a.height) * 0.5)),
+      params.minScale,
+      params.maxScale,
+    );
     const viewAt = (activity: Activity) => clampView({ x: activity.x, y: activity.y, scale }, source);
-    const first = segment[0]!, last = segment.at(-1)!;
+    const first = segment[0]!,
+      last = segment.at(-1)!;
     let view = viewAt(first);
     const previous = frames.at(-1)!;
     const arrive = first.t - params.leadMs;
@@ -68,7 +83,9 @@ export function generateZoomTracks(events: readonly TakeEvent[], source: Size & 
     if (previous.view.scale === 1) push(Math.max(previous.t, arrive - params.easeMs), { ...middle, scale: 1 });
     push(arrive, view);
     for (const activity of segment.slice(1)) {
-      const outside = Math.abs(activity.x - view.x) > (source.width / scale / 2) * SAFE_AREA || Math.abs(activity.y - view.y) > (source.height / scale / 2) * SAFE_AREA;
+      const outside =
+        Math.abs(activity.x - view.x) > (source.width / scale / 2) * SAFE_AREA ||
+        Math.abs(activity.y - view.y) > (source.height / scale / 2) * SAFE_AREA;
       if (!outside) continue;
       const land = activity.t - params.leadMs;
       push(Math.max(frames.at(-1)!.t, land - params.easeMs), view); // hold, then pan
@@ -81,13 +98,21 @@ export function generateZoomTracks(events: readonly TakeEvent[], source: Size & 
   const track = (property: "x" | "y" | "scale"): ZoomTrack => ({
     target: { kind: "zoom" },
     property,
-    keyframes: frames.map((frame) => ({ timeMs: frame.t, value: Math.round(frame.view[property] * 1000) / 1000, easing: "cinematic" })),
+    keyframes: frames.map((frame) => ({
+      timeMs: frame.t,
+      value: Math.round(frame.view[property] * 1000) / 1000,
+      easing: "cinematic",
+    })),
   });
   return [track("x"), track("y"), track("scale")];
 }
 
 /** The zoom tracks a take's edit asks for: generated, hand-written or none. */
-export function resolveZoomTracks(edit: Pick<TakeEdit, "zoom">, events: readonly TakeEvent[], source: Size & { durationMs: number }): ZoomTrack[] {
+export function resolveZoomTracks(
+  edit: Pick<TakeEdit, "zoom">,
+  events: readonly TakeEvent[],
+  source: Size & { durationMs: number },
+): ZoomTrack[] {
   if (edit.zoom.mode === "off") return [];
   if (edit.zoom.mode === "manual") return edit.zoom.tracks;
   return generateZoomTracks(events, source, edit.zoom.params);
@@ -99,7 +124,10 @@ export function zoomAt(tracks: readonly ZoomTrack[], timeMs: number, source: Siz
     const track = tracks.find((candidate) => candidate.property === property);
     return track ? interpolate(track.keyframes as Keyframe[], timeMs) : fallback;
   };
-  return clampView({ x: value("x", source.width / 2), y: value("y", source.height / 2), scale: value("scale", 1) }, source);
+  return clampView(
+    { x: value("x", source.width / 2), y: value("y", source.height / 2), scale: value("scale", 1) },
+    source,
+  );
 }
 
 /** Where the view is zoomed in, for drawing on a timeline. */
@@ -109,8 +137,10 @@ export function zoomSegments(tracks: readonly ZoomTrack[]): ZoomSegment[] {
   let open: ZoomSegment | undefined;
   frames.forEach((frame, index) => {
     const next = frames[index + 1];
-    if (!open && next && frame.value <= 1 && next.value > 1) open = { startMs: frame.timeMs, endMs: frame.timeMs, scale: next.value };
-    if (!open && index === 0 && frame.value > 1) open = { startMs: frame.timeMs, endMs: frame.timeMs, scale: frame.value };
+    if (!open && next && frame.value <= 1 && next.value > 1)
+      open = { startMs: frame.timeMs, endMs: frame.timeMs, scale: next.value };
+    if (!open && index === 0 && frame.value > 1)
+      open = { startMs: frame.timeMs, endMs: frame.timeMs, scale: frame.value };
     if (open) {
       open.endMs = frame.timeMs;
       open.scale = Math.max(open.scale, frame.value);

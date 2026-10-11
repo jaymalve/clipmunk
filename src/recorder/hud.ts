@@ -23,7 +23,8 @@ a { color: #a5f3fc; }
 .cam { position: absolute; right: 24px; bottom: 24px; width: 180px; height: 180px; border-radius: 50%; object-fit: cover; transform: scaleX(-1); border: 3px solid rgba(255,255,255,.85); display: none; background: #000; }
 `;
 const ARROW = `<svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5v15.2l4.1-3.6 2.6 5.9 2.5-1.1-2.6-5.8 5.4-.4z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
-const clock = (ms: number) => `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+const clock = (ms: number) =>
+  `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
 export type RecorderHud = { open(): void; close(): void; toggle(): void; readonly recorder: Recorder | undefined };
 let mounted: RecorderHud | undefined;
@@ -40,8 +41,14 @@ export function mountRecorderHud(): RecorderHud {
       <button class="discard" type="button" hidden>Discard</button><button class="primary action" type="button">Record</button><button class="ghost close" type="button" aria-label="Close recorder">✕</button>
     </div>`;
   const $ = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
-  const status = $(".status"), action = $<HTMLButtonElement>(".action"), mic = $<HTMLButtonElement>(".mic"), camera = $<HTMLButtonElement>(".camera");
-  const dot = $(".dot"), cursor = $(".cursor"), preview = $<HTMLVideoElement>(".cam"), discard = $<HTMLButtonElement>(".discard");
+  const status = $(".status"),
+    action = $<HTMLButtonElement>(".action"),
+    mic = $<HTMLButtonElement>(".mic"),
+    camera = $<HTMLButtonElement>(".camera");
+  const dot = $(".dot"),
+    cursor = $(".cursor"),
+    preview = $<HTMLVideoElement>(".cam"),
+    discard = $<HTMLButtonElement>(".discard");
   const options = { microphone: true, camera: false };
   let recorder: Recorder | undefined;
   let ticker: ReturnType<typeof setInterval> | undefined;
@@ -49,7 +56,8 @@ export function mountRecorderHud(): RecorderHud {
   const fromHud = (event: Event) => event.composedPath().includes(host);
 
   // The page's own cursor is hidden while recording; show a stand-in that is not captured.
-  const follow = (event: PointerEvent) => (cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`);
+  const follow = (event: PointerEvent) =>
+    (cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`);
 
   function render(state: RecorderState) {
     const busy = state.phase === "starting" || state.phase === "saving";
@@ -69,14 +77,23 @@ export function mountRecorderHud(): RecorderHud {
     camera.setAttribute("aria-pressed", String(options.camera));
     action.disabled = busy || !recorder;
     const retry = state.phase === "error" ? state.retry : undefined;
-    action.textContent = recording ? "Stop" : retry ? "Save recording" : state.phase === "saved" || state.phase === "error" ? "Record again" : busy ? "…" : "Record";
+    action.textContent = recording
+      ? "Stop"
+      : retry
+        ? "Save recording"
+        : state.phase === "saved" || state.phase === "error"
+          ? "Record again"
+          : busy
+            ? "…"
+            : "Record";
     action.title = recording ? "Stop recording (Alt+Shift+R)" : "";
     discard.hidden = !retry;
     if (retry) mic.hidden = camera.hidden = true;
     status.className = `status${state.phase === "error" ? " error" : ""}`;
     clearInterval(ticker);
     if (recording) {
-      const tick = () => (status.textContent = `${clock(performance.now() - state.startedAt)} · ${innerWidth}×${innerHeight}`);
+      const tick = () =>
+        (status.textContent = `${clock(performance.now() - state.startedAt)} · ${innerWidth}×${innerHeight}`);
       tick();
       ticker = setInterval(tick, 250);
     } else if (state.phase === "saved") {
@@ -84,20 +101,30 @@ export function mountRecorderHud(): RecorderHud {
       status.innerHTML = `Saved ${(state.take.source.durationMs / 1000).toFixed(1)} s · <a href="?${params}">Open take</a>`;
     } else
       status.textContent =
-        state.phase === "error" ? state.message : state.phase === "starting" ? state.step : state.phase === "saving" ? "Saving…" : recorder ? `Ready · ${innerWidth}×${innerHeight}` : status.textContent;
+        state.phase === "error"
+          ? state.message
+          : state.phase === "starting"
+            ? state.step
+            : state.phase === "saving"
+              ? "Saving…"
+              : recorder
+                ? `Ready · ${innerWidth}×${innerHeight}`
+                : status.textContent;
   }
 
   async function connect() {
     // The studio's own pages navigate with full page loads, which would end the capture at the first click.
     if (new URLSearchParams(location.search).has(STUDIO_PARAM)) {
       status.className = "status error";
-      status.textContent = "The recorder records your app, not the Flick studio. Open a page of your app (without ?flick=1) and press Alt+Shift+R there.";
+      status.textContent =
+        "The recorder records your app, not the Flick studio. Open a page of your app (without ?flick=1) and press Alt+Shift+R there.";
       action.disabled = true;
       mic.hidden = camera.hidden = true;
       return;
     }
     const unsupported = isSupported();
-    if (unsupported) return void ((status.textContent = unsupported), (status.className = "status error"), (action.disabled = true));
+    if (unsupported)
+      return void ((status.textContent = unsupported), (status.className = "status error"), (action.disabled = true));
     status.textContent = "Connecting…";
     const daemon = await connectDaemon();
     if (daemon.problem) {

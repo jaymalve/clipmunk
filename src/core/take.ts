@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { fail, ok, zodIssues, type Result } from "./result";
 import { KeyframeSchema } from "./motion";
 import { MusicSchema } from "./music";
 import { ClipIdSchema } from "./recipe";
+import { fail, ok, type Result, zodIssues } from "./result";
 
 /** A take is one recording session: screen video, optional camera and microphone,
  * and a log of what the pointer and keyboard did. `source` is written once at ingest;
@@ -41,8 +41,22 @@ export const TakeSourceSchema = z.strictObject({
   durationMs: ms,
   /** The page background, composited under the video where the capture is transparent. */
   background: z.string(),
-  screen: z.strictObject({ file: z.string(), offsetMs: finite, latencyMs: ms, width: z.number().int().positive(), height: z.number().int().positive() }),
-  cam: z.strictObject({ file: z.string(), offsetMs: finite, width: z.number().int().positive(), height: z.number().int().positive(), hasAudio: z.boolean() }).optional(),
+  screen: z.strictObject({
+    file: z.string(),
+    offsetMs: finite,
+    latencyMs: ms,
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  }),
+  cam: z
+    .strictObject({
+      file: z.string(),
+      offsetMs: finite,
+      width: z.number().int().positive(),
+      height: z.number().int().positive(),
+      hasAudio: z.boolean(),
+    })
+    .optional(),
   mic: z.strictObject({ file: z.string(), offsetMs: finite }).optional(),
   /** Extracted voice track, when the take has one. */
   audio: z.strictObject({ file: z.string(), offsetMs: finite }).optional(),
@@ -60,10 +74,18 @@ export const ZoomTrackSchema = z
   .superRefine((track, ctx) => {
     track.keyframes.forEach((frame, index) => {
       if (track.property === "scale" && (frame.value < 1 || frame.value > 8))
-        ctx.addIssue({ code: "custom", path: ["keyframes", index, "value"], message: "Zoom scale must be between 1 and 8." });
+        ctx.addIssue({
+          code: "custom",
+          path: ["keyframes", index, "value"],
+          message: "Zoom scale must be between 1 and 8.",
+        });
       const previous = track.keyframes[index - 1];
       if (previous && frame.timeMs <= previous.timeMs)
-        ctx.addIssue({ code: "custom", path: ["keyframes", index, "timeMs"], message: "Keyframe times must be strictly increasing." });
+        ctx.addIssue({
+          code: "custom",
+          path: ["keyframes", index, "timeMs"],
+          message: "Keyframe times must be strictly increasing.",
+        });
     });
   });
 export type ZoomTrack = z.output<typeof ZoomTrackSchema>;
@@ -80,34 +102,48 @@ export const AutoZoomParamsSchema = z.strictObject({
 
 export const TakeEditSchema = z.strictObject({
   trim: z.strictObject({ startMs: ms, endMs: ms }),
-  canvas: z.strictObject({
-    width: z.number().int().min(64).max(3840).multipleOf(2).default(1920),
-    height: z.number().int().min(64).max(3840).multipleOf(2).default(1080),
-    background: z.string().default("#0b0b0f"),
-    padding: finite.min(0).max(0.4).default(0.06),
-    radius: finite.min(0).max(200).default(16),
-    shadow: finite.min(0).max(1).default(0.5),
-  }).prefault({}),
-  zoom: z.discriminatedUnion("mode", [
-    z.strictObject({ mode: z.literal("auto"), params: AutoZoomParamsSchema.prefault({}) }),
-    z.strictObject({ mode: z.literal("manual"), tracks: z.array(ZoomTrackSchema).max(3) }),
-    z.strictObject({ mode: z.literal("off") }),
-  ]).prefault({ mode: "auto" }),
-  cursor: z.strictObject({
-    visible: z.boolean().default(true),
-    size: finite.min(0.5).max(4).default(1.4),
-    smoothing: finite.min(0).max(1).default(0.6),
-    clickEffect: z.enum(["ripple", "none"]).default("ripple"),
-    hideWhenIdleMs: ms.optional(),
-  }).prefault({}),
-  cam: z.strictObject({
-    visible: z.boolean().default(true),
-    shape: z.enum(["circle", "rounded"]).default("circle"),
-    corner: z.enum(["tl", "tr", "bl", "br"]).default("br"),
-    size: finite.min(0.05).max(0.5).default(0.18),
-    mirror: z.boolean().default(true),
-  }).prefault({}),
-  audio: z.strictObject({ muted: z.boolean().default(false), gain: finite.min(0).max(4).default(1), normalize: z.boolean().default(true) }).prefault({}),
+  canvas: z
+    .strictObject({
+      width: z.number().int().min(64).max(3840).multipleOf(2).default(1920),
+      height: z.number().int().min(64).max(3840).multipleOf(2).default(1080),
+      background: z.string().default("#0b0b0f"),
+      padding: finite.min(0).max(0.4).default(0.06),
+      radius: finite.min(0).max(200).default(16),
+      shadow: finite.min(0).max(1).default(0.5),
+    })
+    .prefault({}),
+  zoom: z
+    .discriminatedUnion("mode", [
+      z.strictObject({ mode: z.literal("auto"), params: AutoZoomParamsSchema.prefault({}) }),
+      z.strictObject({ mode: z.literal("manual"), tracks: z.array(ZoomTrackSchema).max(3) }),
+      z.strictObject({ mode: z.literal("off") }),
+    ])
+    .prefault({ mode: "auto" }),
+  cursor: z
+    .strictObject({
+      visible: z.boolean().default(true),
+      size: finite.min(0.5).max(4).default(1.4),
+      smoothing: finite.min(0).max(1).default(0.6),
+      clickEffect: z.enum(["ripple", "none"]).default("ripple"),
+      hideWhenIdleMs: ms.optional(),
+    })
+    .prefault({}),
+  cam: z
+    .strictObject({
+      visible: z.boolean().default(true),
+      shape: z.enum(["circle", "rounded"]).default("circle"),
+      corner: z.enum(["tl", "tr", "bl", "br"]).default("br"),
+      size: finite.min(0.05).max(0.5).default(0.18),
+      mirror: z.boolean().default(true),
+    })
+    .prefault({}),
+  audio: z
+    .strictObject({
+      muted: z.boolean().default(false),
+      gain: finite.min(0).max(4).default(1),
+      normalize: z.boolean().default(true),
+    })
+    .prefault({}),
   /** Background music generated by Flick. */
   music: MusicSchema.optional(),
 });
@@ -123,8 +159,14 @@ export const TakeSchema = z
     edit: TakeEditSchema,
   })
   .superRefine((take, ctx) => {
-    if (take.edit.trim.endMs > take.source.durationMs + 1) ctx.addIssue({ code: "custom", path: ["edit", "trim", "endMs"], message: "Trim end is past the end of the recording." });
-    if (take.edit.trim.startMs >= take.edit.trim.endMs && take.source.durationMs > 0) ctx.addIssue({ code: "custom", path: ["edit", "trim"], message: "Trim start must come before trim end." });
+    if (take.edit.trim.endMs > take.source.durationMs + 1)
+      ctx.addIssue({
+        code: "custom",
+        path: ["edit", "trim", "endMs"],
+        message: "Trim end is past the end of the recording.",
+      });
+    if (take.edit.trim.startMs >= take.edit.trim.endMs && take.source.durationMs > 0)
+      ctx.addIssue({ code: "custom", path: ["edit", "trim"], message: "Trim start must come before trim end." });
   });
 export type Take = z.output<typeof TakeSchema>;
 
@@ -134,7 +176,8 @@ export function validateTake(input: unknown): Result<Take> {
 }
 
 /** The edit a new take starts with: untrimmed, a 16:9 canvas, auto-zoom on. */
-export const defaultEdit = (durationMs: number): TakeEdit => TakeEditSchema.parse({ trim: { startMs: 0, endMs: durationMs } });
+export const defaultEdit = (durationMs: number): TakeEdit =>
+  TakeEditSchema.parse({ trim: { startMs: 0, endMs: durationMs } });
 
 /** What the recorder tells the daemon when a recording starts and when it stops. */
 export const CreateTakeSchema = z.strictObject({
@@ -160,7 +203,16 @@ export function takeId(now: Date): string {
 }
 
 /** Summary rows for listings; the full take is fetched by id. */
-export type TakeSummary = { id: string; title: string; createdAt: string; durationMs: number; width: number; height: number; hasCam: boolean; hasAudio: boolean };
+export type TakeSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  durationMs: number;
+  width: number;
+  height: number;
+  hasCam: boolean;
+  hasAudio: boolean;
+};
 export const summarizeTake = (take: Take): TakeSummary => ({
   id: take.id,
   title: take.title,
@@ -176,5 +228,10 @@ export const summarizeTake = (take: Take): TakeSummary => ({
 export const DAEMON_FILE = ".flick/daemon.json";
 export const DAEMON_HASH = "flick-daemon";
 export const DEFAULT_DAEMON_PORT = 4747;
-export const DaemonFileSchema = z.strictObject({ port: z.number().int(), pid: z.number().int(), token: z.string().min(16), startedAt: z.string() });
+export const DaemonFileSchema = z.strictObject({
+  port: z.number().int(),
+  pid: z.number().int(),
+  token: z.string().min(16),
+  startedAt: z.string(),
+});
 export type DaemonFile = z.output<typeof DaemonFileSchema>;

@@ -1,4 +1,4 @@
-import { PACKAGE_NAME, STUDIO_PARAM, type Adapter } from "../core";
+import { type Adapter, PACKAGE_NAME, STUDIO_PARAM } from "../core";
 
 /** Source of every file `flick init` and `flick sync` generate.
  * Each adapter keeps Flick out of production: the import of the studio sits behind
@@ -149,6 +149,7 @@ takes/*/*
 `;
 
 export function wiringInstruction(adapter: Adapter, studioImport: string): string {
-  if (adapter === "next-app" || adapter === "next-pages") return "No wiring needed: the studio is served at /flick on the dev server.";
+  if (adapter === "next-app" || adapter === "next-pages")
+    return "No wiring needed: the studio is served at /flick on the dev server.";
   return `Wrap your app once, inside the providers your scenes should share:\n\n  import { FlickStudioHost } from "${studioImport}";\n\n  <FlickStudioHost>\n    <App />\n  </FlickStudioHost>`;
 }

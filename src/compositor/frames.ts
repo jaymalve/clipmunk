@@ -1,4 +1,4 @@
-import { ALL_FORMATS, Input, UrlSource, VideoSampleSink, type VideoSample } from "mediabunny";
+import { ALL_FORMATS, Input, UrlSource, type VideoSample, VideoSampleSink } from "mediabunny";
 
 /** Decoded video frames by timestamp.
  * A recording has a variable frame rate (a tab capture emits a frame only when the page
@@ -22,7 +22,8 @@ export async function openFrameSource(url: string): Promise<FrameSource> {
   const input = new Input({ source: new UrlSource(url), formats: ALL_FORMATS });
   const track = await input.getPrimaryVideoTrack();
   if (!track) throw new Error("This recording has no video track.");
-  if (!(await track.canDecode())) throw new Error(`This browser cannot decode the recording's video codec (${track.codec ?? "unknown"}).`);
+  if (!(await track.canDecode()))
+    throw new Error(`This browser cannot decode the recording's video codec (${track.codec ?? "unknown"}).`);
   const sink = new VideoSampleSink(track);
   const durationMs = (await input.computeDuration()) * 1000;
   let current: VideoSample | null = null;

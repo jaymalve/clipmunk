@@ -12,15 +12,32 @@ rmSync(new URL("../dist", import.meta.url), { recursive: true, force: true });
 await build({
   ...shared,
   build: {
-    outDir: "dist", emptyOutDir: false, minify: false, target: "es2022",
-    lib: { entry: { index: "src/index.ts", core: "src/core/index.ts", studio: "src/studio/index.ts", recorder: "src/recorder/index.ts" }, formats: ["es"] },
-    rollupOptions: { external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "zod", "mediabunny"], output: { chunkFileNames: "chunks/[name]-[hash].js" } },
+    outDir: "dist",
+    emptyOutDir: false,
+    minify: false,
+    target: "es2022",
+    lib: {
+      entry: {
+        index: "src/index.ts",
+        core: "src/core/index.ts",
+        studio: "src/studio/index.ts",
+        recorder: "src/recorder/index.ts",
+      },
+      formats: ["es"],
+    },
+    rollupOptions: {
+      external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "zod", "mediabunny"],
+      output: { chunkFileNames: "chunks/[name]-[hash].js" },
+    },
   },
 });
 await build({
   ...shared,
   build: {
-    outDir: "dist", emptyOutDir: false, minify: false, target: "node22",
+    outDir: "dist",
+    emptyOutDir: false,
+    minify: false,
+    target: "node22",
     lib: { entry: { cli: "src/cli/main.ts" }, formats: ["es"] },
     rollupOptions: { external: [/^node:/, "playwright", "zod"], output: { chunkFileNames: "chunks/[name]-[hash].js" } },
   },

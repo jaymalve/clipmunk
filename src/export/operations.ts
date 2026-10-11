@@ -3,23 +3,23 @@ import os from "node:os";
 import path from "node:path";
 import {
   AUDIO_DIR,
-  sceneMoments,
   EXPORTS_DIR,
-  ExportSceneSchema,
-  MAX_EXPORT_DURATION_MS,
-  SNAPSHOT_WIDTH,
-  SceneRecipeSchema,
-  SnapshotSceneSchema,
-  fail,
-  ok,
-  zodIssues,
   type ExportSceneResult,
+  ExportSceneSchema,
+  fail,
+  MAX_EXPORT_DURATION_MS,
+  ok,
   type Result,
+  SceneRecipeSchema,
+  SNAPSHOT_WIDTH,
   type SnapshotSceneResult,
+  SnapshotSceneSchema,
+  sceneMoments,
+  zodIssues,
 } from "../core";
-import { Fault, exists, readText, resolveInside, resolveStudio, toIssues, writeText, type Context } from "../project";
+import { type Context, exists, Fault, readText, resolveInside, resolveStudio, toIssues, writeText } from "../project";
 import { launchBrowser, openClip } from "./browser";
-import { addAudio, concatSegments, startEncoder, type Encoder } from "./ffmpeg";
+import { addAudio, concatSegments, type Encoder, startEncoder } from "./ffmpeg";
 import { writeMusic } from "./music";
 
 /** Rendering operations. A scene is sampled at exact frame times through the same
@@ -55,7 +55,11 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
   try {
     check();
     if (request.output && (await exists(root, request.output)))
-      throw new Fault("output-exists", `${request.output} already exists. Choose another --output; Flick never overwrites a file.`, request.output);
+      throw new Fault(
+        "output-exists",
+        `${request.output} already exists. Choose another --output; Flick never overwrites a file.`,
+        request.output,
+      );
     const studio = await resolveStudio({ url: request.url, sceneId: request.sceneId }, context);
     if (!studio.ok) return studio;
     const output = request.output ?? (await freeOutput(root, request.sceneId));
@@ -66,8 +70,13 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
     const probe = await openClip(browser, studio.data.url, { width: 1280, height: 720 });
     const info = probe.info;
     await probe.close();
-    if (info.durationMs <= 0) throw new Fault("still-scene", "This scene has no motion, so there is no video to export. Use flick snapshot for a still.");
-    if (info.durationMs > MAX_EXPORT_DURATION_MS) throw new Fault("too-long", `Scenes longer than ${MAX_EXPORT_DURATION_MS / 60000} minutes are not supported.`);
+    if (info.durationMs <= 0)
+      throw new Fault(
+        "still-scene",
+        "This scene has no motion, so there is no video to export. Use flick snapshot for a still.",
+      );
+    if (info.durationMs > MAX_EXPORT_DURATION_MS)
+      throw new Fault("too-long", `Scenes longer than ${MAX_EXPORT_DURATION_MS / 60000} minutes are not supported.`);
     const width = request.width ?? even(request.height ? (request.height * info.width) / info.height : info.width);
     const height = request.height ?? even(request.width ? (request.width * info.height) / info.width : info.height);
     const frames = Math.ceil((info.durationMs * request.fps) / 1000);
@@ -84,12 +93,22 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
     await Promise.all(
       segments.map(async (segment) => {
         const clip = await openClip(browser!, studio.data.url, { width, height });
-        const encoder = startEncoder({ output: segment.file, fps: request.fps, width, height, frames: segment.to - segment.from, input: request.draft ? "mjpeg" : "png", cwd: root });
+        const encoder = startEncoder({
+          output: segment.file,
+          fps: request.fps,
+          width,
+          height,
+          frames: segment.to - segment.from,
+          input: request.draft ? "mjpeg" : "png",
+          cwd: root,
+        });
         encoders.push(encoder);
         try {
           for (let frame = segment.from; frame < segment.to; frame++) {
             check();
-            await encoder.write(await clip.frame(Math.min(info.durationMs, (frame * 1000) / request.fps), request.draft ? "jpeg" : "png"));
+            await encoder.write(
+              await clip.frame(Math.min(info.durationMs, (frame * 1000) / request.fps), request.draft ? "jpeg" : "png"),
+            );
             context.onProgress?.(++done, frames);
           }
           await encoder.finish();
@@ -102,18 +121,30 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
     const joined = path.join(temporary, "joined.mp4");
     const list = path.join(temporary, "segments.txt");
     await writeFile(list, segments.map((segment) => `file '${segment.file.replace(/'/g, "'\\''")}'`).join("\n"));
-    await concatSegments(segments.map((segment) => segment.file), list, joined, root);
+    await concatSegments(
+      segments.map((segment) => segment.file),
+      list,
+      joined,
+      root,
+    );
     check();
     // Narration or other sound attached to the scene. A missing file is reported, not fatal.
     const durationMs = (frames * 1000) / request.fps;
     const warnings: string[] = [];
     const tracks: { file: string; offsetMs: number; gain: number }[] = [];
     for (const clip of studio.data.scene?.audio ?? []) {
-      if (await exists(root, `${AUDIO_DIR}/${clip.file}`)) tracks.push({ ...clip, file: await resolveInside(root, `${AUDIO_DIR}/${clip.file}`) });
+      if (await exists(root, `${AUDIO_DIR}/${clip.file}`))
+        tracks.push({ ...clip, file: await resolveInside(root, `${AUDIO_DIR}/${clip.file}`) });
       else warnings.push(`${AUDIO_DIR}/${clip.file} is missing, so this scene was exported without it.`);
     }
     const wanted = request.music ? studio.data.scene?.music : undefined;
-    const music = wanted && (await writeMusic(temporary, wanted, { key: `scene:${request.sceneId}`, durationMs, momentsMs: sceneMoments(studio.data.scene!.definition) }));
+    const music =
+      wanted &&
+      (await writeMusic(temporary, wanted, {
+        key: `scene:${request.sceneId}`,
+        durationMs,
+        momentsMs: sceneMoments(studio.data.scene!.definition),
+      }));
     let finished = joined;
     if (tracks.length || music) {
       finished = path.join(temporary, "with-audio.mp4");
@@ -122,10 +153,22 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
     try {
       await link(finished, target);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
+      if ((error as NodeJS.ErrnoException).code === "EEXIST")
+        throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
       throw error;
     }
-    return ok({ output, fps: request.fps, frames, durationMs, width, height, workers, audio: tracks.length > 0 || !!music, elapsedMs: Date.now() - started, ...(warnings.length ? { warnings } : {}) });
+    return ok({
+      output,
+      fps: request.fps,
+      frames,
+      durationMs,
+      width,
+      height,
+      workers,
+      audio: tracks.length > 0 || !!music,
+      elapsedMs: Date.now() - started,
+      ...(warnings.length ? { warnings } : {}),
+    });
   } catch (error) {
     if (signal?.aborted) return fail([{ code: "export-cancelled", message: "Export cancelled. No file was written." }]);
     return fail(toIssues(error, "export-failed"));
@@ -153,14 +196,24 @@ export async function snapshotScene(input: unknown, context: ExportContext): Pro
     browser = await launchBrowser();
     const clip = await openClip(browser, studio.data.url, { width: SNAPSHOT_WIDTH, height });
     const timeMs = parsed.data.timeMs ?? clip.info.durationMs / 2;
-    if (timeMs > clip.info.durationMs) throw new Fault("invalid-snapshot", `--time must be within the scene (0 to ${clip.info.durationMs} ms).`);
+    if (timeMs > clip.info.durationMs)
+      throw new Fault("invalid-snapshot", `--time must be within the scene (0 to ${clip.info.durationMs} ms).`);
     const png = await clip.frame(timeMs, "png");
     const image = `data:image/png;base64,${png.toString("base64")}`;
     const next = SceneRecipeSchema.safeParse({ ...JSON.parse(original), snapshot: { image, timeMs } });
-    if (!next.success) throw new Fault("snapshot-too-large", "The snapshot is too large to store in the recipe. Simplify the frame or pick another --time.");
+    if (!next.success)
+      throw new Fault(
+        "snapshot-too-large",
+        "The snapshot is too large to store in the recipe. Simplify the frame or pick another --time.",
+      );
     // The scene may have been edited while the browser was open; never clobber that edit.
-    if ((await readText(context.root, source)) !== original) throw new Fault("source-changed", `${source} changed during the snapshot. Run it again.`, source);
-    await writeText(context.root, source, `${JSON.stringify({ ...JSON.parse(original), snapshot: { image, timeMs } }, null, 2)}\n`);
+    if ((await readText(context.root, source)) !== original)
+      throw new Fault("source-changed", `${source} changed during the snapshot. Run it again.`, source);
+    await writeText(
+      context.root,
+      source,
+      `${JSON.stringify({ ...JSON.parse(original), snapshot: { image, timeMs } }, null, 2)}\n`,
+    );
     return ok({ sceneId: recipe.id, source, timeMs, bytes: png.length });
   } catch (error) {
     return fail(toIssues(error, "snapshot-failed"));

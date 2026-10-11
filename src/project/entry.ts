@@ -3,7 +3,10 @@
  * forms and declines anything it is not sure about, so the caller can fall back to
  * printing the instruction. It never guesses.
  */
-export type EntryEdit = { status: "wrapped"; source: string } | { status: "already" } | { status: "manual"; reason: string };
+export type EntryEdit =
+  | { status: "wrapped"; source: string }
+  | { status: "already" }
+  | { status: "manual"; reason: string };
 
 const COMPONENT = "FlickStudioHost";
 
@@ -12,8 +15,10 @@ function matchParen(source: string, open: number): number {
   let depth = 0;
   for (let i = open; i < source.length; i++) {
     const char = source[i]!;
-    if (char === "/" && source[i + 1] === "/") i = source.indexOf("\n", i) === -1 ? source.length : source.indexOf("\n", i);
-    else if (char === "/" && source[i + 1] === "*") i = source.indexOf("*/", i + 2) === -1 ? source.length : source.indexOf("*/", i + 2) + 1;
+    if (char === "/" && source[i + 1] === "/")
+      i = source.indexOf("\n", i) === -1 ? source.length : source.indexOf("\n", i);
+    else if (char === "/" && source[i + 1] === "*")
+      i = source.indexOf("*/", i + 2) === -1 ? source.length : source.indexOf("*/", i + 2) + 1;
     else if (char === '"' || char === "'" || char === "`") {
       const end = closeQuote(source, i);
       if (end === -1) return -1;
@@ -36,19 +41,29 @@ function closeQuote(source: string, start: number): number {
 export function wrapRootRender(source: string, importPath: string): EntryEdit {
   if (source.includes(COMPONENT)) return { status: "already" };
   const calls = [...source.matchAll(/\.render\s*\(/g)];
-  if (calls.length !== 1) return { status: "manual", reason: calls.length ? "the entry file has more than one render call" : "no root render call was found in the entry file" };
+  if (calls.length !== 1)
+    return {
+      status: "manual",
+      reason: calls.length
+        ? "the entry file has more than one render call"
+        : "no root render call was found in the entry file",
+    };
   const open = calls[0]!.index + calls[0]![0].length - 1;
   const close = matchParen(source, open);
   if (close === -1) return { status: "manual", reason: "the root render call could not be read safely" };
   const inner = source.slice(open + 1, close - 1);
   const argument = inner.trim().replace(/,$/, "").trim();
-  if (!argument.startsWith("<") || !argument.endsWith(">")) return { status: "manual", reason: "the root render argument is not a JSX element" };
+  if (!argument.startsWith("<") || !argument.endsWith(">"))
+    return { status: "manual", reason: "the root render argument is not a JSX element" };
 
   const lineStart = source.lastIndexOf("\n", calls[0]!.index) + 1;
   const indent = /^\s*/.exec(source.slice(lineStart))![0];
   const pad = `${indent}  `;
   const body = argument.includes("\n")
-    ? argument.split("\n").map((line, index) => (index === 0 ? `${pad}  ${line}` : `  ${line}`)).join("\n")
+    ? argument
+        .split("\n")
+        .map((line, index) => (index === 0 ? `${pad}  ${line}` : `  ${line}`))
+        .join("\n")
     : `${pad}  ${argument}`;
   const wrapped = `\n${pad}<${COMPONENT}>\n${body}\n${pad}</${COMPONENT}>,\n${indent}`;
   let next = source.slice(0, open + 1) + wrapped + source.slice(close - 1);

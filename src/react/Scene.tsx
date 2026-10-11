@@ -1,5 +1,7 @@
 import {
+  type CSSProperties,
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -8,38 +10,36 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
-  type ReactNode,
 } from "react";
 import {
+  type CameraInput,
   CameraSchema,
-  FocusSchema,
-  FULL_FOCUS_BANDS,
-  NO_MOTION,
-  PREVIEW_FOCUS_BANDS,
-  SCENE_BACKGROUND,
-  TransformSchema,
   cameraToCss,
   compileMotion,
+  DEFAULT_CAMERA,
+  DEFAULT_FOCUS,
+  DEFAULT_TRANSFORM,
   evaluateFrame,
   evaluateMotion,
-  motionTime,
-  nodeTreeIssues,
-  planFocus,
-  resolveFrame,
-  transformToCss,
-  zodIssues,
-  DEFAULT_CAMERA,
-  DEFAULT_TRANSFORM,
-  DEFAULT_FOCUS,
-  type CameraInput,
   type FocusInput,
+  FocusSchema,
+  FULL_FOCUS_BANDS,
   type Issue,
   type Measurement,
+  motionTime,
+  NO_MOTION,
+  nodeTreeIssues,
+  PREVIEW_FOCUS_BANDS,
+  planFocus,
+  resolveFrame,
+  SCENE_BACKGROUND,
   type Transform,
   type TransformInput,
+  TransformSchema,
+  transformToCss,
+  zodIssues,
 } from "../core";
-import { createClock, type Clock } from "./clock";
+import { type Clock, createClock } from "./clock";
 import { createFocusFilters } from "./focus-filter";
 import { createRegistry, type Registry } from "./registry";
 
@@ -71,7 +71,19 @@ export type SceneProps = {
   onDiagnostics?: (issues: Issue[]) => void;
 };
 
-export function Scene({ camera, focus, nodes: declared, motion, clock: externalClock, timeMs, quality = "full", children, className, style, onDiagnostics }: SceneProps) {
+export function Scene({
+  camera,
+  focus,
+  nodes: declared,
+  motion,
+  clock: externalClock,
+  timeMs,
+  quality = "full",
+  children,
+  className,
+  style,
+  onDiagnostics,
+}: SceneProps) {
   const [registry] = useState(createRegistry);
   const [ownClock] = useState(() => createClock(timeMs));
   const clock = externalClock ?? ownClock;
@@ -89,10 +101,17 @@ export function Scene({ camera, focus, nodes: declared, motion, clock: externalC
     const nodes = nodeList ? new Map(nodeList.map((node) => [node.id, node])) : undefined;
     const parsedCamera = CameraSchema.safeParse(JSON.parse(cameraKey));
     const parsedFocus = FocusSchema.safeParse(JSON.parse(focusKey));
-    if (!parsedCamera.success) issues.push(...zodIssues(parsedCamera.error, "invalid-scene").map((issue) => ({ ...issue, path: `camera.${issue.path}` })));
-    if (!parsedFocus.success) issues.push(...zodIssues(parsedFocus.error, "invalid-scene").map((issue) => ({ ...issue, path: `focus.${issue.path}` })));
+    if (!parsedCamera.success)
+      issues.push(
+        ...zodIssues(parsedCamera.error, "invalid-scene").map((issue) => ({ ...issue, path: `camera.${issue.path}` })),
+      );
+    if (!parsedFocus.success)
+      issues.push(
+        ...zodIssues(parsedFocus.error, "invalid-scene").map((issue) => ({ ...issue, path: `focus.${issue.path}` })),
+      );
     const compiled = motion === undefined ? undefined : compileMotion(motion);
-    if (compiled && !compiled.ok) issues.push(...compiled.issues.map((issue) => ({ ...issue, path: `motion.${issue.path}` })));
+    if (compiled && !compiled.ok)
+      issues.push(...compiled.issues.map((issue) => ({ ...issue, path: `motion.${issue.path}` })));
     return {
       camera: parsedCamera.success ? parsedCamera.data : DEFAULT_CAMERA,
       focus: parsedFocus.success ? parsedFocus.data : DEFAULT_FOCUS,
@@ -108,7 +127,8 @@ export function Scene({ camera, focus, nodes: declared, motion, clock: externalC
   const reported = useRef<string | undefined>(undefined);
 
   const apply = useCallback(() => {
-    const rootElement = root.current, stageElement = stage.current;
+    const rootElement = root.current,
+      stageElement = stage.current;
     if (!rootElement || !stageElement) return;
     const { settings, quality, onDiagnostics } = latest.current;
     const issues: Issue[] = [...settings.issues];
@@ -123,21 +143,42 @@ export function Scene({ camera, focus, nodes: declared, motion, clock: externalC
     if (settings.nodes) {
       const rendered = new Map(nodes.map((node) => [node.id, node]));
       for (const node of nodes)
-        if (!settings.nodes.has(node.id)) issues.push({ code: "undeclared-surface", path: node.id, message: `Surface "${node.id}" is rendered but not listed in the recipe's nodes.` });
+        if (!settings.nodes.has(node.id))
+          issues.push({
+            code: "undeclared-surface",
+            path: node.id,
+            message: `Surface "${node.id}" is rendered but not listed in the recipe's nodes.`,
+          });
       for (const [id, node] of settings.nodes) {
         const live = rendered.get(id);
-        if (!live) issues.push({ code: "missing-surface", path: id, message: `The recipe lists node "${id}" but the component does not render a Surface with that id.` });
+        if (!live)
+          issues.push({
+            code: "missing-surface",
+            path: id,
+            message: `The recipe lists node "${id}" but the component does not render a Surface with that id.`,
+          });
         else if (live.parentId !== node.parentId)
-          issues.push({ code: "parent-mismatch", path: id, message: `Node "${id}" has parentId ${JSON.stringify(node.parentId ?? null)} in the recipe but is rendered inside ${JSON.stringify(live.parentId ?? null)}.` });
+          issues.push({
+            code: "parent-mismatch",
+            path: id,
+            message: `Node "${id}" has parentId ${JSON.stringify(node.parentId ?? null)} in the recipe but is rendered inside ${JSON.stringify(live.parentId ?? null)}.`,
+          });
       }
     }
     for (const binding of bindings)
-      if (binding.transformIssue) issues.push({ code: "invalid-scene", path: binding.id, message: binding.transformIssue });
+      if (binding.transformIssue)
+        issues.push({ code: "invalid-scene", path: binding.id, message: binding.transformIssue });
     const tree = nodeTreeIssues(nodes);
-    for (const issue of tree) issues.push({ code: "invalid-scene", path: nodes[issue.index]!.id, message: issue.message });
+    for (const issue of tree)
+      issues.push({ code: "invalid-scene", path: nodes[issue.index]!.id, message: issue.message });
     const ids = new Set(nodes.map((node) => node.id));
     for (const id of state.surfaces.keys())
-      if (!ids.has(id)) issues.push({ code: "unknown-target", path: `motion.${id}`, message: `Motion targets a surface that is not rendered: ${id}` });
+      if (!ids.has(id))
+        issues.push({
+          code: "unknown-target",
+          path: `motion.${id}`,
+          message: `Motion targets a surface that is not rendered: ${id}`,
+        });
 
     const frame = resolveFrame(settings.camera, settings.focus, nodes, state);
     const measurements = new Map<string, Measurement>();
@@ -250,7 +291,14 @@ export function Scene({ camera, focus, nodes: declared, motion, clock: externalC
           <div
             ref={stage}
             data-flick-stage=""
-            style={{ position: "relative", width: "100%", height: "100%", transformStyle: "preserve-3d", transformOrigin: "50% 50%", pointerEvents: "none" }}
+            style={{
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              transformStyle: "preserve-3d",
+              transformOrigin: "50% 50%",
+              pointerEvents: "none",
+            }}
           >
             {children}
           </div>
@@ -292,7 +340,9 @@ export function Surface({ id, transform, content, children, className, style }: 
       content: contentElement.current,
       children: childrenElement.current!,
       transform: parsed.success ? (JSON.parse(transformKey) as Partial<Transform>) : undefined,
-      transformIssue: parsed.success ? undefined : `Invalid transform on ${id}: ${parsed.error.issues.map((issue) => `${issue.path.join(".")} ${issue.message}`).join("; ")}`,
+      transformIssue: parsed.success
+        ? undefined
+        : `Invalid transform on ${id}: ${parsed.error.issues.map((issue) => `${issue.path.join(".")} ${issue.message}`).join("; ")}`,
     });
   });
   useLayout(() => () => registry.remove(token), [registry, token]);
@@ -303,7 +353,13 @@ export function Surface({ id, transform, content, children, className, style }: 
         ref={element}
         className={className}
         data-flick-id={id}
-        style={{ ...style, position: style?.position ?? "relative", transformOrigin: "50% 50%", transformStyle: "preserve-3d", pointerEvents: "none" }}
+        style={{
+          ...style,
+          position: style?.position ?? "relative",
+          transformOrigin: "50% 50%",
+          transformStyle: "preserve-3d",
+          pointerEvents: "none",
+        }}
       >
         {content !== undefined && (
           <div ref={contentElement} data-flick-leaf="">

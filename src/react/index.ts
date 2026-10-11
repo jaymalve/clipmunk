@@ -1,2 +1,2 @@
-export { Scene, Surface, useSceneTime, type SceneProps, type SurfaceProps, type SceneQuality } from "./Scene";
-export { createClock, type Clock } from "./clock";
+export { type Clock, createClock } from "./clock";
+export { Scene, type SceneProps, type SceneQuality, Surface, type SurfaceProps, useSceneTime } from "./Scene";

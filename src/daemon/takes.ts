@@ -2,35 +2,40 @@ import { appendFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   CreateTakeSchema,
-  FinalizeTakeSchema,
-  TAKES_DIR,
-  TAKE_TRACKS,
-  TakeEditSchema,
-  TakeEventSchema,
-  TakeSchema,
   defaultEdit,
+  FinalizeTakeSchema,
   fail,
+  type Issue,
   ok,
   parseEvents,
-  summarizeTake,
-  takeId,
-  zodIssues,
-  type Issue,
   type Result,
+  summarizeTake,
+  TAKE_TRACKS,
+  TAKES_DIR,
   type Take,
+  TakeEditSchema,
   type TakeEvent,
+  TakeEventSchema,
+  TakeSchema,
   type TakeSummary,
   type TakeTrack,
+  takeId,
+  zodIssues,
 } from "../core";
 import { extractAudio, probeMedia, remux } from "../export";
-import { Fault, exists, readText, resolveInside, sha256, toIssues, writeText } from "../project";
+import { exists, Fault, readText, resolveInside, sha256, toIssues, writeText } from "../project";
 
 /** Take storage under .flick/takes/<id>/. Uploads append to raw files while recording;
  * finalising remuxes them, extracts the voice track and writes take.json.
  */
 export type Context = { root: string };
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const RAW: Record<TakeTrack, string> = { screen: "screen.raw.webm", cam: "cam.raw.webm", mic: "mic.raw.webm", events: "events.jsonl" };
+const RAW: Record<TakeTrack, string> = {
+  screen: "screen.raw.webm",
+  cam: "cam.raw.webm",
+  mic: "mic.raw.webm",
+  events: "events.jsonl",
+};
 const MAX_CHUNK = 64 * 1024 * 1024;
 const PENDING = "recording.json";
 
@@ -48,7 +53,11 @@ export async function createTake(input: unknown, context: Context, now = new Dat
   try {
     let id = takeId(now);
     for (let n = 2; await exists(context.root, dirOf(id)); n++) id = `${takeId(now)}-${n}`;
-    await writeText(context.root, `${dirOf(id)}/${PENDING}`, JSON.stringify({ ...parsed.data, createdAt: now.toISOString() }));
+    await writeText(
+      context.root,
+      `${dirOf(id)}/${PENDING}`,
+      JSON.stringify({ ...parsed.data, createdAt: now.toISOString() }),
+    );
     for (const track of TAKE_TRACKS) expected.set(`${id}/${track}`, 0);
     return ok({ id });
   } catch (error) {
@@ -56,13 +65,21 @@ export async function createTake(input: unknown, context: Context, now = new Dat
   }
 }
 
-export async function appendChunk(id: string, track: string, seq: number, data: Buffer, context: Context): Promise<Result<{ next: number }>> {
+export async function appendChunk(
+  id: string,
+  track: string,
+  seq: number,
+  data: Buffer,
+  context: Context,
+): Promise<Result<{ next: number }>> {
   try {
-    if (!TAKE_TRACKS.includes(track as TakeTrack)) throw new Fault("invalid-track", `Unknown track "${track}". Use one of: ${TAKE_TRACKS.join(", ")}.`);
+    if (!TAKE_TRACKS.includes(track as TakeTrack))
+      throw new Fault("invalid-track", `Unknown track "${track}". Use one of: ${TAKE_TRACKS.join(", ")}.`);
     if (data.length > MAX_CHUNK) throw new Fault("chunk-too-large", "A chunk may be at most 64 MB.");
     const key = `${id}/${track}`;
     const next = expected.get(key);
-    if (next === undefined || !(await exists(context.root, `${dirOf(id)}/${PENDING}`))) throw new Fault("not-recording", `Take "${id}" is not being recorded. Start a new recording.`);
+    if (next === undefined || !(await exists(context.root, `${dirOf(id)}/${PENDING}`)))
+      throw new Fault("not-recording", `Take "${id}" is not being recorded. Start a new recording.`);
     // A retry of a chunk whose response was lost is already stored; accept it without writing twice.
     if (seq < next) return ok({ next });
     if (seq !== next) throw new Fault("out-of-order", `Expected chunk ${next} of ${track}, got ${seq}.`);
@@ -79,8 +96,12 @@ export async function appendLog(id: string, text: string, context: Context): Pro
   try {
     if (!(await exists(context.root, dirOf(id)))) throw new Fault("unknown-take", `No take named "${id}".`);
     const file = await resolveInside(context.root, `${dirOf(id)}/recorder.log`);
-    const size = await stat(file).then((info) => info.size, () => 0);
-    if (size < 256 * 1024) await appendFile(file, `${new Date().toISOString()} ${text.replace(/[\r\n]+/g, " ").slice(0, 2000)}\n`);
+    const size = await stat(file).then(
+      (info) => info.size,
+      () => 0,
+    );
+    if (size < 256 * 1024)
+      await appendFile(file, `${new Date().toISOString()} ${text.replace(/[\r\n]+/g, " ").slice(0, 2000)}\n`);
     return ok({ id });
   } catch (error) {
     return fail(toIssues(error, "log-failed"));
@@ -95,10 +116,22 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
     const dir = dirOf(id);
     const pendingText = await readText(root, `${dir}/${PENDING}`);
     if (pendingText === undefined) throw new Fault("not-recording", `Take "${id}" is not being recorded.`);
-    const pending = JSON.parse(pendingText) as { title?: string; width: number; height: number; dpr: number; background: string; createdAt: string };
+    const pending = JSON.parse(pendingText) as {
+      title?: string;
+      width: number;
+      height: number;
+      dpr: number;
+      background: string;
+      createdAt: string;
+    };
     const absolute = await resolveInside(root, dir);
-    const has = async (file: string) => stat(path.join(absolute, file)).then((info) => info.size > 0, () => false);
-    if (!(await has(RAW.screen))) throw new Fault("empty-recording", "No screen video was received, so there is nothing to save.");
+    const has = async (file: string) =>
+      stat(path.join(absolute, file)).then(
+        (info) => info.size > 0,
+        () => false,
+      );
+    if (!(await has(RAW.screen)))
+      throw new Fault("empty-recording", "No screen video was received, so there is nothing to save.");
 
     // Raw MediaRecorder files have no duration or index; a stream copy adds both.
     const finish = async (track: "screen" | "cam" | "mic") => {
@@ -108,10 +141,15 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
       return { file: output, info: await probeMedia(output, absolute) };
     };
     const screen = await finish("screen");
-    if (!screen.info.hasVideo || !screen.info.width || !screen.info.height) throw new Fault("ingest-failed", "The screen recording contains no readable video.");
+    if (!screen.info.hasVideo || !screen.info.width || !screen.info.height)
+      throw new Fault("ingest-failed", "The screen recording contains no readable video.");
     const cam = parsed.data.cam && (await has(RAW.cam)) ? await finish("cam") : undefined;
     const mic = parsed.data.mic && (await has(RAW.mic)) ? await finish("mic") : undefined;
-    const voice = cam?.info.hasAudio ? { from: cam.file, offsetMs: parsed.data.cam!.offsetMs } : mic?.info.hasAudio ? { from: mic.file, offsetMs: parsed.data.mic!.offsetMs } : undefined;
+    const voice = cam?.info.hasAudio
+      ? { from: cam.file, offsetMs: parsed.data.cam!.offsetMs }
+      : mic?.info.hasAudio
+        ? { from: mic.file, offsetMs: parsed.data.mic!.offsetMs }
+        : undefined;
     if (voice) await extractAudio(voice.from, "audio.wav", absolute);
 
     // Keep only well-formed events, so everything downstream can trust the log.
@@ -137,8 +175,24 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
         dpr: pending.dpr,
         durationMs,
         background: pending.background,
-        screen: { file: screen.file, offsetMs: 0, latencyMs: parsed.data.screen.latencyMs, width: screen.info.width, height: screen.info.height },
-        ...(cam?.info.width && cam.info.height ? { cam: { file: cam.file, offsetMs: parsed.data.cam!.offsetMs, width: cam.info.width, height: cam.info.height, hasAudio: cam.info.hasAudio } } : {}),
+        screen: {
+          file: screen.file,
+          offsetMs: 0,
+          latencyMs: parsed.data.screen.latencyMs,
+          width: screen.info.width,
+          height: screen.info.height,
+        },
+        ...(cam?.info.width && cam.info.height
+          ? {
+              cam: {
+                file: cam.file,
+                offsetMs: parsed.data.cam!.offsetMs,
+                width: cam.info.width,
+                height: cam.info.height,
+                hasAudio: cam.info.hasAudio,
+              },
+            }
+          : {}),
         ...(mic ? { mic: { file: mic.file, offsetMs: parsed.data.mic!.offsetMs } } : {}),
         ...(voice ? { audio: { file: "audio.wav", offsetMs: voice.offsetMs } } : {}),
         events: { file: "events.jsonl", count: events.length },
@@ -159,7 +213,13 @@ export async function readTake(id: string, context: Context): Promise<Result<{ t
     const text = await readText(context.root, `${dirOf(id)}/take.json`);
     if (text === undefined) throw new Fault("unknown-take", `No take named "${id}".`);
     const parsed = TakeSchema.safeParse(JSON.parse(text));
-    if (!parsed.success) return fail(zodIssues(parsed.error, "invalid-take").map((issue) => ({ ...issue, path: `${dirOf(id)}/take.json: ${issue.path}` })));
+    if (!parsed.success)
+      return fail(
+        zodIssues(parsed.error, "invalid-take").map((issue) => ({
+          ...issue,
+          path: `${dirOf(id)}/take.json: ${issue.path}`,
+        })),
+      );
     return ok({ take: parsed.data, revision: sha256(text) });
   } catch (error) {
     return fail(toIssues(error, "invalid-take"));
@@ -169,7 +229,10 @@ export async function readTake(id: string, context: Context): Promise<Result<{ t
 export async function listTakes(context: Context): Promise<Result<{ takes: TakeSummary[]; issues: Issue[] }>> {
   try {
     const absolute = await resolveInside(context.root, TAKES_DIR);
-    const names = await readdir(absolute, { withFileTypes: true }).then((entries) => entries.filter((entry) => entry.isDirectory() && ID.test(entry.name)).map((entry) => entry.name), () => []);
+    const names = await readdir(absolute, { withFileTypes: true }).then(
+      (entries) => entries.filter((entry) => entry.isDirectory() && ID.test(entry.name)).map((entry) => entry.name),
+      () => [],
+    );
     const takes: TakeSummary[] = [];
     const issues: Issue[] = [];
     for (const name of names.sort().reverse()) {
@@ -185,14 +248,30 @@ export async function listTakes(context: Context): Promise<Result<{ takes: TakeS
 }
 
 /** Save an edit. `revision` is the hash the editor read; a mismatch means someone else changed the file. */
-export async function updateTakeEdit(id: string, input: { edit?: unknown; title?: unknown; revision?: unknown }, context: Context): Promise<Result<{ take: Take; revision: string }>> {
+export async function updateTakeEdit(
+  id: string,
+  input: { edit?: unknown; title?: unknown; revision?: unknown },
+  context: Context,
+): Promise<Result<{ take: Take; revision: string }>> {
   const current = await readTake(id, context);
   if (!current.ok) return current;
   if (input.revision !== current.data.revision)
-    return fail([{ code: "stale-revision", message: "take.json changed since it was loaded. Reload the take and apply the edit again." }]);
-  const edit = input.edit === undefined ? { success: true as const, data: current.data.take.edit } : TakeEditSchema.safeParse(input.edit);
+    return fail([
+      {
+        code: "stale-revision",
+        message: "take.json changed since it was loaded. Reload the take and apply the edit again.",
+      },
+    ]);
+  const edit =
+    input.edit === undefined
+      ? { success: true as const, data: current.data.take.edit }
+      : TakeEditSchema.safeParse(input.edit);
   if (!edit.success) return fail(zodIssues(edit.error, "invalid-take"));
-  const next = TakeSchema.safeParse({ ...current.data.take, edit: edit.data, ...(typeof input.title === "string" ? { title: input.title } : {}) });
+  const next = TakeSchema.safeParse({
+    ...current.data.take,
+    edit: edit.data,
+    ...(typeof input.title === "string" ? { title: input.title } : {}),
+  });
   if (!next.success) return fail(zodIssues(next.error, "invalid-take"));
   const text = `${JSON.stringify(next.data, null, 2)}\n`;
   await writeText(context.root, `${dirOf(id)}/take.json`, text);
@@ -213,9 +292,16 @@ export async function deleteTake(id: string, context: Context): Promise<Result<{
 
 /** Absolute path of a media file inside a take, or a Fault. Only plain file names are accepted. */
 export async function takeFile(id: string, name: string, context: Context): Promise<string> {
-  if (!/^[a-z0-9][a-z0-9.-]*$/i.test(name) || name.includes("..")) throw new Fault("unknown-file", `"${name}" is not a take file.`);
+  if (!/^[a-z0-9][a-z0-9.-]*$/i.test(name) || name.includes(".."))
+    throw new Fault("unknown-file", `"${name}" is not a take file.`);
   const absolute = await resolveInside(context.root, `${dirOf(id)}/${name}`);
-  if (!(await stat(absolute).then((info) => info.isFile(), () => false))) throw new Fault("unknown-file", `Take "${id}" has no file named "${name}".`);
+  if (
+    !(await stat(absolute).then(
+      (info) => info.isFile(),
+      () => false,
+    ))
+  )
+    throw new Fault("unknown-file", `Take "${id}" has no file named "${name}".`);
   return absolute;
 }
 

@@ -16,7 +16,8 @@ async function host(files: Record<string, string>) {
   return root;
 }
 const read = (root: string, file: string) => readFile(path.join(root, file), "utf8");
-const manifest = (deps: Record<string, string>) => JSON.stringify({ dependencies: { react: "19", "react-dom": "19", ...deps } });
+const manifest = (deps: Record<string, string>) =>
+  JSON.stringify({ dependencies: { react: "19", "react-dom": "19", ...deps } });
 const MAIN = `import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
@@ -27,9 +28,17 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 `;
-const VITE = { "package.json": manifest({ vite: "8" }), "tsconfig.json": "{}", "index.html": '<script type="module" src="/src/main.tsx"></script>', "src/main.tsx": MAIN };
+const VITE = {
+  "package.json": manifest({ vite: "8" }),
+  "tsconfig.json": "{}",
+  "index.html": '<script type="module" src="/src/main.tsx"></script>',
+  "src/main.tsx": MAIN,
+};
 const guide = getGuide();
-const scenePair = { [guide.example.recipePath]: JSON.stringify(guide.example.recipe), [guide.example.componentPath]: guide.example.component };
+const scenePair = {
+  [guide.example.recipePath]: JSON.stringify(guide.example.recipe),
+  [guide.example.componentPath]: guide.example.component,
+};
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -46,15 +55,23 @@ describe("init", () => {
     expect(main).toContain('import { FlickStudioHost } from "./flick/Studio";');
     expect(main.match(/<FlickStudioHost>/g)).toHaveLength(1);
     expect(await read(root, "src/flick/Studio.tsx")).toContain("import.meta.glob");
-    expect(await read(root, "src/flick/Studio.tsx")).toMatch(/import\.meta\.env\.DEV && typeof window !== "undefined"\) void import\("@flickjs\/record\/recorder"\)/);
+    expect(await read(root, "src/flick/Studio.tsx")).toMatch(
+      /import\.meta\.env\.DEV && typeof window !== "undefined"\) void import\("@flickjs\/record\/recorder"\)/,
+    );
     expect(first.data.recorder).toEqual({ status: "automatic" });
     expect(await read(root, "FLICK.md")).toContain("npx flick guide");
 
-    const snapshot = await Promise.all(["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)));
+    const snapshot = await Promise.all(
+      ["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)),
+    );
     const second = await initProject({}, { root });
     expect(second.ok && second.data.files.every((file) => file.status === "verified")).toBe(true);
     expect(second.ok && second.data.entry.status).toBe("already");
-    expect(await Promise.all(["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)))).toEqual(snapshot);
+    expect(
+      await Promise.all(
+        ["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)),
+      ),
+    ).toEqual(snapshot);
   });
 
   it("generates untyped files for a JavaScript host", async () => {
@@ -66,7 +83,12 @@ describe("init", () => {
 
   it("adds a development-only route to Next.js without touching layouts", async () => {
     const layout = "export default function Layout({ children }) { return <html><body>{children}</body></html>; }";
-    const root = await host({ "package.json": manifest({ next: "16" }), "tsconfig.json": "{}", "app/layout.tsx": layout, ...scenePair });
+    const root = await host({
+      "package.json": manifest({ next: "16" }),
+      "tsconfig.json": "{}",
+      "app/layout.tsx": layout,
+      ...scenePair,
+    });
     const result = await initProject({}, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data.adapter).toBe("next-app");
@@ -77,18 +99,27 @@ describe("init", () => {
     expect(page).toContain('from "../../src/flick/Studio"');
     expect(page).toContain("notFound()");
     expect(await read(root, "src/flick/Studio.tsx")).toMatch(/^"use client";/);
-    expect(await read(root, "src/flick/catalog.ts")).toContain('"./scenes/page-survey.tsx": () => import("./scenes/page-survey")');
+    expect(await read(root, "src/flick/catalog.ts")).toContain(
+      '"./scenes/page-survey.tsx": () => import("./scenes/page-survey")',
+    );
     // Recording needs one line in the root layout; init generates the component and says where it goes.
     expect(await read(root, "src/flick/Recorder.tsx")).toContain("bootRecorder");
     expect(result.data.recorder.status).toBe("manual");
     expect(result.data.recorder.instruction).toContain('import { FlickRecorder } from "../src/flick/Recorder";');
-    await writeFile(path.join(root, "app/layout.tsx"), `import { FlickRecorder } from "../src/flick/Recorder";\n${layout}`);
+    await writeFile(
+      path.join(root, "app/layout.tsx"),
+      `import { FlickRecorder } from "../src/flick/Recorder";\n${layout}`,
+    );
     const wired = await initProject({}, { root });
     expect(wired.ok && wired.data.recorder).toEqual({ status: "automatic" });
   });
 
   it("uses the pages router when there is no app directory", async () => {
-    const root = await host({ "package.json": manifest({ next: "16" }), "tsconfig.json": "{}", "src/pages/index.tsx": "export default () => null;" });
+    const root = await host({
+      "package.json": manifest({ next: "16" }),
+      "tsconfig.json": "{}",
+      "src/pages/index.tsx": "export default () => null;",
+    });
     const result = await initProject({}, { root });
     expect(result.ok && result.data.entry).toEqual({ status: "route", path: "src/pages/flick.tsx" });
     expect(await read(root, "src/pages/flick.tsx")).toContain('from "../flick/Studio"');
@@ -120,20 +151,32 @@ describe("init", () => {
   });
 
   it("explains unsupported hosts", async () => {
-    expect(await initProject({}, { root: await host({}) })).toMatchObject({ ok: false, issues: [{ code: "no-project" }] });
-    expect(await initProject({}, { root: await host({ "package.json": "{}" }) })).toMatchObject({ ok: false, issues: [{ code: "unsupported-host" }] });
+    expect(await initProject({}, { root: await host({}) })).toMatchObject({
+      ok: false,
+      issues: [{ code: "no-project" }],
+    });
+    expect(await initProject({}, { root: await host({ "package.json": "{}" }) })).toMatchObject({
+      ok: false,
+      issues: [{ code: "unsupported-host" }],
+    });
   });
 });
 
 describe("entry wrapping", () => {
   it("handles one-line and self-closing roots and keeps other code intact", () => {
-    const edit = wrapRootRender(`import ReactDOM from "react-dom/client";\nimport App from "./App";\n\nReactDOM.createRoot(document.getElementById("root")).render(<App />);\n`, "./flick/Studio");
+    const edit = wrapRootRender(
+      `import ReactDOM from "react-dom/client";\nimport App from "./App";\n\nReactDOM.createRoot(document.getElementById("root")).render(<App />);\n`,
+      "./flick/Studio",
+    );
     if (edit.status !== "wrapped") throw new Error(edit.status);
     expect(edit.source).toContain(".render(\n  <FlickStudioHost>\n    <App />\n  </FlickStudioHost>,\n);");
     expect(edit.source.indexOf("FlickStudioHost }")).toBeGreaterThan(edit.source.indexOf('import App from "./App";'));
   });
   it("places the import after a multi-line import", () => {
-    const edit = wrapRootRender(`import {\n  StrictMode,\n} from "react";\nconst root = createRoot(el);\nroot.render(<StrictMode><App title="a (b)" /></StrictMode>);\n`, "./flick/Studio");
+    const edit = wrapRootRender(
+      `import {\n  StrictMode,\n} from "react";\nconst root = createRoot(el);\nroot.render(<StrictMode><App title="a (b)" /></StrictMode>);\n`,
+      "./flick/Studio",
+    );
     if (edit.status !== "wrapped") throw new Error(edit.status);
     expect(edit.source).toMatch(/\} from "react";\nimport \{ FlickStudioHost \} from "\.\/flick\/Studio";\nconst root/);
     expect(edit.source).toContain('<StrictMode><App title="a (b)" /></StrictMode>');
@@ -157,14 +200,25 @@ describe("scenes", () => {
       "src/flick/scenes/renamed.scene.json": JSON.stringify(recipe),
       "src/flick/scenes/renamed.tsx": "export default () => null;",
       "src/flick/scenes/broken.scene.json": "{ not json",
-      "src/flick/scenes/typo.scene.json": JSON.stringify({ ...recipe, id: "typo", definition: { ...recipe.definition, scene: { nodes: [{ id: "page" }], camra: {} } } }),
+      "src/flick/scenes/typo.scene.json": JSON.stringify({
+        ...recipe,
+        id: "typo",
+        definition: { ...recipe.definition, scene: { nodes: [{ id: "page" }], camra: {} } },
+      }),
       "src/flick/scenes/typo.tsx": "export default () => null;",
     });
     const result = await listScenes({ root });
     if (!result.ok) throw new Error("failed");
     expect(result.data.scenes.map((scene) => scene.id)).toEqual(["page-survey"]);
-    expect(result.data.issues.map((issue) => issue.code).sort()).toEqual(["id-mismatch", "invalid-json", "invalid-scene", "missing-binding"]);
-    expect(result.data.issues.find((issue) => issue.code === "invalid-scene")!.path).toContain("typo.scene.json: definition.scene");
+    expect(result.data.issues.map((issue) => issue.code).sort()).toEqual([
+      "id-mismatch",
+      "invalid-json",
+      "invalid-scene",
+      "missing-binding",
+    ]);
+    expect(result.data.issues.find((issue) => issue.code === "invalid-scene")!.path).toContain(
+      "typo.scene.json: definition.scene",
+    );
   });
 
   it("keeps the guide's example valid", () => {
@@ -174,7 +228,12 @@ describe("scenes", () => {
   });
 
   it("syncs the static catalog for non-Vite hosts and skips broken scenes", async () => {
-    const root = await host({ "package.json": manifest({ next: "16" }), "tsconfig.json": "{}", "app/page.tsx": "", "src/flick/scenes/lonely.scene.json": "{}" });
+    const root = await host({
+      "package.json": manifest({ next: "16" }),
+      "tsconfig.json": "{}",
+      "app/page.tsx": "",
+      "src/flick/scenes/lonely.scene.json": "{}",
+    });
     expect((await syncProject({ root })).ok).toBe(false); // not initialised yet
     await initProject({}, { root });
     for (const [file, content] of Object.entries(scenePair)) await writeFile(path.join(root, file), content);
@@ -183,7 +242,9 @@ describe("scenes", () => {
     const catalog = await read(root, "src/flick/catalog.ts");
     expect(catalog).toContain("page-survey.scene.json");
     expect(catalog).not.toContain("lonely");
-    expect((await syncProject({ root })).ok && ((await syncProject({ root })) as { data: { status: string } }).data.status).toBe("verified");
+    expect(
+      (await syncProject({ root })).ok && ((await syncProject({ root })) as { data: { status: string } }).data.status,
+    ).toBe("verified");
   });
 
   it("builds studio URLs and remembers the dev server", async () => {
@@ -193,8 +254,14 @@ describe("scenes", () => {
     expect(opened.ok && opened.data.url).toBe("http://localhost:4321/?flick=1&flick-scene=page-survey");
     expect(opened.ok && opened.data.reachable).toBe(false);
     expect(JSON.parse(await read(root, ".flick/project.json")).devUrl).toBe("http://localhost:4321");
-    expect(await resolveStudio({ url: "https://example.com" }, { root })).toMatchObject({ ok: false, issues: [{ code: "invalid-url" }] });
-    expect(await resolveStudio({ sceneId: "nope" }, { root })).toMatchObject({ ok: false, issues: [{ code: "unknown-scene" }] });
+    expect(await resolveStudio({ url: "https://example.com" }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "invalid-url" }],
+    });
+    expect(await resolveStudio({ sceneId: "nope" }, { root })).toMatchObject({
+      ok: false,
+      issues: [{ code: "unknown-scene" }],
+    });
   });
 });
 

@@ -15,13 +15,23 @@ export default function Plating() {
       content={<div style={{ position: "absolute", width: 1400, height: 980, background: "#f5f7fb" }} />}
     >
       <div className="dash" style={{ background: "none", minHeight: 0, height: 980 }}>
-        <Surface id="sidebar" style={{ height: 980, display: "grid" }}><Sidebar /></Surface>
+        <Surface id="sidebar" style={{ height: 980, display: "grid" }}>
+          <Sidebar />
+        </Surface>
         <main className="main">
-          <Surface id="header"><Header /></Surface>
-          <Surface id="metrics"><Metrics /></Surface>
+          <Surface id="header">
+            <Header />
+          </Surface>
+          <Surface id="metrics">
+            <Metrics />
+          </Surface>
           <div className="row">
-            <Surface id="chart"><Chart /></Surface>
-            <Surface id="customers"><CustomerTable /></Surface>
+            <Surface id="chart">
+              <Chart />
+            </Surface>
+            <Surface id="customers">
+              <CustomerTable />
+            </Surface>
           </div>
         </main>
       </div>

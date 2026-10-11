@@ -1,6 +1,6 @@
-import type { Issue } from "./result";
-import { DEFAULT_TRANSFORM, type Camera, type Focus, type Transform } from "./scene";
 import type { MotionState } from "./motion";
+import type { Issue } from "./result";
+import { type Camera, DEFAULT_TRANSFORM, type Focus, type Transform } from "./scene";
 
 /** Camera-space transforms and depth of field for every renderer.
  * CSS performs the real projection; this module reproduces the same transform order
@@ -28,9 +28,12 @@ export function multiply(a: Matrix, b: Matrix): Matrix {
 /** translate · rotateX · rotateY · rotateZ · scale, the same order transformToCss emits. */
 export function matrixFor(t: Transform): Matrix {
   const rad = Math.PI / 180;
-  const sx = Math.sin(t.rotateX * rad), cx = Math.cos(t.rotateX * rad);
-  const sy = Math.sin(t.rotateY * rad), cy = Math.cos(t.rotateY * rad);
-  const sz = Math.sin(t.rotateZ * rad), cz = Math.cos(t.rotateZ * rad);
+  const sx = Math.sin(t.rotateX * rad),
+    cx = Math.cos(t.rotateX * rad);
+  const sy = Math.sin(t.rotateY * rad),
+    cy = Math.cos(t.rotateY * rad);
+  const sz = Math.sin(t.rotateZ * rad),
+    cz = Math.cos(t.rotateZ * rad);
   const translate: Matrix = [1, 0, 0, t.x, 0, 1, 0, t.y, 0, 0, 1, t.z, 0, 0, 0, 1];
   const rx: Matrix = [1, 0, 0, 0, 0, cx, -sx, 0, 0, sx, cx, 0, 0, 0, 0, 1];
   const ry: Matrix = [cy, 0, sy, 0, 0, 1, 0, 0, -sy, 0, cy, 0, 0, 0, 0, 1];
@@ -44,7 +47,13 @@ export function transformToCss(t: Transform): string {
 }
 
 const cameraTransform = (c: Camera): Transform => ({
-  x: -c.x, y: -c.y, z: -c.z, rotateX: c.rotateX, rotateY: c.rotateY, rotateZ: c.rotateZ, scale: 1,
+  x: -c.x,
+  y: -c.y,
+  z: -c.z,
+  rotateX: c.rotateX,
+  rotateY: c.rotateY,
+  rotateZ: c.rotateZ,
+  scale: 1,
 });
 export const cameraToCss = (c: Camera): string => transformToCss(cameraTransform(c));
 
@@ -60,7 +69,11 @@ export function resolveFrame(
     focus: { ...focus, ...motion.focus },
     nodes: nodes.map((node) => {
       const { opacity: _opacity, ...override } = motion.surfaces.get(node.id) ?? {};
-      return { id: node.id, parentId: node.parentId, transform: { ...(node.transform ?? DEFAULT_TRANSFORM), ...override } };
+      return {
+        id: node.id,
+        parentId: node.parentId,
+        transform: { ...(node.transform ?? DEFAULT_TRANSFORM), ...override },
+      };
     }),
   };
 }
@@ -70,10 +83,10 @@ export function resolveFrame(
  * depth = perspective - z. (x, y) are local pixels measured from the surface centre.
  */
 export type FocusField = Focus & {
-  depth: number;   // at the surface centre
-  depthX: number;  // change per local pixel along x
-  depthY: number;  // change per local pixel along y
-  scale: number;   // world length of one local pixel
+  depth: number; // at the surface centre
+  depthX: number; // change per local pixel along x
+  depthY: number; // change per local pixel along y
+  scale: number; // world length of one local pixel
 };
 
 export function focusForSurface(world: Matrix, focus: Focus, perspective: number): FocusField {
@@ -107,15 +120,12 @@ function depthBounds(f: FocusField, width: number, height: number) {
 }
 
 /** How a visual leaf should be blurred: not at all, uniformly, or with a depth-varying filter. */
-export type FocusPlan =
-  | { kind: "none" }
-  | { kind: "uniform"; blurPx: number }
-  | { kind: "varying"; mask: FocusMask };
+export type FocusPlan = { kind: "none" } | { kind: "uniform"; blurPx: number } | { kind: "varying"; mask: FocusMask };
 
 export type FocusMask = {
-  pad: number;            // local pixels of filter region outside the box
-  xWeight: number;        // share of the depth range explained by x
-  yWeight: number;        // share explained by y
+  pad: number; // local pixels of filter region outside the box
+  xWeight: number; // share of the depth range explained by x
+  yWeight: number; // share explained by y
   reverseX: boolean;
   reverseY: boolean;
   bands: { stdDeviation: number; weights: number[] }[]; // local-pixel sigma and weight per depth sample
@@ -131,7 +141,8 @@ const MASK_SAMPLES = 33;
 export function planFocus(f: FocusField, width: number, height: number, bandCount = FULL_FOCUS_BANDS): FocusPlan {
   if (f.maxBlur === 0 || width <= 0 || height <= 0) return { kind: "none" };
   const { min, max, pad } = depthBounds(f, width, height);
-  const low = sigmaAtDepth(f, min), high = sigmaAtDepth(f, max);
+  const low = sigmaAtDepth(f, min),
+    high = sigmaAtDepth(f, max);
   // The focal plane lies outside the surface when both ends are on the same side of it.
   const sameSide = max <= f.distance || min >= f.distance;
   const flat = max - min < 1e-6;
@@ -148,7 +159,8 @@ export function planFocus(f: FocusField, width: number, height: number, bandCoun
       return Math.max(0, 1 - Math.abs(level - band));
     });
     // A band that never contributes costs a Gaussian pass for nothing.
-    if (weights.some((weight) => weight > 0)) bands.push({ stdDeviation: (f.maxBlur * band) / bandCount / f.scale, weights });
+    if (weights.some((weight) => weight > 0))
+      bands.push({ stdDeviation: (f.maxBlur * band) / bandCount / f.scale, weights });
   }
   return {
     kind: "varying",
@@ -163,7 +175,14 @@ export function planFocus(f: FocusField, width: number, height: number, bandCoun
   };
 }
 
-export type EvaluatedNode = { id: string; world: Matrix; depth: number; focus: FocusField; width: number; height: number };
+export type EvaluatedNode = {
+  id: string;
+  world: Matrix;
+  depth: number;
+  focus: FocusField;
+  width: number;
+  height: number;
+};
 export type Evaluation = { nodes: EvaluatedNode[]; issues: Issue[] };
 
 /** World matrices and focus fields for one frame. Nodes must already form a valid tree. */
@@ -179,7 +198,11 @@ export function evaluateFrame(frame: Frame, measurements: ReadonlyMap<string, Me
     if (!node || guard > frame.nodes.length) return IDENTITY;
     const m = measurements.get(id);
     // A surface starts where CSS laid it out: its centre offset from its parent's centre.
-    const local = matrixFor({ ...node.transform, x: node.transform.x + (m?.offsetX ?? 0), y: node.transform.y + (m?.offsetY ?? 0) });
+    const local = matrixFor({
+      ...node.transform,
+      x: node.transform.x + (m?.offsetX ?? 0),
+      y: node.transform.y + (m?.offsetY ?? 0),
+    });
     const world = multiply(node.parentId ? worldOf(node.parentId, guard + 1) : camera, local);
     cache.set(id, world);
     return world;
@@ -188,7 +211,11 @@ export function evaluateFrame(frame: Frame, measurements: ReadonlyMap<string, Me
   for (const node of frame.nodes) {
     const world = worldOf(node.id);
     if (!world.every(Number.isFinite)) {
-      issues.push({ code: "invalid-geometry", path: node.id, message: `Transform of ${node.id} exceeds numeric limits: reduce nested scale or position.` });
+      issues.push({
+        code: "invalid-geometry",
+        path: node.id,
+        message: `Transform of ${node.id} exceeds numeric limits: reduce nested scale or position.`,
+      });
       continue;
     }
     const m = measurements.get(node.id);
@@ -196,7 +223,11 @@ export function evaluateFrame(frame: Frame, measurements: ReadonlyMap<string, Me
       issues.push({ code: "empty-surface", path: node.id, message: `Surface ${node.id} has no measurable area.` });
     const focus = focusForSurface(world, frame.focus, frame.camera.perspective);
     if (focus.depth <= 1)
-      issues.push({ code: "behind-camera", path: node.id, message: `Surface ${node.id} reaches the camera plane: move it farther back.` });
+      issues.push({
+        code: "behind-camera",
+        path: node.id,
+        message: `Surface ${node.id} reaches the camera plane: move it farther back.`,
+      });
     nodes.push({ id: node.id, world, depth: focus.depth, focus, width: m?.width ?? 0, height: m?.height ?? 0 });
   }
   return { nodes, issues };
