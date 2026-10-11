@@ -1,0 +1,253 @@
+/* ─────────────────────────────────────────────────────────────
+   Chip, the mascot. Flat fill, like the logo; only the parts move.
+   ───────────────────────────────────────────────────────────── */
+
+.chip {
+  --fur: var(--munk);
+  --pupil: var(--bg);
+  --glint: #fff;
+  display: block;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip--ink {
+  --fur: var(--bg);
+  --pupil: var(--munk);
+  --glint: var(--bg);
+}
+
+.chip--paper {
+  --fur: #fff;
+}
+
+.chip--ghost {
+  --fur: rgba(255, 255, 255, 0.14);
+}
+
+.chip[data-flip="1"] {
+  transform: scaleX(-1);
+}
+
+.chip--interactive {
+  cursor: pointer;
+}
+
+.chip__fur {
+  fill: var(--fur);
+}
+
+.chip__tail,
+.chip__ear,
+.chip__torso,
+.chip__all,
+.chip__eye,
+.chip__stick {
+  transform-box: view-box;
+}
+
+.chip__tail {
+  transform-origin: 560px 960px;
+  animation: chip-tail 3.6s ease-in-out infinite;
+}
+
+.chip__ear {
+  transform-origin: 792px 418px;
+  animation: chip-ear 5.2s ease-in-out infinite;
+  animation-delay: var(--blink-delay);
+}
+
+.chip__ball {
+  fill: var(--pupil);
+}
+
+.chip__glint {
+  fill: var(--glint);
+  transform: translate(var(--look-x, 0px), var(--look-y, 0px));
+  transition: transform 0.12s ease-out;
+}
+
+.chip__eye {
+  transform-origin: 896px 468px;
+  animation: chip-blink 5.4s infinite;
+  animation-delay: var(--blink-delay);
+}
+
+.chip__lid {
+  stroke: var(--pupil);
+}
+
+/* Props */
+
+.chip__slate {
+  fill: #fff;
+}
+
+.chip__stripe {
+  fill: var(--bg);
+}
+
+.chip__rule {
+  fill: none;
+  stroke: rgba(23, 23, 23, 0.28);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.chip__stick {
+  transform-origin: 936px 662px;
+  transform: rotate(-16deg);
+  transition: transform 0.12s cubic-bezier(0.5, 0, 1, 0.6);
+}
+
+.is-clapped .chip__stick {
+  transform: rotate(0deg);
+}
+
+.chip__nut {
+  fill: #fff;
+}
+
+.chip__cap {
+  fill: rgba(255, 255, 255, 0.55);
+}
+
+.chip__stem {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.chip__band {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 16;
+  stroke-linecap: round;
+}
+
+.chip__cup {
+  fill: #fff;
+}
+
+/* Whole-body motion */
+
+.chip--float .chip__all {
+  animation: chip-float 4.2s ease-in-out infinite;
+}
+
+.chip--run .chip__all {
+  transform-origin: 650px 990px;
+  animation: chip-run 0.42s ease-in-out infinite alternate;
+}
+
+.chip--run .chip__tail {
+  animation: chip-tail-run 0.42s ease-in-out infinite alternate;
+}
+
+.chip--still .chip__tail,
+.chip--still .chip__ear,
+.chip--still .chip__eye {
+  animation: none;
+}
+
+.chip.is-poked .chip__torso {
+  transform-origin: 700px 990px;
+  animation: chip-hop 0.56s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.chip.is-poked .chip__tail {
+  animation: chip-tail-flick 0.56s ease-out;
+}
+
+@keyframes chip-tail {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-3.5deg);
+  }
+}
+
+@keyframes chip-tail-run {
+  0% {
+    transform: rotate(3deg);
+  }
+  100% {
+    transform: rotate(-7deg);
+  }
+}
+
+@keyframes chip-tail-flick {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35% {
+    transform: rotate(-11deg);
+  }
+  65% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes chip-ear {
+  0%,
+  86%,
+  100% {
+    transform: rotate(0deg);
+  }
+  89% {
+    transform: rotate(-11deg);
+  }
+  93% {
+    transform: rotate(6deg);
+  }
+  96% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes chip-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  95.5% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes chip-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes chip-run {
+  0% {
+    transform: rotate(-4deg) translateY(0);
+  }
+  100% {
+    transform: rotate(5deg) translateY(-22px);
+  }
+}
+
+@keyframes chip-hop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  25% {
+    transform: translateY(0) scale(1.05, 0.93);
+  }
+  55% {
+    transform: translateY(-46px) scale(0.97, 1.04);
+  }
+}
