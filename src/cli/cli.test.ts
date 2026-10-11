@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -91,6 +91,19 @@ describe("flick cli", () => {
     controller.abort();
     expect(await running).toBe(0);
     await expect(fetch(`http://127.0.0.1:${data.port}/v1/status`)).rejects.toThrow();
+  });
+
+  it("writes a sample of the generated music and will not overwrite one", async () => {
+    const cwd = await host();
+    expect((await flick(cwd, "music")).err).toContain("music needs a style");
+    expect((await flick(cwd, "music", "jazz")).code).toBe(1);
+    const made = await flick(cwd, "music", "lofi", "--seed", "5", "--seconds", "2");
+    expect(made.out).toContain("Wrote flick-lofi-5.wav: lofi, seed 5, 2 s at 82 beats per minute");
+    const wav = await readFile(path.join(cwd, "flick-lofi-5.wav"));
+    expect(wav.subarray(0, 4).toString()).toBe("RIFF");
+    expect(wav.length).toBe(44 + 2 * 44100 * 4);
+    expect((await flick(cwd, "music", "lofi", "--seed", "5", "--seconds", "2")).err).toContain("already exists");
+    expect((await flick(cwd, "music", "lofi", "--output", "../outside.wav")).code).toBe(1);
   });
 
   it("asks for what is missing before rendering", async () => {

@@ -112,6 +112,23 @@ describe("take editor", () => {
     await expect.poll(() => page.locator(".timeline .zoom").count()).toBe(1);
   }, 60_000);
 
+  it("adds generated music, picks a new tune, and plays it with the preview", async () => {
+    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("lofi");
+    await saved((edit) => edit.music, { style: "lofi", seed: 1, gain: 0.5, duck: true });
+    await page.getByRole("button", { name: "New tune" }).click();
+    await expect.poll(async () => JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit.music.seed, { timeout: 10_000 }).not.toBe(1);
+    // Playing with music on must not disturb playback.
+    await seek(0);
+    await page.getByRole("button", { name: "Play" }).click();
+    await page.waitForTimeout(600);
+    await page.getByRole("button", { name: "Pause" }).click();
+    expect(await page.locator(".transport .time").textContent()).not.toMatch(/^0\.00s/);
+    await page.getByRole("button", { name: "Listen" }).click();
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("off");
+    await expect.poll(async () => "music" in JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit, { timeout: 10_000 }).toBe(false);
+  }, 60_000);
+
   it("plays, and trims from the playhead", async () => {
     await seek(0);
     await page.getByRole("button", { name: "Play" }).click();
@@ -169,6 +186,29 @@ describe("take export", () => {
     expect(near(colour(output, 2.0, "16:16:588:308"), [255, 0, 255], 50), "camera bubble").toBe(true);
     expect(await exportTake({ takeId: "zz-test-export", url: origin, output, fps: 30 }, { root })).toMatchObject({ ok: false, issues: [{ code: "output-exists" }] });
   }, 240_000);
+
+  it("puts generated music under the voice", async () => {
+    const file = takeFile("zz-test-export");
+    const take = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(file, JSON.stringify({ ...take, edit: { ...take.edit, music: { style: "lofi" }, audio: { ...take.edit.audio, muted: true } } }));
+    const musicOnly = ".flick/exports/zz-test-take-music.mp4";
+    made.push(musicOnly);
+    const result = await exportTake({ takeId: "zz-test-export", url: origin, output: musicOnly, fps: 30, height: 360 }, { root });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    // The voice is muted, so any sound in the file is the music.
+    expect(result.data.audio).toBe(true);
+    expect(await probeMedia(musicOnly, root)).toMatchObject({ hasAudio: true, durationMs: 4000 });
+
+    await writeFile(file, JSON.stringify({ ...take, edit: { ...take.edit, music: { style: "lofi" } } }));
+    const both = ".flick/exports/zz-test-take-music-voice.mp4";
+    made.push(both);
+    const mixed = await exportTake({ takeId: "zz-test-export", url: origin, output: both, fps: 30, height: 360 }, { root });
+    expect(mixed.ok && mixed.data.audio).toBe(true);
+    const off = await exportTake({ takeId: "zz-test-export", url: origin, output: ".flick/exports/zz-test-take-nomusic.mp4", fps: 30, height: 360, music: false }, { root });
+    made.push(".flick/exports/zz-test-take-nomusic.mp4");
+    expect(off.ok && off.data.audio).toBe(true); // the voice alone
+    await writeFile(file, JSON.stringify(take));
+  }, 400_000);
 
   it("honours trim and mute, and explains what it cannot do", async () => {
     const file = takeFile("zz-test-export");

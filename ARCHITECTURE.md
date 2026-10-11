@@ -231,6 +231,14 @@ A fade overlaps two clips, so it shortens the total by its length, and it is cap
 
 Sound files are named by plain file name and live in `.flick/audio`. The same `{ file, offsetMs, gain }` shape attaches sound to a scene (`recipe.audio`) and to a sequence.
 
+### 5.5a Music
+
+```ts
+type Music = { style: "upbeat" | "lofi"; seed: number; gain: number; duck: boolean };
+```
+
+A scene (`recipe.music`), a take (`edit.music`) and a sequence (`music`) can each carry one. `seed` picks a different tune in the same style, `gain` defaults to 0.5, and `duck` (default on) lowers the music while a voice is present. When a sequence has music, its clips are exported without their own.
+
 ### 5.6 Results and errors
 
 Every operation returns `{ ok: true, data } | { ok: false, issues: { code, path?, message }[] }`. Codes are stable strings (`invalid-scene`, `output-exists`, `missing-ffmpeg`, …). Messages tell the reader how to fix the problem. Operations do not throw for expected failures.
@@ -464,6 +472,7 @@ Started by `flick dev`. It binds `127.0.0.1` only and writes `.flick/daemon.json
 | `DELETE /v1/takes/:id` | Delete a take and its media |
 | `GET /v1/takes/:id/files/:name` | Serve media with range requests |
 | `GET /v1/scenes` | List validated scenes |
+| `PUT /v1/scenes/:id/music` | Set or clear a scene's generated music in its recipe |
 | `PUT /v1/scenes/:id/narration?offset=ms` | Store a narration recording and point the scene's recipe at it |
 | `DELETE /v1/scenes/:id/narration` | Remove a scene's narration and its file |
 | `GET /v1/audio/:file` | Serve a sound from `.flick/audio`, for the preview |
@@ -517,6 +526,17 @@ A scene's `audio` clips are mixed into its export after the picture is encoded (
 
 **Narration.** In the scene player, Narrate plays the scene from the start while recording the microphone, and stops when the scene ends. The daemon stores the recording as 48 kHz mono WAV in `.flick/audio`, named `<scene>-narration-<timestamp>.wav`, and rewrites the recipe's `audio` to point at it with the measured offset between the microphone starting and playback starting. A new narration replaces the previous one and deletes its file; other sounds on the scene are kept.
 
+### 12.3b Generated music
+
+Background music is synthesized by `renderMusic` in `core/music.ts`: a pure TypeScript function from `{ style, seed, durationMs, accentsMs }` to stereo samples. It uses no recordings, samples or third-party tracks, so the result carries nobody else's rights; that is the reason it exists, and the reason no music is bundled.
+
+- **How it is made.** A seeded random generator picks a key and one of a few chord progressions for the style. Voices are computed sample by sample: detuned chord pads through a low-pass, a bass line, a pitch-swept kick, noise-based snare and hats, and a plucked melody drawn from the chord with echoes. Lo-fi adds swing, tape hiss and crackle.
+- **Stable by construction.** The mix goes through a fixed gain per style and a soft clipper, never a gain measured from the audio. So a longer clip starts with exactly the same music as a shorter one, and adding an accent cannot change how loud the rest is. Each style is set to a similar loudness (about 0.15 RMS, peaks under 0.8).
+- **Fitted to the clip.** It is rendered to the clip's exact length with a fade in and a fade out, so there is no looping. A sequence passes the time of each join as an accent: a short swell into a low thump.
+- **Same in preview and export.** The studio renders the same function into an `AudioBuffer` and starts it at the clock's position; the exporter writes it to a WAV for FFmpeg. Ducking under a voice (`sidechaincompress`) happens at export only, so the preview plays the music at its full level.
+
+`flick music <style>` writes a sample WAV for listening to a style.
+
 ### 12.4 Output rules
 
 Outputs are project-relative `.mp4` paths. Existing files are never overwritten. Work happens in a temporary directory next to the target and the result is linked into place only on success. Cancellation (signal or job delete) kills the encoder and the browser and publishes nothing.
@@ -561,6 +581,7 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | `flick snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |
 | `flick zoom <take> [--write]` | List a take's zoom segments, or store them as manual keyframes |
 | `flick sequences [--json]` | List sequences and their validation issues |
+| `flick music <style> [--seed] [--seconds] [--output]` | Write a WAV sample of the generated music |
 | `flick export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4. A sequence takes its size and frame rate from its file. |
 | `flick doctor` | Check Node, FFmpeg, Chromium and the project connection |
 
@@ -579,6 +600,7 @@ Every command accepts `--json` and then prints only the operation result. Human 
 | Recorder | Headed Chromium with `--auto-accept-this-tab-capture` | HUD excluded, cursor-free capture, event log shape, video-to-event sync, keyboard stop, reload recovery, chunk upload and ingest, and a real take edited and exported |
 | Takes | Playwright + FFmpeg on a synthetic take with known pixels | Layout, zoom, cursor and camera pixels; editor controls and saving; trim; exported MP4 frames, size and voice track |
 | Sequences and narration | Playwright + FFmpeg on the example app | Narration stored, replaced, removed and recorded through the studio; a scene and a take joined by fade and by cut, checked for length, frames, sound and the mixed picture mid-fade; the sequence builder saving a valid file |
+| Generated music | Vitest for the synthesizer; Playwright + FFmpeg for its use | Exact length, no clipping, determinism, fades, accents and WAV encoding; music audible in scene, take and sequence exports; controls saving to scene, take and sequence files. Nothing tests how it sounds. |
 | Installed package | Packed tarball in a temporary Vite, Next and plain React host | `init` idempotency, studio loads, production build contains no Flick code |
 | Boundaries | `scripts/check-boundaries.mjs` | Import rules in section 3 |
 

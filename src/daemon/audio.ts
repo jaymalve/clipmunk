@@ -1,6 +1,6 @@
 import { rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { AUDIO_DIR, SCENES_DIR, SceneRecipeSchema, fail, ok, type AudioClip, type Result } from "../core";
+import { AUDIO_DIR, MusicSchema, SCENES_DIR, SceneRecipeSchema, fail, ok, zodIssues, type AudioClip, type Music, type Result } from "../core";
 import { extractAudio } from "../export";
 import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
 
@@ -68,4 +68,22 @@ export async function audioFile(name: string, context: Context): Promise<string>
   const absolute = await resolveInside(context.root, `${AUDIO_DIR}/${name}`);
   if (!(await stat(absolute).then((info) => info.isFile(), () => false))) throw new Fault("unknown-file", `${AUDIO_DIR}/${name} does not exist.`);
   return absolute;
+}
+
+/** Set or clear a scene's generated music. Only the recipe's `music` field changes. */
+export async function setSceneMusic(sceneId: string, input: unknown, context: Context): Promise<Result<{ music: Music | null }>> {
+  try {
+    const recipe = await recipeOf(sceneId, context);
+    const { music: _old, ...rest } = recipe.json;
+    if (input === null || input === undefined) {
+      await writeText(context.root, recipe.source, `${JSON.stringify(rest, null, 2)}\n`);
+      return ok({ music: null });
+    }
+    const parsed = MusicSchema.safeParse(input);
+    if (!parsed.success) return fail(zodIssues(parsed.error, "invalid-music"));
+    await writeText(context.root, recipe.source, `${JSON.stringify({ ...rest, music: parsed.data }, null, 2)}\n`);
+    return ok({ music: parsed.data });
+  } catch (error) {
+    return fail(toIssues(error, "music-failed"));
+  }
 }

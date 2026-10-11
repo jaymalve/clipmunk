@@ -1,10 +1,11 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { CAPTURE_SELECTOR, installBridge } from "../bridge";
-import { motionDuration, validateDefinition, type AudioClip, type Issue, type SceneDefinition } from "../core";
+import { motionDuration, validateDefinition, type AudioClip, type Issue, type Music, type SceneDefinition } from "../core";
 import { Scene, createClock } from "../react";
 import { Chrome } from "./Chrome";
 import { ExportPanel, type DaemonState } from "./daemon";
+import { MusicControls, useMusicPreview } from "./music";
 import { useNarration } from "./narration";
 import { useClipSession } from "./session";
 
@@ -23,12 +24,14 @@ export type ScenePreviewProps = {
   daemon?: DaemonState;
   /** The recipe's sound clips: narration and anything else attached to the scene. */
   audio?: AudioClip[];
+  /** The recipe's generated music. */
+  music?: Music;
   children?: ReactNode;
 };
 
 const formatTime = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
 
-export function ScenePreview({ definition, title, backHref, sceneId, daemon, audio, children }: ScenePreviewProps) {
+export function ScenePreview({ definition, title, backHref, sceneId, daemon, audio, music: recipeMusic, children }: ScenePreviewProps) {
   const result = useMemo(() => validateDefinition(definition), [definition]);
   // Keep the last valid definition on screen while the source is broken.
   const accepted = useRef<SceneDefinition | null>(null);
@@ -44,6 +47,21 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
   const session = useClipSession(clock, durationMs, valid);
   const width = current?.width ?? 1400, height = current?.height ?? 980;
   const [exporting, setExporting] = useState(false);
+  // The recipe file is the source of truth; this mirrors it until the dev server reloads the module.
+  const [music, setMusic] = useState(recipeMusic);
+  useEffect(() => setMusic(recipeMusic), [recipeMusic]);
+  const [choosingMusic, setChoosingMusic] = useState(false);
+  const [musicIssue, setMusicIssue] = useState<string>();
+  const saveMusic = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const changeMusic = (next: Music | undefined) => {
+    setMusic(next);
+    clearTimeout(saveMusic.current);
+    saveMusic.current = setTimeout(async () => {
+      const result = await daemon!.client!.put<unknown>(`/v1/scenes/${sceneId}/music`, new Blob([JSON.stringify({ music: next ?? null })], { type: "application/json" }));
+      setMusicIssue(result.ok ? undefined : result.issues[0]!.message);
+    }, 400);
+  };
+  useMusicPreview({ music, durationMs, clock, playing: session.playing });
   const narration = useNarration({ sceneId, audio, client: daemon?.client, clock, durationMs, playing: session.playing, seek: session.seek, toggle: session.toggle });
 
   // The exporter drives this same clock. Capture refuses a scene with unresolved issues.
@@ -135,8 +153,15 @@ export function ScenePreview({ definition, title, backHref, sceneId, daemon, aud
         {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
         {exporting && sceneId && <ExportPanel clip={{ sceneId }} daemon={daemon} frame={{ width, height }} />}
         {narration.state.phase === "error" && <div className="issues" role="alert">{narration.state.message}</div>}
+        {musicIssue && <div className="issues" role="alert">{musicIssue}</div>}
+        {choosingMusic && sceneId && daemon?.client && (
+          <div className="musicbox">
+            <MusicControls value={music} hasVoice={narration.hasNarration} onChange={changeMusic} />
+          </div>
+        )}
         <Controls clock={clock} durationMs={durationMs} title={title} backHref={backHref} disabled={!valid} {...session}
-          onExport={sceneId ? () => setExporting((value) => !value) : undefined} narration={narration} />
+          onExport={sceneId ? () => setExporting((value) => !value) : undefined} narration={narration}
+          onMusic={sceneId && daemon?.client && durationMs > 0 ? () => setChoosingMusic((value) => !value) : undefined} hasMusic={!!music} />
       </Chrome>
     </div>
   );
@@ -153,6 +178,8 @@ function Controls(props: {
   seek: (timeMs: number) => void;
   onExport?: () => void;
   narration?: ReturnType<typeof useNarration>;
+  onMusic?: () => void;
+  hasMusic?: boolean;
 }) {
   const { clock, durationMs, disabled } = props;
   // Only this small component re-renders per frame; the scene itself is updated imperatively.
@@ -188,6 +215,7 @@ function Controls(props: {
           {props.narration.hasNarration && props.narration.state.phase === "idle" && <button type="button" onClick={() => void props.narration!.remove()} disabled={props.playing}>Remove narration</button>}
         </>
       )}
+      {props.onMusic && <button type="button" onClick={props.onMusic}>{props.hasMusic ? "Music ♪" : "Music"}</button>}
       {props.onExport && <button type="button" onClick={props.onExport} disabled={disabled}>Export</button>}
     </div>
   );

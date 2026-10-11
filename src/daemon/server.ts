@@ -6,7 +6,7 @@ import path from "node:path";
 import { DAEMON_FILE, DEFAULT_DAEMON_PORT, type DaemonFile, type Issue, type Result } from "../core";
 import { exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
 import { Fault, deleteSequence, discoverScenes, listSequences, readSequence, readText, resolveInside, toIssues, writeSequence, writeText } from "../project";
-import { audioFile, removeNarration, storeNarration } from "./audio";
+import { audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
 import { createJobs } from "./jobs";
 import { appendChunk, appendLog, createTake, deleteTake, finalizeTake, listTakes, readTake, takeFile, updateTakeEdit } from "./takes";
 
@@ -108,6 +108,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
       if (method === "PUT") return reply(response, await storeNarration(id, await readBody(request), Number(url.searchParams.get("offset")) || 0, context));
       if (method === "DELETE") return reply(response, await removeNarration(id, context));
     }
+    if (resource === "scenes" && id && action === "music" && method === "PUT") return reply(response, await setSceneMusic(id, ((await readJson(request)) as { music?: unknown }).music, context));
     if (resource === "audio" && id && method === "GET") return serveFile(request, response, await audioFile(id, context));
     if (resource === "sequences") {
       if (!id && method === "GET") return reply(response, await listSequences(context));

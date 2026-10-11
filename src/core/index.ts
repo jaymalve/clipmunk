@@ -12,3 +12,4 @@ export * from "./autozoom";
 export * from "./cursor";
 export * from "./audio";
 export * from "./sequence";
+export * from "./music";

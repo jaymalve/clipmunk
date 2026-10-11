@@ -4,6 +4,7 @@ import path from "node:path";
 import { AUDIO_DIR, EXPORTS_DIR, ExportSequenceSchema, fail, ok, planSequence, zodIssues, type ExportSequenceResult, type Result } from "../core";
 import { Fault, exists, readSequence, resolveInside, toIssues } from "../project";
 import { joinClips } from "./ffmpeg";
+import { writeMusic } from "./music";
 import { exportScene, type ExportContext } from "./operations";
 import { exportTake } from "./take";
 
@@ -37,7 +38,8 @@ export async function exportSequence(input: unknown, context: ExportContext): Pr
     for (const [index, clip] of unique.entries()) {
       if (signal?.aborted) throw new Fault("export-cancelled", "Export cancelled. No file was written.");
       const file = `${work}/clip-${index}.mp4`;
-      const shared = { url: request.url, output: file, fps: sequence.fps, width: sequence.width, height: sequence.height };
+      // With music over the whole sequence, a clip's own music would play on top of it.
+      const shared = { url: request.url, output: file, fps: sequence.fps, width: sequence.width, height: sequence.height, music: !sequence.music };
       const onProgress = (done: number, total: number) => context.onProgress?.(Math.round(((index + done / total) / unique.length) * 1000), 1000);
       const result = clip.kind === "scene" ? await exportScene({ ...shared, sceneId: clip.id }, { ...context, onProgress }) : await exportTake({ ...shared, takeId: clip.id }, { ...context, onProgress });
       if (!result.ok) return fail(result.issues.map((issue) => ({ ...issue, message: `${clip.kind} "${clip.id}": ${issue.message}` })));
@@ -50,8 +52,10 @@ export async function exportSequence(input: unknown, context: ExportContext): Pr
       if (!(await exists(root, `${AUDIO_DIR}/${track.file}`))) throw new Fault("missing-audio", `${AUDIO_DIR}/${track.file} does not exist. Add the file or remove it from the sequence.`);
       overlay.push({ ...track, file: await resolveInside(root, `${AUDIO_DIR}/${track.file}`) });
     }
+    // The music marks each join between clips with a soft accent.
+    const music = sequence.music && (await writeMusic(await resolveInside(root, work), sequence.music, plan.totalMs, plan.startsMs.slice(1).map((start, index) => start + plan.fadesMs[index + 1]! / 2)));
     const joined = path.join(await resolveInside(root, work), "sequence.mp4");
-    const { audio } = await joinClips({ clips, fadesMs: plan.fadesMs, fps: sequence.fps, width: sequence.width, height: sequence.height, overlay, totalMs: plan.totalMs, output: joined, cwd: root });
+    const { audio } = await joinClips({ clips, fadesMs: plan.fadesMs, fps: sequence.fps, width: sequence.width, height: sequence.height, overlay, music, totalMs: plan.totalMs, output: joined, cwd: root });
     if (signal?.aborted) throw new Fault("export-cancelled", "Export cancelled. No file was written.");
     try {
       await link(joined, target);

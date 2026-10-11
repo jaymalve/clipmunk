@@ -4,6 +4,7 @@ import { DAEMON_HASH, EXPORTS_DIR, ExportTakeSchema, TAKES_DIR, TAKE_PARAM, Take
 import { Fault, exists, readText, resolveInside, resolveStudio, toIssues } from "../project";
 import { launchBrowser } from "./browser";
 import { finishTake } from "./ffmpeg";
+import { writeMusic } from "./music";
 import type { ExportContext } from "./operations";
 
 /** Export a take. The studio's take editor is opened in a headless page and asked to
@@ -97,6 +98,7 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
       await file.close();
       check();
       const voice = media.audio && !edit.audio.muted ? media.audio : undefined;
+      const music = request.music && edit.music ? await writeMusic(temporary, edit.music, encoded.durationMs) : undefined;
       const finished = path.join(temporary, "finished.mp4");
       await finishTake({
         video,
@@ -104,6 +106,7 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
         cwd: root,
         durationMs: encoded.durationMs,
         copyVideo: encoded.codec === "avc",
+        music,
         audio: voice && { file: await resolveInside(root, `${TAKES_DIR}/${request.takeId}/${voice.file}`), startMs: edit.trim.startMs - voice.offsetMs, gain: edit.audio.gain, normalize: edit.audio.normalize },
       });
       check();
@@ -113,7 +116,7 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
         if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
         throw error;
       }
-      return ok({ output, fps: request.fps, frames: encoded.frames, durationMs: encoded.durationMs, width: encoded.width, height: encoded.height, codec: encoded.codec, audio: !!voice, elapsedMs: Date.now() - started });
+      return ok({ output, fps: request.fps, frames: encoded.frames, durationMs: encoded.durationMs, width: encoded.width, height: encoded.height, codec: encoded.codec, audio: !!voice || !!music, elapsedMs: Date.now() - started });
     } finally {
       await file.close().catch(() => {});
     }

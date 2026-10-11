@@ -83,7 +83,7 @@ function OpenScene({ scene, load, daemon }: { scene: CatalogScene; load: () => P
   if (state.error) return <Library catalog={{ scenes: [], issues: [{ code: "component-failed", path: scene.binding, message: state.error }] }} />;
   if (!state.Component) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
   return (
-    <ScenePreview definition={scene.definition} title={scene.title} sceneId={scene.id} backHref={href()} daemon={daemon} audio={scene.audio}>
+    <ScenePreview definition={scene.definition} title={scene.title} sceneId={scene.id} backHref={href()} daemon={daemon} audio={scene.audio} music={scene.music}>
       <state.Component />
     </ScenePreview>
   );

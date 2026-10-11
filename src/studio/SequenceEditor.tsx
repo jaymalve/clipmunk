@@ -3,6 +3,7 @@ import type { CatalogScene, Issue, Sequence, SequenceItem, TakeSummary } from ".
 import type { DaemonClient } from "../recorder";
 import { Chrome } from "./Chrome";
 import { ExportPanel, sizesFor, type DaemonState } from "./daemon";
+import { MusicControls } from "./music";
 
 /** Builds a sequence: an ordered list of scenes and takes with a cut or a fade between
  * them. Every change is saved to src/flick/sequences/<id>.sequence.json through the
@@ -163,6 +164,9 @@ function Editor(props: { initial: Sequence; client: DaemonClient; daemon: Daemon
             items((list) => [...list, { clip: { kind, id: clipId }, transition: { kind: "fade", ms: 500 } }]);
             setAdding("");
           }}>Add</button>
+        </div>
+        <div className="musicbox">
+          <MusicControls value={sequence.music} onChange={(music) => setSequence(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
         </div>
         <p className="note">There is no live preview of a whole sequence yet: open a clip to see it, and export to see them joined.</p>
       </div>

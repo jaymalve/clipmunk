@@ -24,6 +24,8 @@ export const ExportSceneSchema = z.strictObject({
   /** JPEG frames instead of PNG: faster, slightly lossy. */
   draft: z.boolean().default(false),
   workers: z.number().int().min(1).max(8).optional(),
+  /** Include the scene's generated music. A sequence with its own music turns this off for its clips. */
+  music: z.boolean().default(true),
 });
 export type ExportSceneInput = z.input<typeof ExportSceneSchema>;
 export type ExportSceneResult = { output: string; fps: number; frames: number; durationMs: number; width: number; height: number; workers: number; audio: boolean; elapsedMs: number; warnings?: string[] };
@@ -46,6 +48,8 @@ export const ExportTakeSchema = z.strictObject({
   /** Defaults to the canvas size in the take's edit. Give one and the other follows the canvas shape. */
   width: dimension.optional(),
   height: dimension.optional(),
+  /** Include the take's generated music. */
+  music: z.boolean().default(true),
 });
 export type ExportTakeResult = { output: string; fps: number; frames: number; durationMs: number; width: number; height: number; codec: string; audio: boolean; elapsedMs: number };
 

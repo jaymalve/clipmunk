@@ -1,5 +1,6 @@
 import { EXPORT_FPS } from "./export";
 import { EASINGS, MotionSchema, SceneTrackSchema } from "./motion";
+import { MUSIC_STYLES } from "./music";
 import { HANDOFF_FILE, PACKAGE_NAME, SCENES_DIR, SCENE_PARAM, STUDIO_PARAM } from "./project";
 import { SceneRecipeSchema, type SceneRecipe } from "./recipe";
 import { SEQUENCES_DIR, SequenceSchema } from "./sequence";
@@ -162,6 +163,7 @@ export function getGuide() {
       "flick export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]": "Render a take with cursor, zoom, camera and voice.",
       "flick sequences": "List sequences and every validation issue.",
       "flick export --sequence <id> [--output file.mp4]": "Render every clip of a sequence and join them.",
+      [`flick music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n]`]: "Write a WAV sample of the generated music, to hear a style.",
       "flick doctor": "Check Node, FFmpeg, Chromium and the project connection.",
     },
     sequences: {
@@ -169,6 +171,7 @@ export function getGuide() {
       path: `${SEQUENCES_DIR}/<id>.sequence.json`,
       shape: "{ version: 1, id, title, width?, height?, fps?: 30 | 60, items: [{ clip: { kind: \"scene\" | \"take\", id }, transition?: { kind: \"cut\" | \"fade\", ms? } }], audio?: [{ file, offsetMs?, gain? }] }. `transition` says how an item arrives from the one before it; a fade overlaps the two clips. `audio` files live in .flick/audio and play over the whole sequence.",
       example: SequenceSchema.parse({ version: 1, id: "launch", title: "Launch video", items: [{ clip: { kind: "scene", id: "page-survey" } }, { clip: { kind: "take", id: "take-20261005-142233" }, transition: { kind: "fade", ms: 600 } }] }),
+      music: `Scenes (recipe.music), takes (edit.music) and sequences (music) accept { style: ${MUSIC_STYLES.map((style) => `"${style}"`).join(" | ")}, seed?, gain?, duck? }. The music is synthesized by Flick from code, so it carries no third-party rights. seed picks a different tune in the same style; duck lowers it under a voice. A sequence's music replaces its clips' own.`,
       narration: "A scene's recipe may carry `audio: [{ file, offsetMs?, gain? }]`. The studio's Narrate button records the microphone while the scene plays and fills this in.",
     },
     limits: [
@@ -195,7 +198,7 @@ export function formatGuide(guide: Guide = getGuide()): string {
     lines.push(`- target { kind: "${track.target}"${track.needsId ? ", id" : ""} }: ${track.properties.join(", ")}`);
   lines.push("", "## Example", guide.example.note, "", guide.example.recipePath, JSON.stringify(guide.example.recipe, null, 2), "", guide.example.componentPath, guide.example.component, "## Commands");
   for (const [command, purpose] of Object.entries(guide.commands)) lines.push(`- ${command}: ${purpose}`);
-  lines.push("", "## Sequences", guide.sequences.what, `Path: ${guide.sequences.path}`, guide.sequences.shape, JSON.stringify(guide.sequences.example, null, 2), guide.sequences.narration);
+  lines.push("", "## Sequences", guide.sequences.what, `Path: ${guide.sequences.path}`, guide.sequences.shape, JSON.stringify(guide.sequences.example, null, 2), guide.sequences.narration, guide.sequences.music);
   lines.push("", "## Limits", ...guide.limits.map((limit) => `- ${limit}`), "");
   return lines.join("\n");
 }

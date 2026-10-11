@@ -19,6 +19,7 @@ import {
 import { Fault, exists, readText, resolveInside, resolveStudio, toIssues, writeText, type Context } from "../project";
 import { launchBrowser, openClip } from "./browser";
 import { addAudio, concatSegments, startEncoder, type Encoder } from "./ffmpeg";
+import { writeMusic } from "./music";
 
 /** Rendering operations. A scene is sampled at exact frame times through the same
  * bridge the studio uses, so the file matches the preview frame for frame.
@@ -110,10 +111,12 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
       if (await exists(root, `${AUDIO_DIR}/${clip.file}`)) tracks.push({ ...clip, file: await resolveInside(root, `${AUDIO_DIR}/${clip.file}`) });
       else warnings.push(`${AUDIO_DIR}/${clip.file} is missing, so this scene was exported without it.`);
     }
+    const wanted = request.music ? studio.data.scene?.music : undefined;
+    const music = wanted && (await writeMusic(temporary, wanted, durationMs));
     let finished = joined;
-    if (tracks.length) {
+    if (tracks.length || music) {
       finished = path.join(temporary, "with-audio.mp4");
-      await addAudio({ video: joined, output: finished, cwd: root, durationMs, tracks });
+      await addAudio({ video: joined, output: finished, cwd: root, durationMs, tracks, music });
     }
     try {
       await link(finished, target);
@@ -121,7 +124,7 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
       if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Fault("output-exists", `${output} appeared during the export. Choose another --output.`, output);
       throw error;
     }
-    return ok({ output, fps: request.fps, frames, durationMs, width, height, workers, audio: tracks.length > 0, elapsedMs: Date.now() - started, ...(warnings.length ? { warnings } : {}) });
+    return ok({ output, fps: request.fps, frames, durationMs, width, height, workers, audio: tracks.length > 0 || !!music, elapsedMs: Date.now() - started, ...(warnings.length ? { warnings } : {}) });
   } catch (error) {
     if (signal?.aborted) return fail([{ code: "export-cancelled", message: "Export cancelled. No file was written." }]);
     return fail(toIssues(error, "export-failed"));

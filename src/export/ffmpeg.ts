@@ -141,8 +141,9 @@ export async function extractAudio(input: string, output: string, cwd: string): 
   if (code !== 0) throw new Fault("ingest-failed", `FFmpeg could not extract audio from ${input}: ${stderr.trim().slice(-600)}`);
 }
 
-/** Turn the page-encoded video into the final MP4: add the voice track, trimmed and levelled, and
- * put the index at the front. The picture is copied untouched when it is already H.264.
+/** Turn the page-encoded video into the final MP4: add the voice track, trimmed and levelled,
+ * put generated music under it, and move the index to the front. The picture is copied
+ * untouched when it is already H.264.
  */
 export async function finishTake(options: {
   video: string;
@@ -151,24 +152,58 @@ export async function finishTake(options: {
   durationMs: number;
   copyVideo: boolean;
   audio?: { file: string; startMs: number; gain: number; normalize: boolean };
+  music?: MusicInput;
 }): Promise<void> {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", options.video];
-  const filters: string[] = [];
+  const graph: string[] = [];
+  let sound: string | undefined;
+  let inputs = 1;
   if (options.audio) {
     // startMs is where the clip begins inside the audio file; negative means the voice starts later.
     if (options.audio.startMs > 0) args.push("-ss", (options.audio.startMs / 1000).toFixed(3));
     args.push("-i", options.audio.file);
-    if (options.audio.startMs < 0) filters.push(`adelay=${Math.round(-options.audio.startMs)}:all=1`);
-    if (options.audio.gain !== 1) filters.push(`volume=${options.audio.gain.toFixed(3)}`);
-    if (options.audio.normalize) filters.push("loudnorm=I=-16:TP=-1.5:LRA=11");
-    filters.push("apad");
+    const chain = ["aresample=48000"];
+    if (options.audio.startMs < 0) chain.push(`adelay=${Math.round(-options.audio.startMs)}:all=1`);
+    if (options.audio.gain !== 1) chain.push(`volume=${options.audio.gain.toFixed(3)}`);
+    if (options.audio.normalize) chain.push("loudnorm=I=-16:TP=-1.5:LRA=11");
+    graph.push(`[${inputs}:a:0]${chain.join(",")}[voice]`);
+    sound = "voice";
+    inputs++;
+  }
+  if (options.music) {
+    args.push("-i", options.music.file);
+    const mixed = underlay(sound, `[${inputs}:a:0]`, options.music);
+    graph.push(...mixed.lines);
+    sound = mixed.out;
   }
   args.push("-map", "0:v:0");
-  if (options.audio) args.push("-map", "1:a:0", "-af", filters.join(","), "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
+  if (sound) {
+    graph.push(`[${sound}]apad[out]`);
+    args.push("-filter_complex", graph.join(";"), "-map", "[out]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
+  }
   args.push(...(options.copyVideo ? ["-c:v", "copy"] : ["-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p"]));
   args.push("-t", (options.durationMs / 1000).toFixed(3), "-movflags", "+faststart", "-n", options.output);
   const { code, stderr } = await run(args, options.cwd);
   if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not finish the video: ${stderr.trim().slice(-800)}`);
+}
+
+export type MusicInput = { file: string; gain: number; duck: boolean };
+/** Filter lines that put music under a clip's sound. With `duck`, the music drops while the
+ * clip's own sound (a voice) is present and comes back afterwards. Returns the label to map.
+ */
+function underlay(main: string | undefined, musicInput: string, music: MusicInput): { lines: string[]; out: string } {
+  const level = `${musicInput}aresample=48000,aformat=channel_layouts=stereo,volume=${music.gain.toFixed(3)}[mus]`;
+  if (!main) return { lines: [level], out: "mus" };
+  if (!music.duck) return { lines: [level, `[${main}][mus]amix=inputs=2:normalize=0:dropout_transition=0[withmusic]`], out: "withmusic" };
+  return {
+    lines: [
+      level,
+      `[${main}]aformat=channel_layouts=stereo,asplit=2[voicemix][voicekey]`,
+      "[mus][voicekey]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=450[ducked]",
+      "[voicemix][ducked]amix=inputs=2:normalize=0:dropout_transition=0[withmusic]",
+    ],
+    out: "withmusic",
+  };
 }
 
 export type PlacedAudio = { file: string; offsetMs: number; gain: number };
@@ -176,13 +211,24 @@ export type PlacedAudio = { file: string; offsetMs: number; gain: number };
 const placed = (input: string, track: PlacedAudio, label: string) =>
   `${input}aresample=48000,${track.offsetMs >= 0 ? `adelay=${Math.round(track.offsetMs)}:all=1` : `atrim=start=${(-track.offsetMs / 1000).toFixed(3)},asetpts=PTS-STARTPTS`},volume=${track.gain.toFixed(3)}[${label}]`;
 
-/** Lay sound files over a finished video. The picture is copied untouched. */
-export async function addAudio(options: { video: string; output: string; cwd: string; durationMs: number; tracks: PlacedAudio[] }): Promise<void> {
+/** Lay sound files and generated music over a finished video. The picture is copied untouched. */
+export async function addAudio(options: { video: string; output: string; cwd: string; durationMs: number; tracks: PlacedAudio[]; music?: MusicInput }): Promise<void> {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", options.video];
   for (const track of options.tracks) args.push("-i", track.file);
-  const chains = options.tracks.map((track, index) => placed(`[${index + 1}:a:0]`, track, `a${index}`));
-  const mix = `${options.tracks.map((_, index) => `[a${index}]`).join("")}amix=inputs=${options.tracks.length}:normalize=0:dropout_transition=0,apad[out]`;
-  args.push("-filter_complex", [...chains, mix].join(";"), "-map", "0:v:0", "-map", "[out]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
+  if (options.music) args.push("-i", options.music.file);
+  const graph = options.tracks.map((track, index) => placed(`[${index + 1}:a:0]`, track, `a${index}`));
+  let sound: string | undefined;
+  if (options.tracks.length) {
+    graph.push(`${options.tracks.map((_, index) => `[a${index}]`).join("")}amix=inputs=${options.tracks.length}:normalize=0:dropout_transition=0[sound]`);
+    sound = "sound";
+  }
+  if (options.music) {
+    const mixed = underlay(sound, `[${options.tracks.length + 1}:a:0]`, options.music);
+    graph.push(...mixed.lines);
+    sound = mixed.out;
+  }
+  graph.push(`[${sound}]apad[out]`);
+  args.push("-filter_complex", graph.join(";"), "-map", "0:v:0", "-map", "[out]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
   args.push("-t", (options.durationMs / 1000).toFixed(3), "-movflags", "+faststart", "-n", options.output);
   const { code, stderr } = await run(args, options.cwd);
   if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not add the audio: ${stderr.trim().slice(-800)}`);
@@ -199,6 +245,7 @@ export async function joinClips(options: {
   width: number;
   height: number;
   overlay: PlacedAudio[];
+  music?: MusicInput;
   totalMs: number;
   output: string;
   cwd: string;
@@ -207,6 +254,8 @@ export async function joinClips(options: {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin"];
   for (const clip of clips) args.push("-i", clip.file);
   for (const track of options.overlay) args.push("-i", track.file);
+  if (options.music) args.push("-i", options.music.file);
+  // Clip sound is only wired up when some clip or overlay has any; music alone needs none of it.
   const audio = clips.some((clip) => clip.hasAudio) || options.overlay.length > 0;
   const seconds = (ms: number) => (ms / 1000).toFixed(3);
   const graph: string[] = [];
@@ -239,10 +288,16 @@ export async function joinClips(options: {
     graph.push(`[${sound}]${options.overlay.map((_, index) => `[o${index}]`).join("")}amix=inputs=${options.overlay.length + 1}:normalize=0:dropout_transition=0[mixed]`);
     sound = "mixed";
   }
+  let heard: string | undefined = audio ? sound : undefined;
+  if (options.music) {
+    const mixed = underlay(heard, `[${clips.length + options.overlay.length}:a:0]`, options.music);
+    graph.push(...mixed.lines);
+    heard = mixed.out;
+  }
   args.push("-filter_complex", graph.join(";"), "-map", `[${video}]`);
-  if (audio) args.push("-map", `[${sound}]`, "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
+  if (heard) args.push("-map", `[${heard}]`, "-c:a", "aac", "-b:a", "192k", "-ar", "48000");
   args.push("-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-t", seconds(options.totalMs), "-movflags", "+faststart", "-n", options.output);
   const { code, stderr } = await run(args, options.cwd);
   if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not join the sequence: ${stderr.trim().slice(-900)}`);
-  return { audio };
+  return { audio: !!heard };
 }

@@ -61,6 +61,9 @@ a { color: inherit; }
 .field input[type=color] { padding: 2px; height: 28px; } .field input[type=range] { min-width: 0; width: 100%; }
 .field.check { grid-template-columns: auto 1fr; } .field.check input { accent-color: #f4f4f5; }
 .hint { color: #71717a; margin: 4px 0 0; }
+.field.tune { grid-template-columns: 1fr 1fr; } .field.tune button { min-width: 0; }
+.musicbox { font: 13px/1.4 system-ui, sans-serif; color: #e4e4e7; background: rgba(24,24,27,.94); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; max-width: 340px; }
+.sequence .musicbox { max-width: 380px; margin: 0; }
 .editor footer { grid-column: 1 / -1; grid-row: 4; padding: 10px 18px 16px; border-top: 1px solid #18181b; display: grid; gap: 10px; }
 .transport { display: flex; gap: 10px; align-items: center; } .transport .spacer { flex: 1; } .transport .hint { margin: 0; }
 .timeline { position: relative; height: 34px; border-radius: 8px; background: #18181b; cursor: pointer; touch-action: none; overflow: hidden; }

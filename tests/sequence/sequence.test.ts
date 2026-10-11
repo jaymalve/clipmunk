@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -31,6 +31,8 @@ const colour = (file: string, at: number, crop: string) =>
   [...execFileSync(FFMPEG, ["-loglevel", "error", "-ss", String(at), "-i", path.join(root, file), "-vf", `crop=${crop},scale=1:1`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).subarray(0, 3)];
 const near = (actual: number[], expected: readonly number[], tolerance = 50) => expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
 const out = (name: string) => (made.push(name), name);
+/** Mean loudness of a file's sound in decibels, from FFmpeg's own measurement. */
+const loudness = (file: string) => Number(/mean_volume: (-?[\d.]+) dB/.exec(spawnSync(FFMPEG, ["-hide_banner", "-i", path.join(root, file), "-af", "volumedetect", "-f", "null", "-"], { encoding: "utf8" }).stderr)?.[1] ?? Number.NaN);
 
 beforeAll(async () => {
   process.env.FLICK_FFMPEG ??= FFMPEG;
@@ -106,6 +108,42 @@ describe("narration over a scene", () => {
   }, 240_000);
 });
 
+describe("generated music", () => {
+  const recipe = async () => JSON.parse(await readFile(recipePath, "utf8"));
+
+  it("is set on a scene through the daemon and heard in its export", async () => {
+    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "techno" } })).json).toMatchObject({ ok: false, issues: [{ code: "invalid-music" }] });
+    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: { style: "upbeat", seed: 9 } })).json).toMatchObject({ ok: true, data: { music: { style: "upbeat", seed: 9, gain: 0.5, duck: true } } });
+    expect((await recipe()).music).toEqual({ style: "upbeat", seed: 9, gain: 0.5, duck: true });
+    expect((await recipe()).definition).toEqual(JSON.parse(recipeFile).definition);
+
+    const output = out(".flick/exports/zz-test-music-scene.mp4");
+    const result = await exportScene({ sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 }, { root });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.data.audio).toBe(true);
+    expect(await probeMedia(output, root)).toMatchObject({ hasAudio: true, durationMs: 1500 });
+    expect(loudness(output), "the music is audible").toBeGreaterThan(-35);
+
+    // A caller can leave the music out, which is what a sequence with its own music does.
+    const silent = out(".flick/exports/zz-test-music-off.mp4");
+    const without = await exportScene({ sceneId: "rack-focus", url: origin, output: silent, fps: 30, width: 500, height: 300, workers: 1, music: false }, { root });
+    expect(without.ok && without.data.audio).toBe(false);
+  }, 240_000);
+
+  it("plays over a whole sequence in place of its clips' own music", async () => {
+    await call("PUT", "/v1/sequences/zz-test-music", { version: 1, id: "zz-test-music", title: "Music", width: 640, height: 360, fps: 30, music: { style: "lofi", gain: 0.6 }, items: [{ clip: { kind: "scene", id: "rack-focus" } }, { clip: { kind: "scene", id: "rack-focus" }, transition: { kind: "fade", ms: 400 } }] });
+    const output = out(".flick/exports/zz-test-music-sequence.mp4");
+    const result = await exportSequence({ sequenceId: "zz-test-music", url: origin, output }, { root });
+    await rm(sequenceFile("zz-test-music"), { force: true });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.data).toMatchObject({ durationMs: 2600, audio: true });
+    expect(loudness(output)).toBeGreaterThan(-35);
+
+    expect((await call("PUT", "/v1/scenes/rack-focus/music", { music: null })).json).toMatchObject({ ok: true, data: { music: null } });
+    expect("music" in (await recipe())).toBe(false);
+  }, 400_000);
+});
+
 describe("narrating in the studio", () => {
   let browser: Browser;
   afterAll(() => browser?.close());
@@ -135,6 +173,17 @@ describe("narrating in the studio", () => {
     await page.getByRole("button", { name: "Remove narration" }).click();
     await expect.poll(narrated, { timeout: 10_000 }).toBe(0);
     await page.getByRole("button", { name: "Narrate", exact: true }).waitFor({ timeout: 10_000 });
+
+    // Music from the scene player: choosing a style writes it to the recipe, and Off removes it.
+    const music = async () => JSON.parse(await readFile(recipePath, "utf8")).music;
+    await page.getByRole("button", { name: "Music", exact: true }).click();
+    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("lofi");
+    await expect.poll(music, { timeout: 10_000 }).toEqual({ style: "lofi", seed: 1, gain: 0.5, duck: true });
+    await page.getByRole("button", { name: "Music ♪" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: /^(Play|Replay)$/ }).click(); // plays with the music running
+    await page.waitForTimeout(500);
+    await page.locator("label.field", { hasText: /^Music/ }).locator("select").selectOption("off");
+    await expect.poll(music, { timeout: 10_000 }).toBeUndefined();
   }, 120_000);
 });
 

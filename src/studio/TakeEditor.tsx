@@ -6,6 +6,7 @@ import { createClock, type Clock } from "../react";
 import type { DaemonClient } from "../recorder";
 import { Chrome } from "./Chrome";
 import { ExportPanel, type DaemonState } from "./daemon";
+import { MusicControls, useMusicPreview } from "./music";
 import { useClipSession } from "./session";
 
 /** The take editor: a live preview of the composited take, a timeline, and the controls
@@ -140,6 +141,8 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
     void element.play().catch(() => {});
   }, [session.playing, voice, take.edit.audio, take.edit.trim.startMs, clock]);
 
+  useMusicPreview({ music: take.edit.music, durationMs, clock, playing: session.playing });
+
   // The exporter drives this page through the same renderer the preview uses.
   useEffect(() => {
     if (!renderer) return;
@@ -254,6 +257,9 @@ function Editor(props: { take: Take; revision: string; events: TakeEvent[]; clie
             <Slider label="Padding" value={e.canvas.padding} min={0} max={0.3} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(padding) => edit((c) => ({ ...c, canvas: { ...c.canvas, padding } }))} />
             <Slider label="Corner radius" value={e.canvas.radius} min={0} max={80} step={1} format={(v) => `${v}px`} onChange={(radius) => edit((c) => ({ ...c, canvas: { ...c.canvas, radius } }))} />
             <Slider label="Shadow" value={e.canvas.shadow} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(shadow) => edit((c) => ({ ...c, canvas: { ...c.canvas, shadow } }))} />
+          </Group>
+          <Group title="Music">
+            <MusicControls value={e.music} hasVoice={!!voice} onChange={(music) => edit(({ music: _previous, ...rest }) => (music ? { ...rest, music } : rest))} />
           </Group>
           {voice && (
             <Group title="Voice">
