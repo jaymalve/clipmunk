@@ -1,5 +1,5 @@
 // Installs the packed package into a fresh host app and walks the whole path an agent takes:
-// init -> author a scene -> validate -> snapshot -> export -> production build without Flick.
+// init -> author a scene -> validate -> snapshot -> export -> production build without Clipmunk.
 // Run: node scripts/check-installed.mjs [vite] [next]     (needs network for npm, and FFmpeg)
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
@@ -18,7 +18,7 @@ import path from "node:path";
 const repo = path.resolve(new URL("..", import.meta.url).pathname);
 const env = {
   ...process.env,
-  FLICK_FFMPEG: process.env.FLICK_FFMPEG ?? path.join(repo, "node_modules/ffmpeg-static/ffmpeg"),
+  CLIPMUNK_FFMPEG: process.env.CLIPMUNK_FFMPEG ?? path.join(repo, "node_modules/ffmpeg-static/ffmpeg"),
   NEXT_TELEMETRY_DISABLED: "1",
 };
 const sh = (cwd, command, args, options = {}) =>
@@ -50,7 +50,7 @@ const CARD = `export function Card() {
 }
 `;
 const scene = (componentImport) => ({
-  "src/flick/scenes/card-pass.scene.json": JSON.stringify(
+  "src/clipmunk/scenes/card-pass.scene.json": JSON.stringify(
     {
       version: 1,
       id: "card-pass",
@@ -81,7 +81,7 @@ const scene = (componentImport) => ({
     null,
     2,
   ),
-  "src/flick/scenes/card-pass.tsx": `import { Surface } from "@flickjs/record";\nimport { Card } from "${componentImport}";\n\nexport default function CardPass() {\n  return (\n    <div style={{ display: "grid", placeItems: "center", width: 700, height: 420 }}>\n      <Surface id="card"><Card /></Surface>\n    </div>\n  );\n}\n`,
+  "src/clipmunk/scenes/card-pass.tsx": `import { Surface } from "clipmunk";\nimport { Card } from "${componentImport}";\n\nexport default function CardPass() {\n  return (\n    <div style={{ display: "grid", placeItems: "center", width: 700, height: 420 }}>\n      <Surface id="card"><Card /></Surface>\n    </div>\n  );\n}\n`,
 });
 
 const HOSTS = {
@@ -194,8 +194,8 @@ async function stopGroup(child) {
 
 async function checkHost(name, tarball) {
   const host = HOSTS[name];
-  const root = mkdtempSync(path.join(os.tmpdir(), `flick-installed-${name}-`));
-  const flick = (...args) => sh(root, "npx", ["flick", ...args]);
+  const root = mkdtempSync(path.join(os.tmpdir(), `clipmunk-installed-${name}-`));
+  const clipmunk = (...args) => sh(root, "npx", ["clipmunk", ...args]);
   const origin = `http://127.0.0.1:${host.port}`;
   let server,
     serverLog = "";
@@ -225,28 +225,28 @@ async function checkHost(name, tarball) {
       "-D",
       `playwright@${JSON.parse(readFileSync(path.join(repo, "node_modules/playwright/package.json"), "utf8")).version}`,
     ]);
-    check(existsSync(path.join(root, "node_modules/.bin/flick")), "the flick binary is installed");
+    check(existsSync(path.join(root, "node_modules/.bin/clipmunk")), "the clipmunk binary is installed");
 
-    const init = JSON.parse(flick("init", "--json"));
+    const init = JSON.parse(clipmunk("init", "--json"));
     check(init.ok && init.data.adapter === host.expectAdapter, `init detects ${host.expectAdapter}`);
     check(
       ["wrapped", "route"].includes(init.data.entry.status),
       `init connects the host automatically (${init.data.entry.status})`,
     );
     check(
-      JSON.parse(flick("guide", "--json")).example.recipe.id === "page-survey",
+      JSON.parse(clipmunk("guide", "--json")).example.recipe.id === "page-survey",
       "the installed guide prints its tested example",
     );
     write(root, scene(host.cardImport));
     if (name !== "vite")
-      check(JSON.parse(flick("sync", "--json")).data.scenes === 1, "sync adds the new scene to the catalog");
+      check(JSON.parse(clipmunk("sync", "--json")).data.scenes === 1, "sync adds the new scene to the catalog");
     const generated = () =>
-      walk(path.join(root, "src/flick"))
+      walk(path.join(root, "src/clipmunk"))
         .filter((file) => !file.includes(`${path.sep}scenes${path.sep}`))
         .map((file) => `${file}\n${readFileSync(file, "utf8")}`)
         .join("\n");
     const before = generated();
-    const scenes = JSON.parse(flick("scenes", "--json"));
+    const scenes = JSON.parse(clipmunk("scenes", "--json"));
     check(
       scenes.ok && scenes.data.scenes.length === 1 && scenes.data.issues.length === 0,
       "the authored scene validates",
@@ -271,26 +271,26 @@ async function checkHost(name, tarball) {
     await waitFor(origin, server, () => serverLog);
     const home = await fetch(origin).then((response) => response.text());
     check(
-      !/flick/i.test(home.replace(/host-\w+/g, "")) || name === "next",
+      !/clipmunk/i.test(home.replace(/host-\w+/g, "")) || name === "next",
       "the normal page is served without the studio",
     );
 
-    const snapshot = JSON.parse(flick("snapshot", "--scene", "card-pass", "--url", origin, "--json"));
+    const snapshot = JSON.parse(clipmunk("snapshot", "--scene", "card-pass", "--url", origin, "--json"));
     check(snapshot.ok, `snapshot saves a thumbnail${snapshot.ok ? "" : `: ${JSON.stringify(snapshot.issues)}`}`);
     check(
       JSON.parse(
-        readFileSync(path.join(root, "src/flick/scenes/card-pass.scene.json"), "utf8"),
+        readFileSync(path.join(root, "src/clipmunk/scenes/card-pass.scene.json"), "utf8"),
       ).snapshot.image.startsWith("data:image/png"),
       "the recipe now carries the snapshot",
     );
-    const exported = JSON.parse(flick("export", "--scene", "card-pass", "--fps", "30", "--workers", "1", "--json"));
+    const exported = JSON.parse(clipmunk("export", "--scene", "card-pass", "--fps", "30", "--workers", "1", "--json"));
     check(exported.ok, `export renders an MP4${exported.ok ? "" : `: ${JSON.stringify(exported.issues)}`}`);
     const stderr = spawnSyncStderr(root, exported.data.output);
     check(/frame=\s*30\b/.test(stderr) && /700x420/.test(stderr), "the MP4 has 30 frames at 700x420");
 
     // The daemon starts from the installed binary, answers with its token, and cleans up when stopped.
     // Started directly so the interrupt reaches it, as Ctrl+C in a terminal does.
-    const dev = spawn(path.join(root, "node_modules/.bin/flick"), ["dev", "--port", "0", "--json"], {
+    const dev = spawn(path.join(root, "node_modules/.bin/clipmunk"), ["dev", "--port", "0", "--json"], {
       cwd: root,
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -298,27 +298,27 @@ async function checkHost(name, tarball) {
     const started = JSON.parse(
       await new Promise((resolve, reject) => {
         dev.stdout.once("data", (chunk) => resolve(String(chunk)));
-        dev.once("exit", () => reject(new Error("flick dev exited early")));
+        dev.once("exit", () => reject(new Error("clipmunk dev exited early")));
       }),
     );
-    if (!started.ok) throw new Error(`flick dev did not start: ${JSON.stringify(started.issues)}`);
+    if (!started.ok) throw new Error(`clipmunk dev did not start: ${JSON.stringify(started.issues)}`);
     const daemonStatus = await fetch(`http://127.0.0.1:${started.data.port}/v1/status`, {
       headers: { authorization: `Bearer ${started.data.token}` },
     }).then((response) => response.json());
-    check(daemonStatus.ok && daemonStatus.data.ffmpeg, "flick dev starts the daemon and it sees FFmpeg");
+    check(daemonStatus.ok && daemonStatus.data.ffmpeg, "clipmunk dev starts the daemon and it sees FFmpeg");
     check(
       (await fetch(`http://127.0.0.1:${started.data.port}/v1/status`)).status === 401,
       "the daemon refuses requests without the token",
     );
     dev.kill("SIGINT");
     await new Promise((resolve) => dev.once("exit", resolve));
-    check(!existsSync(path.join(root, ".flick/daemon.json")), "stopping the daemon removes its address file");
+    check(!existsSync(path.join(root, ".clipmunk/daemon.json")), "stopping the daemon removes its address file");
     check(
-      JSON.parse(flick("takes", "--json")).data.takes.length === 0,
+      JSON.parse(clipmunk("takes", "--json")).data.takes.length === 0,
       "takes lists nothing before the first recording",
     );
 
-    const again = JSON.parse(flick("init", "--json"));
+    const again = JSON.parse(clipmunk("init", "--json"));
     check(
       again.ok && again.data.files.every((file) => file.status === "verified"),
       "running init again changes nothing",
@@ -333,25 +333,25 @@ async function checkHost(name, tarball) {
       .map((file) => readFileSync(file, "utf8"))
       .join("\n");
     check(
-      shipped.length > 1000 && !/data-flick|FlickStudio|flick-scene/.test(shipped),
-      "the production build contains no Flick code",
+      shipped.length > 1000 && !/data-clipmunk|ClipmunkStudio|clipmunk-scene/.test(shipped),
+      "the production build contains no Clipmunk code",
     );
     return true;
   } finally {
     if (server) await stopGroup(server);
-    if (!process.env.FLICK_KEEP) rmSync(root, { recursive: true, force: true });
+    if (!process.env.CLIPMUNK_KEEP) rmSync(root, { recursive: true, force: true });
   }
 }
 
 function spawnSyncStderr(cwd, file) {
-  return spawnSync(env.FLICK_FFMPEG, ["-hide_banner", "-i", file, "-map", "0:v:0", "-f", "null", "-"], {
+  return spawnSync(env.CLIPMUNK_FFMPEG, ["-hide_banner", "-i", file, "-map", "0:v:0", "-f", "null", "-"], {
     cwd,
     encoding: "utf8",
   }).stderr;
 }
 
 sh(repo, "node", ["scripts/build.mjs"]);
-const packDir = mkdtempSync(path.join(os.tmpdir(), "flick-pack-"));
+const packDir = mkdtempSync(path.join(os.tmpdir(), "clipmunk-pack-"));
 const tarball = path.join(
   packDir,
   sh(repo, "npm", ["pack", "--pack-destination", packDir, "--loglevel=error"]).trim().split("\n").pop(),

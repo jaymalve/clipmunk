@@ -1,16 +1,16 @@
-# Flick architecture
+# Clipmunk architecture
 
-Flick is a TypeScript SDK that a developer installs into their own web app. It does two things:
+Clipmunk is a TypeScript SDK that a developer installs into their own web app. It does two things:
 
-1. **Scenes.** It turns the app's real React components into cinematic 3D shots (camera, depth of field, keyframed motion), authored as source files by the developer's coding agent. This is feature parity with [Flute](https://github.com/webprodigies-org/flute) (MIT), which Flick is modelled on.
+1. **Scenes.** It turns the app's real React components into cinematic 3D shots (camera, depth of field, keyframed motion), authored as source files by the developer's coding agent. This is feature parity with [Flute](https://github.com/webprodigies-org/flute) (MIT), which Clipmunk is modelled on.
 2. **Takes.** It records the developer using their own app in a browser tab, then renders the recording with a smoothed synthetic cursor, automatic zooms, a camera bubble and voiceover.
 
-Both produce MP4 files locally. There is no account, no hosted service and no AI integration inside Flick; the developer's own coding agent reads a guide and edits source files.
+Both produce MP4 files locally. There is no account, no hosted service and no AI integration inside Clipmunk; the developer's own coding agent reads a guide and edits source files.
 
 This document is the implementation map. If code and this document disagree, one of them is a bug.
 
-- npm package: `@flickjs/record`
-- CLI binary: `flick` (`npx flick …` after install; first run is `npx @flickjs/record init`, because the unscoped `flick` package on npm belongs to someone else)
+- npm package: `clipmunk`
+- CLI binary: `clipmunk` (`npx clipmunk …`; the package and the binary share a name, so the first run is simply `npx clipmunk init`)
 - Runtime: Node 22.12+ for the CLI, React DOM 18.2+ or 19 for scenes, Chromium for recording and export
 
 ---
@@ -19,11 +19,11 @@ This document is the implementation map. If code and this document disagree, one
 
 These are the rules every module follows. They exist so that preview and export can never disagree.
 
-1. **One explicit clock.** Nothing in Flick reads wall-clock time to decide what a frame looks like. Every renderer is a function of `(definition, timeMs)`. Playback, scrubbing, thumbnails and export all call the same `seek(timeMs)`.
+1. **One explicit clock.** Nothing in Clipmunk reads wall-clock time to decide what a frame looks like. Every renderer is a function of `(definition, timeMs)`. Playback, scrubbing, thumbnails and export all call the same `seek(timeMs)`.
 2. **The source of truth is files in the host repo.** Scenes, take edits and sequences are JSON validated by Zod schemas in `core`. The studio UI and the coding agent edit the same files. There is no database.
 3. **Core is pure.** `core` has no DOM, no Node and no React imports. All maths (camera, focus, easing, auto-zoom, cursor smoothing) lives there and is unit-tested without a browser.
 4. **Effects live at the edge.** Filesystem, processes and network are touched only by `daemon`, `export` and `project` service modules. Policy (validation, scoping, idempotency) lives in operations that call those services.
-5. **The host app is not redesigned.** Scenes mount the host's real components with their providers and styles. Flick never clones UI, never resets host CSS, and ships nothing into production builds.
+5. **The host app is not redesigned.** Scenes mount the host's real components with their providers and styles. Clipmunk never clones UI, never resets host CSS, and ships nothing into production builds.
 6. **Generators emit ordinary data.** Auto-zoom, cascades and cursor smoothing are pure functions that output the same keyframe tracks a human or agent could write by hand. Nothing is magic at render time.
 7. **Honest limits.** Depth of field is a Gaussian approximation in the DOM, not ray-traced bokeh. Recording covers the app's own tab in Chromium, not the desktop.
 
@@ -41,7 +41,7 @@ These are the rules every module follows. They exist so that preview and export 
 | **Sequence** | An ordered list of clips with transitions and audio, exported as one video. |
 | **Studio** | The in-app UI for browsing, playing, editing and exporting clips. |
 | **Daemon** | A local server on `127.0.0.1` that stores media, reads and writes project files and runs export jobs for the studio. |
-| **Capture bridge** | The object a page exposes on `window.__FLICK__` so the exporter can drive it frame by frame. |
+| **Capture bridge** | The object a page exposes on `window.__CLIPMUNK__` so the exporter can drive it frame by frame. |
 
 ---
 
@@ -56,7 +56,7 @@ src/
   compositor/   Canvas renderer for takes. Browser, no React.
   recorder/     Capture session, event log, HUD. Browser, no React.
   studio/       Library, player, take editor, export UI. React, rendered in a shadow root.
-  bridge/       The window.__FLICK__ contract and its browser implementation helpers.
+  bridge/       The window.__CLIPMUNK__ contract and its browser implementation helpers.
   daemon/       HTTP server, take storage, job runner. Node.
   export/       Playwright frame pump, FFmpeg encode and mux. Node.
   project/      init, framework adapters, discovery, sync. Node.
@@ -82,41 +82,41 @@ Browser modules never import Node modules and the reverse. `scripts/check-bounda
 
 | Import | Contents | Environment |
 |---|---|---|
-| `@flickjs/record` | `Scene`, `Surface`, `useSceneTime`, core types and helpers | Browser |
-| `@flickjs/record/core` | Everything in `core` | Any |
-| `@flickjs/record/studio` | `FlickStudio`, `ScenePreview` | Browser, dev only |
-| `@flickjs/record/recorder` | `bootRecorder`, `mountRecorderHud`, `createRecorder`, the daemon client | Browser, dev only |
-| `flick` binary | CLI | Node |
+| `clipmunk` | `Scene`, `Surface`, `useSceneTime`, core types and helpers | Browser |
+| `clipmunk/core` | Everything in `core` | Any |
+| `clipmunk/studio` | `ClipmunkStudio`, `ScenePreview` | Browser, dev only |
+| `clipmunk/recorder` | `bootRecorder`, `mountRecorderHud`, `createRecorder`, the daemon client | Browser, dev only |
+| `clipmunk` binary | CLI | Node |
 
-Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Optional peer: `playwright` (export, snapshots). System prerequisite for saving recordings and for export: FFmpeg. It is looked up as `FLICK_FFMPEG`, then the `ffmpeg-static` package if the project has it installed, then `ffmpeg` on `PATH`. `flick dev` warns at startup when none is found, and the recorder refuses to start a recording the daemon could not save.
+Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Optional peer: `playwright` (export, snapshots). System prerequisite for saving recordings and for export: FFmpeg. It is looked up as `CLIPMUNK_FFMPEG`, then the `ffmpeg-static` package if the project has it installed, then `ffmpeg` on `PATH`. `clipmunk dev` warns at startup when none is found, and the recorder refuses to start a recording the daemon could not save.
 
 ---
 
 ## 4. Files in the host app
 
 ```
-FLICK.md                              Agent handoff. Points at `flick guide`.
-src/flick/Studio.tsx                  Generated adapter. Dev-only wrapper around the host app.
-src/flick/catalog.ts                  Generated scene catalog (Next.js and generic React hosts only).
-src/flick/scenes/<id>.scene.json      Scene recipe (committed).
-src/flick/scenes/<id>.tsx             Scene component, default export (committed).
-src/flick/sequences/<id>.sequence.json  Sequence (committed).
-.flick/project.json                   Project identity and the ownership record of generated files.
-.flick/.gitignore                     Ignores media, caches, exports and daemon state.
-.flick/takes/<id>/take.json           Take manifest and edit (committed).
-.flick/takes/<id>/screen.webm         Screen recording (ignored).
-.flick/takes/<id>/cam.webm            Camera + microphone (ignored).
-.flick/takes/<id>/audio.wav           Voice track extracted at ingest (ignored).
-.flick/takes/<id>/events.jsonl        Pointer and interaction log (ignored).
-.flick/takes/<id>/recorder.log        Recorder breadcrumbs for diagnosis (ignored).
-.flick/audio/<file>                   Narration recordings and any music or voiceover files (ignored).
-.flick/exports/                       Default output directory (ignored).
-.flick/daemon.json                    Port, pid and session token of a running daemon (ignored).
+CLIPMUNK.md                              Agent handoff. Points at `clipmunk guide`.
+src/clipmunk/Studio.tsx                  Generated adapter. Dev-only wrapper around the host app.
+src/clipmunk/catalog.ts                  Generated scene catalog (Next.js and generic React hosts only).
+src/clipmunk/scenes/<id>.scene.json      Scene recipe (committed).
+src/clipmunk/scenes/<id>.tsx             Scene component, default export (committed).
+src/clipmunk/sequences/<id>.sequence.json  Sequence (committed).
+.clipmunk/project.json                   Project identity and the ownership record of generated files.
+.clipmunk/.gitignore                     Ignores media, caches, exports and daemon state.
+.clipmunk/takes/<id>/take.json           Take manifest and edit (committed).
+.clipmunk/takes/<id>/screen.webm         Screen recording (ignored).
+.clipmunk/takes/<id>/cam.webm            Camera + microphone (ignored).
+.clipmunk/takes/<id>/audio.wav           Voice track extracted at ingest (ignored).
+.clipmunk/takes/<id>/events.jsonl        Pointer and interaction log (ignored).
+.clipmunk/takes/<id>/recorder.log        Recorder breadcrumbs for diagnosis (ignored).
+.clipmunk/audio/<file>                   Narration recordings and any music or voiceover files (ignored).
+.clipmunk/exports/                       Default output directory (ignored).
+.clipmunk/daemon.json                    Port, pid and session token of a running daemon (ignored).
 ```
 
 Scene ids and take ids are lowercase slugs (`[a-z0-9]+(-[a-z0-9]+)*`). A scene's id equals its file name and its recipe's `id` field.
 
-Every generated file is recorded in `.flick/project.json` with a content hash. `init` and `sync` only overwrite a file whose current hash matches the record; an edited or unrelated file produces a repair message and no write.
+Every generated file is recorded in `.clipmunk/project.json` with a content hash. `init` and `sync` only overwrite a file whose current hash matches the record; an edited or unrelated file produces a repair message and no write.
 
 ---
 
@@ -162,7 +162,7 @@ type SceneRecipe = {
     };
     motion?: Motion;
   };
-  audio?: { file: string; offsetMs: number; gain: number }[];       // voiceover, files under .flick/audio
+  audio?: { file: string; offsetMs: number; gain: number }[];       // voiceover, files under .clipmunk/audio
   snapshot?: { image: string; timeMs: number };                     // small PNG data URL for the library
 };
 ```
@@ -229,7 +229,7 @@ type Sequence = {
 
 A fade overlaps two clips, so it shortens the total by its length, and it is capped at half of the shorter neighbour. `planSequence(items, durations)` in `core/sequence.ts` computes each item's start, each fade and the total; the exporter and the tests use the same function. The first item's transition is ignored. Items have no trim of their own: a take is trimmed in its own edit.
 
-Sound files are named by plain file name and live in `.flick/audio`. The same `{ file, offsetMs, gain }` shape attaches sound to a scene (`recipe.audio`) and to a sequence.
+Sound files are named by plain file name and live in `.clipmunk/audio`. The same `{ file, offsetMs, gain }` shape attaches sound to a scene (`recipe.audio`) and to a sequence.
 
 ### 5.5a Music
 
@@ -292,13 +292,13 @@ The depth-varying filter uses two tiny alpha-ramp images (one per axis) blended 
 - A Surface with nested Surfaces is a **group**. Groups keep `preserve-3d` and are never filtered, because a filter would flatten their children. A group's own paint goes in its `content` prop, which renders as a filtered leaf. The registry reports visible text or media sitting directly in a group as a diagnostic, and capture refuses a scene with diagnostics.
 - Spatial wrappers ignore pointer events; visual leaves receive them, so the live UI stays interactive in preview.
 
-**Frames do not go through React.** This is a deliberate departure from Flute, which re-renders the tree from state on every frame. In Flick, the clock store holds `timeMs`. On each tick the Scene evaluates motion and spatial maths once and writes `style.transform`, `style.opacity`, `style.filter` and the filter table attributes directly on the registered elements. React re-renders only when the definition, the registered structure or measurements change. Components that want scene time opt in with `useSceneTime()`, which subscribes through `useSyncExternalStore`; `seek()` wraps the update in `flushSync` so those components are committed before the frame is captured.
+**Frames do not go through React.** This is a deliberate departure from Flute, which re-renders the tree from state on every frame. In Clipmunk, the clock store holds `timeMs`. On each tick the Scene evaluates motion and spatial maths once and writes `style.transform`, `style.opacity`, `style.filter` and the filter table attributes directly on the registered elements. React re-renders only when the definition, the registered structure or measurements change. Components that want scene time opt in with `useSceneTime()`, which subscribes through `useSyncExternalStore`; `seek()` wraps the update in `flushSync` so those components are committed before the frame is captured.
 
 ### 6.4 Diagnostics and recovery
 
 - Invalid recipe JSON keeps the last valid definition on screen and lists the issues.
 - A component that throws is caught by an error boundary with a retry action; fixing the source and saving recovers through the host's hot reload.
-- The scene root carries `data-flick-valid="true|false"`. The capture bridge rejects `seek` while it is false.
+- The scene root carries `data-clipmunk-valid="true|false"`. The capture bridge rejects `seek` while it is false.
 
 ---
 
@@ -307,7 +307,7 @@ The depth-varying filter uses two tiny alpha-ramp images (one per axis) blended 
 Any page that can be exported exposes exactly one bridge:
 
 ```ts
-interface FlickBridge {
+interface ClipmunkBridge {
   version: 1;
   kind: "scene" | "take";
   durationMs: number;
@@ -320,8 +320,8 @@ interface FlickBridge {
 ```
 
 - Scenes implement `seek` and are captured by screenshot.
-- Takes implement `encode`, because their frames are already on a canvas and in-page encoding measured roughly ten times faster than screenshots. File bytes leave the page through a `__FLICK_WRITE__(base64, position)` binding the exporter provides, and progress through `__FLICK_PROGRESS__`.
-- Studio chrome is marked `data-flick-chrome` and hidden by the exporter in its own private page only.
+- Takes implement `encode`, because their frames are already on a canvas and in-page encoding measured roughly ten times faster than screenshots. File bytes leave the page through a `__CLIPMUNK_WRITE__(base64, position)` binding the exporter provides, and progress through `__CLIPMUNK_PROGRESS__`.
+- Studio chrome is marked `data-clipmunk-chrome` and hidden by the exporter in its own private page only.
 
 ---
 
@@ -358,10 +358,10 @@ Take ids read as a timestamp (`take-20261005-142233`), so listings sort by time.
 
 - **Stopping.** The HUD's Stop button, `Alt+Shift+R`, and the browser's own "Stop sharing" control all end a recording the same way.
 - **Full page loads end a tab capture.** Client-side route changes are fine; a reload or a real navigation is not. While recording, the recorder keeps the take id and timing in `sessionStorage`. When the page loads again, the HUD reopens by itself, says what happened and offers to save the part the daemon already holds, or to discard it.
-- **The studio is not recordable.** Its pages navigate with full page loads, so the HUD declines to record on any URL with `?flick`.
+- **The studio is not recordable.** Its pages navigate with full page loads, so the HUD declines to record on any URL with `?clipmunk`.
 - **Upload failures stop the recording** at once and offer to save what was uploaded. The daemon accepts a retried chunk whose response was lost without writing it twice.
 - **No step can hang.** The HUD shows which start step is in progress. The capture restriction has a timeout, and the latency measurement never waits on `video.play()`, which stays pending on a still page because a tab capture emits no frame until something repaints.
-- **Diagnosis.** The recorder sends breadcrumbs (start parameters, page unload, script errors, visibility changes, track events, upload failures, stop) to `PUT /v1/takes/:id/log`; the daemon appends them to `.flick/takes/<id>/recorder.log`.
+- **Diagnosis.** The recorder sends breadcrumbs (start parameters, page unload, script errors, visibility changes, track events, upload failures, stop) to `PUT /v1/takes/:id/log`; the daemon appends them to `.clipmunk/takes/<id>/recorder.log`.
 
 ### 8.5 Ingest (daemon)
 
@@ -397,7 +397,7 @@ Pixel-valued settings (corner radius, cursor size, margins) are authored against
 4. **Follow.** Inside a segment the view stays put while the action remains in the inner 62% of the view, and pans when it leaves.
 5. **Timing.** Ease in over `easeMs` (default 700), arriving `leadMs` (default 300) before the first activity. Hold `holdMs` (default 1500) after the last, then ease out. A segment that starts before the previous one has finished easing out pans straight to it.
 
-The view is clamped so it never shows anything outside the recording; a property test checks this at every 50 ms. The output is three ordinary tracks (`x`, `y`, `scale`) on `{ kind: "zoom" }`. With `edit.zoom.mode = "auto"` they are regenerated from `params`; `flick zoom <take> --write` stores them as `manual` tracks in `take.json` for hand editing.
+The view is clamped so it never shows anything outside the recording; a property test checks this at every 50 ms. The output is three ordinary tracks (`x`, `y`, `scale`) on `{ kind: "zoom" }`. With `edit.zoom.mode = "auto"` they are regenerated from `params`; `clipmunk zoom <take> --write` stores them as `manual` tracks in `take.json` for hand editing.
 
 ### 9.4 Cursor
 
@@ -413,21 +413,21 @@ The studio runs inside the host app's dev server, in the host's React tree, so s
 
 ### 10.1 Mounting
 
-`init` generates `src/flick/Studio.tsx`, which exports `FlickStudioHost`. The host wraps its app with it once:
+`init` generates `src/clipmunk/Studio.tsx`, which exports `ClipmunkStudioHost`. The host wraps its app with it once:
 
 ```tsx
 <ExistingProviders>
-  <FlickStudioHost>
+  <ClipmunkStudioHost>
     <ExistingApp />
-  </FlickStudioHost>
+  </ClipmunkStudioHost>
 </ExistingProviders>
 ```
 
-- Without `?flick` in the URL the wrapper returns `children`, so the app is unaffected. In development the generated module also calls `bootRecorder()` from `@flickjs/record/recorder`, which remembers a daemon link in the URL and registers the recorder shortcut; nothing is shown until it is used.
-- `?flick=1` renders the studio instead of the app. `&flick-scene=<id>` opens a scene (`&flick-take=<id>` will open a take). Navigation is by plain links, so back, forward and reload resolve the same URL.
-- The wrapper lazy-loads `FlickStudio` from `@flickjs/record/studio` behind the bundler's compile-time development condition (`import.meta.env.DEV` or `process.env.NODE_ENV`), so a production build contains no Flick code. The installed-package check greps the production output to prove it.
-- `FlickStudio` receives `scenes`: a map from module path to lazy loader for every recipe and component. It loads the recipes to build the library and loads a component only when its scene is opened.
-- In Next.js the studio is a development-only route (`/flick`) instead of a wrapper.
+- Without `?clipmunk` in the URL the wrapper returns `children`, so the app is unaffected. In development the generated module also calls `bootRecorder()` from `clipmunk/recorder`, which remembers a daemon link in the URL and registers the recorder shortcut; nothing is shown until it is used.
+- `?clipmunk=1` renders the studio instead of the app. `&clipmunk-scene=<id>` opens a scene (`&clipmunk-take=<id>` will open a take). Navigation is by plain links, so back, forward and reload resolve the same URL.
+- The wrapper lazy-loads `ClipmunkStudio` from `clipmunk/studio` behind the bundler's compile-time development condition (`import.meta.env.DEV` or `process.env.NODE_ENV`), so a production build contains no Clipmunk code. The installed-package check greps the production output to prove it.
+- `ClipmunkStudio` receives `scenes`: a map from module path to lazy loader for every recipe and component. It loads the recipes to build the library and loads a component only when its scene is opened.
+- In Next.js the studio is a development-only route (`/clipmunk`) instead of a wrapper.
 
 ### 10.2 Views
 
@@ -436,7 +436,7 @@ The studio runs inside the host app's dev server, in the host's React tree, so s
 | **Library** | Grid of scenes (cached snapshot thumbnails) and takes. Shows validation issues per item. |
 | **Scene player** | The authored frame fitted inside the viewport and clipped to its edges, so the preview shows exactly what export renders. Play, scrub, replay and export. Shows diagnostics and hot-reload status. |
 | **Take editor** | The composited preview on a canvas; play and scrub; a timeline showing the kept range, zoom segments and playhead; trim from the playhead; controls for zoom, cursor, camera, frame and voice. Edits apply to the preview at once and are saved to `take.json` through the daemon half a second later, against a revision hash. |
-| **Recorder HUD** | Record, stop, camera and microphone toggles, elapsed time, viewport size, a stand-in cursor and a live camera preview. A plain-DOM custom element on `<html>`; opened by `Alt+Shift+R` or `?flick-record=1` on any app route. There is no pause. |
+| **Recorder HUD** | Record, stop, camera and microphone toggles, elapsed time, viewport size, a stand-in cursor and a live camera preview. A plain-DOM custom element on `<html>`; opened by `Alt+Shift+R` or `?clipmunk-record=1` on any app route. There is no pause. |
 | **Sequence builder** | Create a sequence by name, add scenes and takes, reorder and remove them, choose a cut or a fade and its length, and set the shape and frame rate. Saved to the sequence file through the daemon. There is no live preview of a whole sequence; it is seen by exporting. |
 | **Export panel** | Resolution (the clip's own size, 720p, 1080p, 1440p or 4K, always in the clip's own shape and never over 3840 pixels a side) and frame rate where the clip allows a choice; runs a daemon job and shows progress. Without a daemon it shows the equivalent CLI command, including the chosen size. A sequence's resolution is set in its builder, because it is stored in the sequence file. |
 
@@ -448,11 +448,11 @@ One hook, `useClipSession`, owns the cursor: `timeMs`, `playing`, `seek`, `toggl
 
 ## 11. Daemon (`daemon`)
 
-Started by `flick dev`. It binds `127.0.0.1` only and writes `.flick/daemon.json`.
+Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemon.json`.
 
 ### 11.1 Security
 
-- Every request must carry the session token (`Authorization: Bearer …`). The token is random per start and reaches the studio in the URL fragment of the link `flick dev` prints, then lives in `localStorage` for that origin so every tab of the app can reach the daemon. A restarted daemon has a new token; the stale one fails the status check and the HUD asks for the new link.
+- Every request must carry the session token (`Authorization: Bearer …`). The token is random per start and reaches the studio in the URL fragment of the link `clipmunk dev` prints, then lives in `localStorage` for that origin so every tab of the app can reach the daemon. A restarted daemon has a new token; the stale one fails the status check and the HUD asks for the new link.
 - `GET` requests may pass the token as `?token=` instead, because media elements and `EventSource` cannot set headers. Writes never accept it.
 - The `Origin` must be a loopback origin and the `Host` header must be the daemon's own address, which blocks cross-site requests and DNS rebinding.
 - All paths are resolved inside the project root; traversal, absolute paths and symlinks that leave the root are rejected.
@@ -475,7 +475,7 @@ Started by `flick dev`. It binds `127.0.0.1` only and writes `.flick/daemon.json
 | `PUT /v1/scenes/:id/music` | Set or clear a scene's generated music in its recipe |
 | `PUT /v1/scenes/:id/narration?offset=ms` | Store a narration recording and point the scene's recipe at it |
 | `DELETE /v1/scenes/:id/narration` | Remove a scene's narration and its file |
-| `GET /v1/audio/:file` | Serve a sound from `.flick/audio`, for the preview |
+| `GET /v1/audio/:file` | Serve a sound from `.clipmunk/audio`, for the preview |
 | `GET /v1/sequences`, `GET /v1/sequences/:id` | List and read sequences |
 | `PUT /v1/sequences/:id`, `DELETE /v1/sequences/:id` | Save (only when every clip exists) or delete a sequence |
 | `POST /v1/exports` | Start an export job for `{ sceneId }`, `{ takeId }` or `{ sequenceId }` |
@@ -492,7 +492,7 @@ The daemon is a thin adapter: each route validates input with a `core` schema an
 
 1. Launch headless Chromium through Playwright at the output size, device scale factor 1.
 2. Block navigation to anything but loopback HTTP.
-3. Open the scene URL, hide `[data-flick-chrome]`, wait for the bridge and `ready()`.
+3. Open the scene URL, hide `[data-clipmunk-chrome]`, wait for the bridge and `ready()`.
 4. For each frame `i`: `seek(i × 1000 / fps)`, then capture the `selector` rectangle and pipe it to FFmpeg.
 5. FFmpeg encodes H.264 (`yuv420p`, `+faststart`) and mixes any scene audio.
 
@@ -518,13 +518,13 @@ Size defaults to the edit's canvas; giving a width or height scales the other to
 3. Join the results in one FFmpeg filter graph: `xfade` and `acrossfade` for a fade, `concat` for a cut. A clip without sound contributes silence so every join is uniform.
 4. Mix the sequence's own audio over the result and write H.264 and AAC.
 
-Intermediate files live in a temporary directory under `.flick/exports` and are removed whether the export succeeds or not.
+Intermediate files live in a temporary directory under `.clipmunk/exports` and are removed whether the export succeeds or not.
 
 ### 12.3a Sound on scenes
 
 A scene's `audio` clips are mixed into its export after the picture is encoded (the picture is copied, not re-encoded). A file that has gone missing does not fail the export; the result carries a warning naming it.
 
-**Narration.** In the scene player, Narrate plays the scene from the start while recording the microphone, and stops when the scene ends. The daemon stores the recording as 48 kHz mono WAV in `.flick/audio`, named `<scene>-narration-<timestamp>.wav`, and rewrites the recipe's `audio` to point at it with the measured offset between the microphone starting and playback starting. A new narration replaces the previous one and deletes its file; other sounds on the scene are kept.
+**Narration.** In the scene player, Narrate plays the scene from the start while recording the microphone, and stops when the scene ends. The daemon stores the recording as 48 kHz mono WAV in `.clipmunk/audio`, named `<scene>-narration-<timestamp>.wav`, and rewrites the recipe's `audio` to point at it with the measured offset between the microphone starting and playback starting. A new narration replaces the previous one and deletes its file; other sounds on the scene are kept.
 
 ### 12.3b Generated music
 
@@ -536,7 +536,7 @@ Background music is synthesized by `renderMusic` in `core/music.ts`: a pure Type
 - **Synced to the picture.** `core/moments.ts` finds a clip's key moments: in a scene, when each surface finishes arriving (the last keyframe of any track that moves or fades it; camera and focus travel are ignored); in a take, the first click of each burst of activity, on the trimmed clock; in a sequence, each join. With `sync` on, `fitTempo` picks a tempo within 8% of the style's own, and a starting point inside the first beat, that puts beats, or the points halfway between beats, on those moments. Each moment also gets an accent placed exactly on it (softer in scenes and takes than at a sequence's joins). Because the tempo may only move 8%, several unrelated moments cannot always land on the rhythm exactly; `fitTempo` reports the average miss, and the accents are exact regardless. A test renders a fitted tune with accents off and checks the kick drum lands on every moment when a tempo in range can reach them. `planMusic` wraps all of this and is the one function both the studio and the exporter call.
 - **Same in preview and export.** The studio renders the same function into an `AudioBuffer` and starts it at the clock's position; the exporter writes it to a WAV for FFmpeg. Ducking under a voice (`sidechaincompress`) happens at export only, so the preview plays the music at its full level.
 
-`flick music <style>` writes a sample WAV for listening to a style.
+`clipmunk music <style>` writes a sample WAV for listening to a style.
 
 ### 12.4 Output rules
 
@@ -546,27 +546,27 @@ Outputs are project-relative `.mp4` paths. Existing files are never overwritten.
 
 ### 12.5 Snapshots
 
-`flick snapshot --scene <id>` seeks one frame (default the midpoint) at `full` quality, captures a 320-pixel-wide PNG and writes it into the recipe if the recipe has not changed since it was read.
+`clipmunk snapshot --scene <id>` seeks one frame (default the midpoint) at `full` quality, captures a 320-pixel-wide PNG and writes it into the recipe if the recipe has not changed since it was read.
 
 ---
 
 ## 13. Project setup (`project`)
 
-`flick init` detects the host and connects it. It is idempotent.
+`clipmunk init` detects the host and connects it. It is idempotent.
 
 | Host | What `init` does |
 |---|---|
-| Vite + React | Generates `src/flick/Studio.tsx` with a lazy `import.meta.glob` of the scenes directory. Wraps the root render in the entry file when it matches the standard `createRoot(...).render(...)` form; otherwise prints the one-line wiring instruction. |
-| Next.js App or Pages Router | Adds a development-only `/flick` route that loads the studio with SSR disabled. Does not touch layouts or config. Generates `src/flick/Recorder.tsx` and prints the one line that adds `<FlickRecorder />` to the root layout; `init` reports the recorder as connected once that line is present. |
-| Any other React DOM host | Generates the wrapper and a static scene catalog (`src/flick/catalog.ts`); prints wiring instructions. `flick sync` regenerates the catalog after scene files are added or removed. |
+| Vite + React | Generates `src/clipmunk/Studio.tsx` with a lazy `import.meta.glob` of the scenes directory. Wraps the root render in the entry file when it matches the standard `createRoot(...).render(...)` form; otherwise prints the one-line wiring instruction. |
+| Next.js App or Pages Router | Adds a development-only `/clipmunk` route that loads the studio with SSR disabled. Does not touch layouts or config. Generates `src/clipmunk/Recorder.tsx` and prints the one line that adds `<ClipmunkRecorder />` to the root layout; `init` reports the recorder as connected once that line is present. |
+| Any other React DOM host | Generates the wrapper and a static scene catalog (`src/clipmunk/catalog.ts`); prints wiring instructions. `clipmunk sync` regenerates the catalog after scene files are added or removed. |
 
 Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`) that finds the single `.render(...)` call and wraps its JSX argument. It declines anything it cannot read with certainty (several render calls, a non-JSX argument, unbalanced text) and `init` then prints the instruction instead. The TypeScript compiler API is not used: TypeScript 7 no longer ships one, and JavaScript hosts have no TypeScript at all. Every `init` step is idempotent, so re-running it completes an interrupted run; there is no journal.
 
-`init` also writes `FLICK.md` (a short pointer to `flick guide`), `.flick/project.json` and `.flick/.gitignore`.
+`init` also writes `CLIPMUNK.md` (a short pointer to `clipmunk guide`), `.clipmunk/project.json` and `.clipmunk/.gitignore`.
 
 ### Agent handoff
 
-`flick guide --json` prints the authoring guide for the installed version: concepts (camera, focus, parallax, timing, composition), the schema defaults, the animatable properties per target, a tested scene file pair, the commands and the workflow. Defaults, property lists and the example are derived from the schemas in `core/guide.ts`, so the guide cannot drift from what the validator accepts. `flick guide` prints it as prose; `--json` prints the structured form.
+`clipmunk guide --json` prints the authoring guide for the installed version: concepts (camera, focus, parallax, timing, composition), the schema defaults, the animatable properties per target, a tested scene file pair, the commands and the workflow. Defaults, property lists and the example are derived from the schemas in `core/guide.ts`, so the guide cannot drift from what the validator accepts. `clipmunk guide` prints it as prose; `--json` prints the structured form.
 
 ---
 
@@ -574,19 +574,19 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 
 | Command | Purpose |
 |---|---|
-| `flick init [--adapter vite\|next\|react]` | Connect the host app |
-| `flick dev [--port]` | Start the daemon and print the link that connects the browser to it |
-| `flick guide [--json]` | Print the agent authoring guide |
-| `flick scenes [--json]` | List validated scenes |
-| `flick takes [--json]` | List takes |
-| `flick sync` | Regenerate the static scene catalog |
-| `flick open [--scene id \| --take id] --url <origin>` | Open the studio in the browser |
-| `flick snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |
-| `flick zoom <take> [--write]` | List a take's zoom segments, or store them as manual keyframes |
-| `flick sequences [--json]` | List sequences and their validation issues |
-| `flick music <style> [--seed] [--seconds] [--output]` | Write a WAV sample of the generated music |
-| `flick export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4. A sequence takes its size and frame rate from its file. |
-| `flick doctor` | Check Node, FFmpeg, Chromium and the project connection |
+| `clipmunk init [--adapter vite\|next\|react]` | Connect the host app |
+| `clipmunk dev [--port]` | Start the daemon and print the link that connects the browser to it |
+| `clipmunk guide [--json]` | Print the agent authoring guide |
+| `clipmunk scenes [--json]` | List validated scenes |
+| `clipmunk takes [--json]` | List takes |
+| `clipmunk sync` | Regenerate the static scene catalog |
+| `clipmunk open [--scene id \| --take id] --url <origin>` | Open the studio in the browser |
+| `clipmunk snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |
+| `clipmunk zoom <take> [--write]` | List a take's zoom segments, or store them as manual keyframes |
+| `clipmunk sequences [--json]` | List sequences and their validation issues |
+| `clipmunk music <style> [--seed] [--seconds] [--output]` | Write a WAV sample of the generated music |
+| `clipmunk export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4. A sequence takes its size and frame rate from its file. |
+| `clipmunk doctor` | Check Node, FFmpeg, Chromium and the project connection |
 
 Every command accepts `--json` and then prints only the operation result. Human output is a separate formatter over the same result.
 
@@ -606,7 +606,7 @@ Each command is one small function: project and listing commands in `cli/command
 | Takes | Playwright + FFmpeg on a synthetic take with known pixels | Layout, zoom, cursor and camera pixels; editor controls and saving; trim; exported MP4 frames, size and voice track |
 | Sequences and narration | Playwright + FFmpeg on the example app | Narration stored, replaced, removed and recorded through the studio; a scene and a take joined by fade and by cut, checked for length, frames, sound and the mixed picture mid-fade; the sequence builder saving a valid file |
 | Generated music | Vitest for the synthesizer; Playwright + FFmpeg for its use | Exact length, no clipping, determinism, fades, accents and WAV encoding; music audible in scene, take and sequence exports; controls saving to scene, take and sequence files. Nothing tests how it sounds. |
-| Installed package | Packed tarball in a temporary Vite, Next and plain React host | `init` idempotency, studio loads, production build contains no Flick code |
+| Installed package | Packed tarball in a temporary Vite, Next and plain React host | `init` idempotency, studio loads, production build contains no Clipmunk code |
 | Boundaries | `scripts/check-boundaries.mjs` | Import rules in section 3 |
 
 `examples/vite-app` is the development host. It is not published.
@@ -631,11 +631,11 @@ Each phase ends with something that runs and is tested.
 |---|---|---|
 | 0. Spikes | Risk answers | **Complete.** Results are recorded in this document. |
 | 1. Core and scene renderer | `core` schemas, motion, spatial and focus maths; `Scene`, `Surface`; `ScenePreview` with play and scrub; `examples/vite-app` | **Complete.** |
-| 2. Flute parity | `init` and adapters, scene discovery and library, guide and `FLICK.md`, capture bridge, scene export, snapshots | **Complete.** `scripts/check-installed.mjs` goes from `init` to an exported MP4 in a fresh Vite app and a fresh Next.js app. |
+| 2. Flute parity | `init` and adapters, scene discovery and library, guide and `CLIPMUNK.md`, capture bridge, scene export, snapshots | **Complete.** `scripts/check-installed.mjs` goes from `init` to an exported MP4 in a fresh Vite app and a fresh Next.js app. |
 | 3. Daemon and recorder | Daemon, take storage, HUD, capture, event log, ingest | **Complete.** `tests/recorder` records the example app in headed Chromium and validates the take on disk. |
 | 4. Take compositor | Frame sources, zoom, cursor, camera bubble, take editor, take export with audio | **Complete.** `tests/take` checks the composite pixel by pixel on a synthetic take and exports it; `tests/recorder` edits and exports a real recording. |
 | 5. Sequences and voiceover | Sequence schema and export, narration over scenes | **Complete.** `tests/sequence` narrates a scene through the studio, and exports a scene plus a take as one file with a fade, with a cut, and with music over the whole. |
-| 6. Release | Installed-package tests, docs, publish | `@flickjs/record` installs and works from the registry |
+| 6. Release | Installed-package tests, docs, publish | `clipmunk` installs and works from the registry |
 
 ---
 

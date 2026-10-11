@@ -20,11 +20,11 @@ import { TakeEditor } from "./TakeEditor";
  * when its scene is opened, and only the host's bundler ever executes it.
  */
 export type SceneModules = Record<string, () => Promise<unknown>>;
-export type FlickStudioProps = { scenes: SceneModules };
+export type ClipmunkStudioProps = { scenes: SceneModules };
 
 const unwrap = (module: unknown) =>
   module && typeof module === "object" && "default" in module ? (module as { default: unknown }).default : module;
-export function FlickStudio({ scenes }: FlickStudioProps) {
+export function ClipmunkStudio({ scenes }: ClipmunkStudioProps) {
   const sceneId = useMemo(() => new URLSearchParams(location.search).get(SCENE_PARAM) ?? undefined, []);
   const takeId = useMemo(() => new URLSearchParams(location.search).get(TAKE_PARAM) ?? undefined, []);
   const sequenceId = useMemo(() => new URLSearchParams(location.search).get(SEQUENCE_PARAM) ?? undefined, []);

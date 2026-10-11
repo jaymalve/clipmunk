@@ -1,4 +1,4 @@
-// The example host app. Scenes import these real components; nothing here knows about Flick.
+// The example host app. Scenes import these real components; nothing here knows about Clipmunk.
 const METRICS = [
   { label: "Revenue", value: "$84,210", change: "+12.4%", up: true },
   { label: "Active customers", value: "3,482", change: "+4.1%", up: true },

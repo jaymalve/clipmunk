@@ -6,7 +6,7 @@ import { connectDaemon } from "./daemon";
  * <body>, so the restricted capture never includes it. Everything is plain DOM in a
  * shadow root: the recorder works in any web app, with or without React.
  */
-const TAG = "flick-recorder";
+const TAG = "clipmunk-recorder";
 const STYLES = `
 :host { all: initial; position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; font: 13px/1.3 system-ui, sans-serif; color: #f4f4f5; }
 .bar { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; pointer-events: auto;
@@ -32,10 +32,10 @@ let mounted: RecorderHud | undefined;
 /** The controls' DOM, built once. Nothing here changes after it is created except through `paint`. */
 function buildHud() {
   const host = document.createElement(TAG);
-  host.setAttribute("data-flick-chrome", "");
+  host.setAttribute("data-clipmunk-chrome", "");
   const root = host.attachShadow({ mode: "open" });
   root.innerHTML = `<style>${STYLES}</style><div class="cursor">${ARROW}</div><video class="cam" muted playsinline></video>
-    <div class="bar" role="toolbar" aria-label="Flick recorder">
+    <div class="bar" role="toolbar" aria-label="Clipmunk recorder">
       <span class="dot" hidden></span><span class="status"></span>
       <button class="mic" type="button" aria-pressed="true">Mic</button><button class="camera" type="button" aria-pressed="false">Camera</button>
       <button class="discard" type="button" hidden>Discard</button><button class="primary action" type="button">Record</button><button class="ghost close" type="button" aria-label="Close recorder">✕</button>
@@ -148,7 +148,7 @@ export function mountRecorderHud(): RecorderHud {
       parts.mic.hidden = parts.camera.hidden = true;
       return paintProblem(
         parts,
-        "The recorder records your app, not the Flick studio. Open a page of your app (without ?flick=1) and press Alt+Shift+R there.",
+        "The recorder records your app, not the Clipmunk studio. Open a page of your app (without ?clipmunk=1) and press Alt+Shift+R there.",
       );
     }
     const unsupported = isSupported();

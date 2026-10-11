@@ -8,7 +8,7 @@ export type EntryEdit =
   | { status: "already" }
   | { status: "manual"; reason: string };
 
-const COMPONENT = "FlickStudioHost";
+const COMPONENT = "ClipmunkStudioHost";
 
 /** Index just past the parenthesis that closes the one opened at `open`, or -1. */
 function matchParen(source: string, open: number): number {

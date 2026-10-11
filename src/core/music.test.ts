@@ -229,7 +229,10 @@ describe("syncing music to the picture", () => {
     const recipe = (name: string) => {
       const result = validateRecipe(
         JSON.parse(
-          readFileSync(new URL(`../../examples/vite-app/src/flick/scenes/${name}.scene.json`, import.meta.url), "utf8"),
+          readFileSync(
+            new URL(`../../examples/vite-app/src/clipmunk/scenes/${name}.scene.json`, import.meta.url),
+            "utf8",
+          ),
         ),
       );
       if (!result.ok) throw new Error(JSON.stringify(result.issues));

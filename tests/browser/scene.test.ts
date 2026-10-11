@@ -11,10 +11,10 @@ const seek = (ms: number) =>
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, String(value));
     element.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   }, ms);
-const frame = () => page.locator('[data-flick-capture="scene"]').screenshot();
+const frame = () => page.locator('[data-clipmunk-capture="scene"]').screenshot();
 const open = async (scene: string) => {
-  await page.goto(`${origin}/?flick=1&flick-scene=${scene}`);
-  await page.waitForSelector('[data-flick-scene][data-flick-valid="true"]');
+  await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=${scene}`);
+  await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
 };
 
 beforeAll(async () => {
@@ -50,7 +50,7 @@ describe("depth of field", () => {
     await open("page-survey");
     const filter = () =>
       page
-        .locator("[data-flick-leaf]")
+        .locator("[data-clipmunk-leaf]")
         .first()
         .evaluate((element) => (element as HTMLElement).style.filter);
     expect(await filter()).toMatch(/^url\(/);
@@ -86,16 +86,16 @@ describe("playback", () => {
 
 describe("studio", () => {
   it("lists every scene and opens one from the library", async () => {
-    await page.goto(`${origin}/?flick=1`);
+    await page.goto(`${origin}/?clipmunk=1`);
     await page.waitForSelector(".tile");
     expect(await page.locator(".tile b").allTextContents()).toEqual(["Page survey", "Plating", "Rack focus"]);
     await page.locator(".tile", { hasText: "Rack focus" }).click();
-    await page.waitForSelector('[data-flick-scene][data-flick-valid="true"]');
-    expect(new URL(page.url()).searchParams.get("flick-scene")).toBe("rack-focus");
+    await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
+    expect(new URL(page.url()).searchParams.get("clipmunk-scene")).toBe("rack-focus");
   }, 60_000);
 
   it("explains an unknown scene instead of showing a blank page", async () => {
-    await page.goto(`${origin}/?flick=1&flick-scene=nope`);
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=nope`);
     await page.waitForSelector(".issues");
     expect(await page.locator(".issues").textContent()).toContain('No valid scene named "nope"');
   }, 60_000);
@@ -104,7 +104,7 @@ describe("studio", () => {
     await open("rack-focus");
     const blur = (id: string) =>
       page
-        .locator(`[data-flick-id="${id}"] [data-flick-leaf]`)
+        .locator(`[data-clipmunk-id="${id}"] [data-clipmunk-leaf]`)
         .evaluate((element) =>
           parseFloat(/blur\(([\d.]+)px\)/.exec((element as HTMLElement).style.filter)?.[1] ?? "0"),
         );
@@ -122,7 +122,7 @@ describe("studio", () => {
   it("exposes a capture bridge that rejects times outside the scene", async () => {
     await open("rack-focus");
     const bridge = await page.evaluate(() => {
-      const b = (window as any).__FLICK__;
+      const b = (window as any).__CLIPMUNK__;
       return {
         version: b.version,
         kind: b.kind,
@@ -138,13 +138,13 @@ describe("studio", () => {
       durationMs: 1500,
       width: 1000,
       height: 600,
-      selector: '[data-flick-capture="scene"]',
+      selector: '[data-clipmunk-capture="scene"]',
     });
-    await page.evaluate(() => (window as any).__FLICK__.seek(750));
+    await page.evaluate(() => (window as any).__CLIPMUNK__.seek(750));
     expect(await page.locator(".time").textContent()).toBe("0.75s / 1.50s");
     expect(
       await page.evaluate(() =>
-        (window as any).__FLICK__.seek(9999).then(
+        (window as any).__CLIPMUNK__.seek(9999).then(
           () => "ok",
           (e: Error) => e.message,
         ),
@@ -155,7 +155,7 @@ describe("studio", () => {
 
 it("leaves the normal app untouched and reports no page errors", async () => {
   await page.goto(origin);
-  expect(await page.locator("[data-flick-scene]").count()).toBe(0);
+  expect(await page.locator("[data-clipmunk-scene]").count()).toBe(0);
   expect(await page.getByRole("heading", { name: "Good morning, Maya" }).count()).toBe(1);
   expect(errors).toEqual([]);
 }, 60_000);

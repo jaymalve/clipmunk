@@ -14,8 +14,8 @@ import { FFMPEG, makeTake, QUADRANTS } from "../support/take";
 /** Narration over a scene and sequences of scenes and takes, end to end on the example app. */
 const root = path.resolve("examples/vite-app");
 const TAKE = "zz-test-seq";
-const recipePath = path.join(root, "src/flick/scenes/rack-focus.scene.json");
-const sequenceFile = (id: string) => path.join(root, "src/flick/sequences", `${id}.sequence.json`);
+const recipePath = path.join(root, "src/clipmunk/scenes/rack-focus.scene.json");
+const sequenceFile = (id: string) => path.join(root, "src/clipmunk/sequences", `${id}.sequence.json`);
 const made: string[] = [];
 let server: ViteDevServer,
   daemon: Daemon,
@@ -52,11 +52,11 @@ const out = (name: string) => {
 const loudness = (file: string) => loudnessOf(path.join(root, file));
 
 beforeAll(async () => {
-  process.env.FLICK_FFMPEG ??= FFMPEG;
-  projectFile = await readFile(path.join(root, ".flick/project.json"), "utf8");
+  process.env.CLIPMUNK_FFMPEG ??= FFMPEG;
+  projectFile = await readFile(path.join(root, ".clipmunk/project.json"), "utf8");
   recipeFile = await readFile(recipePath, "utf8");
-  hadSequences = existsSync(path.join(root, "src/flick/sequences"));
-  hadAudio = existsSync(path.join(root, ".flick/audio"));
+  hadSequences = existsSync(path.join(root, "src/clipmunk/sequences"));
+  hadAudio = existsSync(path.join(root, ".clipmunk/audio"));
   await makeTake(root, TAKE);
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
@@ -66,13 +66,13 @@ beforeAll(async () => {
 afterAll(async () => {
   await daemon?.close();
   await server?.close();
-  await rm(path.join(root, ".flick/takes", TAKE), { recursive: true, force: true });
+  await rm(path.join(root, ".clipmunk/takes", TAKE), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
   for (const id of ["zz-test-launch", "zz-built-here"]) await rm(sequenceFile(id), { force: true });
-  if (!hadSequences) await rm(path.join(root, "src/flick/sequences"), { recursive: true, force: true });
-  if (!hadAudio) await rm(path.join(root, ".flick/audio"), { recursive: true, force: true });
+  if (!hadSequences) await rm(path.join(root, "src/clipmunk/sequences"), { recursive: true, force: true });
+  if (!hadAudio) await rm(path.join(root, ".clipmunk/audio"), { recursive: true, force: true });
   await writeFile(recipePath, recipeFile);
-  await writeFile(path.join(root, ".flick/project.json"), projectFile);
+  await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
 });
 
 describe("narration over a scene", () => {
@@ -88,14 +88,14 @@ describe("narration over a scene", () => {
     expect(stored.json).toMatchObject({ ok: true, data: { audio: [{ offsetMs: -120, gain: 1 }] } });
     const [clip] = await audioOf();
     expect(clip!.file).toMatch(/^rack-focus-narration-\d{14}\.wav$/);
-    expect(existsSync(path.join(root, ".flick/audio", clip!.file))).toBe(true);
-    expect((await readdir(path.join(root, ".flick/audio"))).filter((name) => name.endsWith(".upload"))).toEqual([]);
+    expect(existsSync(path.join(root, ".clipmunk/audio", clip!.file))).toBe(true);
+    expect((await readdir(path.join(root, ".clipmunk/audio"))).filter((name) => name.endsWith(".upload"))).toEqual([]);
     const served = await call("GET", `/v1/audio/${clip!.file}`);
     expect([served.status, served.type]).toEqual([200, "audio/wav"]);
     // The rest of the recipe is untouched.
     expect(JSON.parse(await readFile(recipePath, "utf8")).definition).toEqual(JSON.parse(recipeFile).definition);
 
-    const output = out(".flick/exports/zz-test-narrated.mp4");
+    const output = out(".clipmunk/exports/zz-test-narrated.mp4");
     const result = await exportScene(
       { sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 },
       { root },
@@ -112,13 +112,13 @@ describe("narration over a scene", () => {
     const after = await audioOf();
     expect(after).toHaveLength(1);
     expect(after[0]!.file).not.toBe(first!.file);
-    expect(existsSync(path.join(root, ".flick/audio", first!.file))).toBe(false);
+    expect(existsSync(path.join(root, ".clipmunk/audio", first!.file))).toBe(false);
     expect((await call("DELETE", "/v1/scenes/rack-focus/narration")).json).toMatchObject({
       ok: true,
       data: { audio: [] },
     });
     expect(await audioOf()).toEqual([]);
-    expect(existsSync(path.join(root, ".flick/audio", after[0]!.file))).toBe(false);
+    expect(existsSync(path.join(root, ".clipmunk/audio", after[0]!.file))).toBe(false);
     expect("audio" in JSON.parse(await readFile(recipePath, "utf8"))).toBe(false);
     expect((await call("PUT", "/v1/scenes/nope/narration", tone(0.2, ["-c:a", "libopus", "-f", "webm"]))).status).toBe(
       404,
@@ -129,7 +129,7 @@ describe("narration over a scene", () => {
   it("exports a scene without a sound file that has gone missing, and says so", async () => {
     const recipe = JSON.parse(recipeFile);
     await writeFile(recipePath, JSON.stringify({ ...recipe, audio: [{ file: "lost.wav" }] }, null, 2));
-    const output = out(".flick/exports/zz-test-missing-audio.mp4");
+    const output = out(".clipmunk/exports/zz-test-missing-audio.mp4");
     const result = await exportScene(
       { sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 },
       { root },
@@ -137,7 +137,9 @@ describe("narration over a scene", () => {
     await writeFile(recipePath, recipeFile);
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data.audio).toBe(false);
-    expect(result.data.warnings).toEqual([".flick/audio/lost.wav is missing, so this scene was exported without it."]);
+    expect(result.data.warnings).toEqual([
+      ".clipmunk/audio/lost.wav is missing, so this scene was exported without it.",
+    ]);
   }, 240_000);
 });
 
@@ -155,7 +157,7 @@ describe("generated music", () => {
     expect((await recipe()).music).toEqual({ style: "upbeat", seed: 9, gain: 0.5, duck: true, sync: true });
     expect((await recipe()).definition).toEqual(JSON.parse(recipeFile).definition);
 
-    const output = out(".flick/exports/zz-test-music-scene.mp4");
+    const output = out(".clipmunk/exports/zz-test-music-scene.mp4");
     const result = await exportScene(
       { sceneId: "rack-focus", url: origin, output, fps: 30, width: 500, height: 300, workers: 1 },
       { root },
@@ -166,7 +168,7 @@ describe("generated music", () => {
     expect(loudness(output), "the music is audible").toBeGreaterThan(-35);
 
     // A caller can leave the music out, which is what a sequence with its own music does.
-    const silent = out(".flick/exports/zz-test-music-off.mp4");
+    const silent = out(".clipmunk/exports/zz-test-music-off.mp4");
     const without = await exportScene(
       {
         sceneId: "rack-focus",
@@ -197,7 +199,7 @@ describe("generated music", () => {
         { clip: { kind: "scene", id: "rack-focus" }, transition: { kind: "fade", ms: 400 } },
       ],
     });
-    const output = out(".flick/exports/zz-test-music-sequence.mp4");
+    const output = out(".clipmunk/exports/zz-test-music-sequence.mp4");
     const result = await exportSequence({ sequenceId: "zz-test-music", url: origin, output }, { root });
     await rm(sequenceFile("zz-test-music"), { force: true });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
@@ -222,8 +224,8 @@ describe("narrating in the studio", () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ["microphone"] });
     const page = await context.newPage();
     page.on("pageerror", (error) => console.error("pageerror:", error.message));
-    await page.goto(`${origin}/?flick=1&flick-scene=rack-focus#flick-daemon=${daemon.port}.${daemon.token}`);
-    await page.waitForSelector('[data-flick-scene][data-flick-valid="true"]');
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=rack-focus#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+    await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
     const narrated = async () =>
       ((JSON.parse(await readFile(recipePath, "utf8")).audio ?? []) as { file: string }[]).length;
     expect(await narrated()).toBe(0);
@@ -241,7 +243,7 @@ describe("narrating in the studio", () => {
     const [clip] = JSON.parse(await readFile(recipePath, "utf8")).audio as { file: string; offsetMs: number }[];
     expect(clip!.file).toMatch(/^rack-focus-narration-/);
     expect(Math.abs(clip!.offsetMs)).toBeLessThan(500);
-    const wav = await probeMedia(path.join(root, ".flick/audio", clip!.file), root);
+    const wav = await probeMedia(path.join(root, ".clipmunk/audio", clip!.file), root);
     expect(wav.hasAudio).toBe(true);
     expect(wav.durationMs).toBeGreaterThan(1000);
     await page.getByRole("button", { name: "Remove narration" }).click();
@@ -297,7 +299,7 @@ describe("sequences", () => {
   });
 
   it("joins a scene and a take with a cross-fade into one file with sound", async () => {
-    const output = out(".flick/exports/zz-test-sequence.mp4");
+    const output = out(".clipmunk/exports/zz-test-sequence.mp4");
     const result = await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     // 1.5 s scene + 4 s take, overlapped by the 0.5 s fade.
@@ -325,8 +327,8 @@ describe("sequences", () => {
     expect(distance(mixed, scene)).toBeGreaterThan(25);
     expect(distance(mixed, take)).toBeGreaterThan(25);
     expect(
-      existsSync(path.join(root, ".flick/exports")) &&
-        (await readdir(path.join(root, ".flick/exports"))).filter((name) => name.startsWith(".flick-")),
+      existsSync(path.join(root, ".clipmunk/exports")) &&
+        (await readdir(path.join(root, ".clipmunk/exports"))).filter((name) => name.startsWith(".clipmunk-")),
     ).toEqual([]);
     expect(await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root })).toMatchObject({
       ok: false,
@@ -335,14 +337,14 @@ describe("sequences", () => {
   }, 400_000);
 
   it("butts clips together on a cut, lays music over the whole, and explains a missing file", async () => {
-    await mkdir(path.join(root, ".flick/audio"), { recursive: true });
-    await writeFile(path.join(root, ".flick/audio/zz-test-music.wav"), tone(8, ["-f", "wav"]));
-    made.push(".flick/audio/zz-test-music.wav");
+    await mkdir(path.join(root, ".clipmunk/audio"), { recursive: true });
+    await writeFile(path.join(root, ".clipmunk/audio/zz-test-music.wav"), tone(8, ["-f", "wav"]));
+    made.push(".clipmunk/audio/zz-test-music.wav");
     await writeFile(
       sequenceFile("zz-test-launch"),
       JSON.stringify(sequence({ kind: "cut" }, { audio: [{ file: "zz-test-music.wav", gain: 0.3 }] })),
     );
-    const output = out(".flick/exports/zz-test-sequence-cut.mp4");
+    const output = out(".clipmunk/exports/zz-test-sequence-cut.mp4");
     const result = await exportSequence({ sequenceId: "zz-test-launch", url: origin, output }, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data).toMatchObject({ durationMs: 5500, audio: true });
@@ -387,10 +389,10 @@ describe("sequence builder in the studio", () => {
     browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.on("pageerror", (error) => console.error("pageerror:", error.message));
-    await page.goto(`${origin}/?flick=1#flick-daemon=${daemon.port}.${daemon.token}`);
+    await page.goto(`${origin}/?clipmunk=1#clipmunk-daemon=${daemon.port}.${daemon.token}`);
     await page.getByLabel("New sequence name").fill("ZZ built here");
     await page.getByRole("button", { name: "Create" }).click();
-    await page.waitForURL(/flick-sequence=zz-built-here/);
+    await page.waitForURL(/clipmunk-sequence=zz-built-here/);
     await page.getByLabel("Add a clip").selectOption(`take:${TAKE}`);
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByLabel("Fade length into clip 2, milliseconds").fill("800");
@@ -417,7 +419,7 @@ describe("sequence builder in the studio", () => {
     await expect
       .poll(async () => JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8")).items[0].clip.kind)
       .toBe("take");
-    await page.goto(`${origin}/?flick=1`);
+    await page.goto(`${origin}/?clipmunk=1`);
     await page.locator(".row", { hasText: "ZZ built here" }).waitFor({ timeout: 15_000 });
   }, 120_000);
 });

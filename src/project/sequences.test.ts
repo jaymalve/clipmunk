@@ -10,14 +10,14 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function project() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "flick-sequences-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "clipmunk-sequences-"));
   roots.push(root);
   const guide = getGuide();
   const files: Record<string, string> = {
     "package.json": "{}",
     [guide.example.recipePath]: JSON.stringify(guide.example.recipe),
     [guide.example.componentPath]: guide.example.component,
-    ".flick/takes/demo/take.json": "{}",
+    ".clipmunk/takes/demo/take.json": "{}",
   };
   for (const [name, content] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, name)), { recursive: true });
@@ -44,7 +44,7 @@ describe("sequences on disk", () => {
       { root },
     );
     expect(written.ok && written.data.items).toHaveLength(2);
-    expect(JSON.parse(await readFile(path.join(root, "src/flick/sequences/launch.sequence.json"), "utf8")).fps).toBe(
+    expect(JSON.parse(await readFile(path.join(root, "src/clipmunk/sequences/launch.sequence.json"), "utf8")).fps).toBe(
       60,
     );
     const listed = await listSequences({ root });
@@ -80,7 +80,7 @@ describe("sequences on disk", () => {
 
   it("reports hand-written files that are broken, misnamed or point nowhere", async () => {
     const root = await project();
-    const dir = path.join(root, "src/flick/sequences");
+    const dir = path.join(root, "src/clipmunk/sequences");
     await mkdir(dir, { recursive: true });
     await writeFile(path.join(dir, "broken.sequence.json"), "{ nope");
     await writeFile(

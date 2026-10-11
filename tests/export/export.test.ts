@@ -17,9 +17,9 @@ const out = (name: string) => {
 };
 
 beforeAll(async () => {
-  process.env.FLICK_FFMPEG ??= path.resolve("node_modules/ffmpeg-static/ffmpeg");
+  process.env.CLIPMUNK_FFMPEG ??= path.resolve("node_modules/ffmpeg-static/ffmpeg");
   // These operations remember the dev server and write snapshots; put the example back afterwards.
-  for (const file of [".flick/project.json", "src/flick/scenes/rack-focus.scene.json"])
+  for (const file of [".clipmunk/project.json", "src/clipmunk/scenes/rack-focus.scene.json"])
     restore.set(file, await readFile(path.join(root, file), "utf8"));
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
@@ -33,7 +33,7 @@ afterAll(async () => {
 
 describe("scene export", () => {
   it("renders every frame at the requested size and cadence, and never overwrites", async () => {
-    const output = out(".flick/exports/test-rack.mp4");
+    const output = out(".clipmunk/exports/test-rack.mp4");
     const progress: number[] = [];
     const result = await exportScene(
       { sceneId: "rack-focus", url, output, fps: 30, width: 500, height: 300, workers: 1 },
@@ -63,7 +63,7 @@ describe("scene export", () => {
   }, 240_000);
 
   it("splits frames across workers and joins them into one file with the same frame count", async () => {
-    const output = out(".flick/exports/test-rack-workers.mp4");
+    const output = out(".clipmunk/exports/test-rack-workers.mp4");
     const result = await exportScene(
       { sceneId: "rack-focus", url, output, fps: 30, width: 500, height: 300, workers: 3, draft: true },
       { root },
@@ -72,12 +72,12 @@ describe("scene export", () => {
     expect(result.data.workers).toBe(3);
     expect(await probeVideo(output, root)).toMatchObject({ frames: 45, width: 500, height: 300 });
     expect(
-      (await readdir(path.join(root, ".flick/exports"))).filter((name) => name.startsWith(".flick-export-")),
+      (await readdir(path.join(root, ".clipmunk/exports"))).filter((name) => name.startsWith(".clipmunk-export-")),
     ).toEqual([]);
   }, 240_000);
 
   it("publishes nothing when cancelled", async () => {
-    const output = ".flick/exports/test-cancelled.mp4";
+    const output = ".clipmunk/exports/test-cancelled.mp4";
     const controller = new AbortController();
     const result = await exportScene(
       { sceneId: "rack-focus", url, output, fps: 60, width: 500, height: 300, workers: 1 },
@@ -102,23 +102,23 @@ describe("scene export", () => {
     });
     expect(
       await exportScene(
-        { sceneId: "rack-focus", url: "http://127.0.0.1:9", output: ".flick/exports/never.mp4" },
+        { sceneId: "rack-focus", url: "http://127.0.0.1:9", output: ".clipmunk/exports/never.mp4" },
         { root },
       ),
     ).toMatchObject({ ok: false, issues: [{ code: "server-unreachable" }] });
-    const real = process.env.FLICK_FFMPEG;
-    process.env.FLICK_FFMPEG = "/nonexistent/ffmpeg";
+    const real = process.env.CLIPMUNK_FFMPEG;
+    process.env.CLIPMUNK_FFMPEG = "/nonexistent/ffmpeg";
     try {
       expect(
         await exportScene(
-          { sceneId: "rack-focus", url, output: ".flick/exports/never.mp4", width: 500, height: 300, workers: 1 },
+          { sceneId: "rack-focus", url, output: ".clipmunk/exports/never.mp4", width: 500, height: 300, workers: 1 },
           { root },
         ),
       ).toMatchObject({ ok: false, issues: [{ code: "missing-ffmpeg" }] });
     } finally {
-      process.env.FLICK_FFMPEG = real;
+      process.env.CLIPMUNK_FFMPEG = real;
     }
-    expect(existsSync(path.join(root, ".flick/exports/never.mp4"))).toBe(false);
+    expect(existsSync(path.join(root, ".clipmunk/exports/never.mp4"))).toBe(false);
   }, 240_000);
 });
 
@@ -128,7 +128,7 @@ describe("snapshot", () => {
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data).toMatchObject({
       sceneId: "rack-focus",
-      source: "src/flick/scenes/rack-focus.scene.json",
+      source: "src/clipmunk/scenes/rack-focus.scene.json",
       timeMs: 400,
     });
     const recipe = validateRecipe(JSON.parse(await readFile(path.join(root, result.data.source), "utf8")));

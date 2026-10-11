@@ -1,2 +1,2 @@
-export { FlickStudio, type FlickStudioProps, type SceneModules } from "./FlickStudio";
+export { ClipmunkStudio, type ClipmunkStudioProps, type SceneModules } from "./ClipmunkStudio";
 export { ScenePreview, type ScenePreviewProps } from "./ScenePreview";

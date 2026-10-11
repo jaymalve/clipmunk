@@ -4,7 +4,7 @@ const html = `<!doctype html><style>html,body{margin:0;height:100%}body{backgrou
 <div id=root style="height:100%"></div>
 <script>
 window.run = async (mode) => {
-  const hud = document.createElement('flick-hud');
+  const hud = document.createElement('clipmunk-hud');
   hud.style.cssText = 'position:fixed;right:0;top:0;width:300px;height:300px;background:rgb(255,0,0);z-index:2147483647';
   document.documentElement.append(hud);
   // A modal portalled to body, as UI libraries do.

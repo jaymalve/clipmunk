@@ -25,7 +25,7 @@ import {
 import { extractAudio, probeMedia, remux } from "../export";
 import { exists, Fault, readText, resolveInside, sha256, toIssues, writeText } from "../project";
 
-/** Take storage under .flick/takes/<id>/. Uploads append to raw files while recording;
+/** Take storage under .clipmunk/takes/<id>/. Uploads append to raw files while recording;
  * finalising remuxes them, extracts the voice track and writes take.json.
  */
 export type Context = { root: string };

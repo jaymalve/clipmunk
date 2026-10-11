@@ -19,7 +19,7 @@ let server: ViteDevServer, daemon: Daemon, browser: Browser, context: BrowserCon
 const takes: string[] = [];
 let withCamera = "";
 let projectFile = "";
-const hud = () => page.locator("flick-recorder");
+const hud = () => page.locator("clipmunk-recorder");
 /** Wait for the recorder to be recording; on failure, report what the HUD says instead of a bare timeout. */
 async function recording() {
   await hud()
@@ -48,9 +48,11 @@ async function record(
   await during();
   await hud().locator("button.action").click();
   await hud().locator(".status a").waitFor({ timeout: 30_000 });
-  const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get("flick-take")!;
+  const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get(
+    "clipmunk-take",
+  )!;
   takes.push(id);
-  const dir = path.join(root, ".flick/takes", id);
+  const dir = path.join(root, ".clipmunk/takes", id);
   const take = validateTake(JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")));
   if (!take.ok) throw new Error(JSON.stringify(take.issues));
   const events = (await readFile(path.join(dir, "events.jsonl"), "utf8"))
@@ -61,8 +63,8 @@ async function record(
 }
 
 beforeAll(async () => {
-  process.env.FLICK_FFMPEG ??= ffmpeg;
-  projectFile = await readFile(path.join(root, ".flick/project.json"), "utf8"); // exporting remembers the dev server; put it back
+  process.env.CLIPMUNK_FFMPEG ??= ffmpeg;
+  projectFile = await readFile(path.join(root, ".clipmunk/project.json"), "utf8"); // exporting remembers the dev server; put it back
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -74,24 +76,26 @@ beforeAll(async () => {
   context = await browser.newContext({ viewport: null, permissions: ["camera", "microphone"] });
   page = await context.newPage();
   page.on("pageerror", (error) => console.error("pageerror:", error.message));
-  await page.goto(`${origin}/?flick-record=1#flick-daemon=${daemon.port}.${daemon.token}`);
+  await page.goto(`${origin}/?clipmunk-record=1#clipmunk-daemon=${daemon.port}.${daemon.token}`);
   await hud().locator(".status", { hasText: "Ready" }).waitFor({ timeout: 20_000 });
 }, 90_000);
 afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of takes) await rm(path.join(root, ".flick/takes", id), { recursive: true, force: true });
-  await writeFile(path.join(root, ".flick/project.json"), projectFile);
+  for (const id of takes) await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
+  await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
 });
 
 describe("recorder", () => {
   it("connects from the daemon link, hides the token, and mounts its HUD outside <body>", async () => {
     expect(new URL(page.url()).hash).toBe("");
     expect(
-      await page.evaluate(() => document.querySelector("flick-recorder")!.parentElement === document.documentElement),
+      await page.evaluate(
+        () => document.querySelector("clipmunk-recorder")!.parentElement === document.documentElement,
+      ),
     ).toBe(true);
-    expect(await page.evaluate(() => document.body.contains(document.querySelector("flick-recorder")))).toBe(false);
+    expect(await page.evaluate(() => document.body.contains(document.querySelector("clipmunk-recorder")))).toBe(false);
   });
 
   it("records the tab without the HUD or cursor and logs interactions without their content", async () => {
@@ -104,7 +108,7 @@ describe("recorder", () => {
           getComputedStyle(document.body).cursor,
           getComputedStyle(document.querySelector(".btn")!).cursor,
           document.body.style.isolation,
-          !!document.querySelector("[data-flick-recorder=backdrop]"),
+          !!document.querySelector("[data-clipmunk-recorder=backdrop]"),
         ]),
       ).toEqual(["none", "none", "isolate", true]);
       await page.mouse.move(300, 300, { steps: 5 });
@@ -118,7 +122,7 @@ describe("recorder", () => {
     expect(
       await page.evaluate(() => [
         document.body.style.isolation,
-        !!document.querySelector("[data-flick-recorder]"),
+        !!document.querySelector("[data-clipmunk-recorder]"),
         getComputedStyle(document.body).cursor,
       ]),
     ).toEqual(["", false, "auto"]);
@@ -216,7 +220,7 @@ describe("recorder", () => {
       .join(", ")} ms`;
     // The picture changes no earlier than the logged click and within a few frames of it.
     writeFileSync(
-      "/tmp/flick-sync-facts.txt",
+      "/tmp/clipmunk-sync-facts.txt",
       `${facts}; all frame times: ${frames.map((frame) => `${Math.round(frame.t)}${frame.cr > 180 ? "R" : ""}`).join(" ")}\n`,
       { flag: "a" },
     );
@@ -233,10 +237,10 @@ describe("recorder", () => {
     await page.keyboard.press("Alt+Shift+KeyR");
     await hud().locator(".status a").waitFor({ timeout: 30_000 });
     const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get(
-      "flick-take",
+      "clipmunk-take",
     )!;
     takes.push(id);
-    const log = await readFile(path.join(root, ".flick/takes", id, "recorder.log"), "utf8");
+    const log = await readFile(path.join(root, ".clipmunk/takes", id, "recorder.log"), "utf8");
     expect(log).toMatch(/ start \d+x\d+@/);
     expect(log).toMatch(/ stop after \d+ms/);
   }, 120_000);
@@ -255,10 +259,10 @@ describe("recorder", () => {
     await hud().locator("button.action").click();
     await hud().locator(".status a").waitFor({ timeout: 30_000 });
     const id = new URL((await hud().locator(".status a").getAttribute("href"))!, origin).searchParams.get(
-      "flick-take",
+      "clipmunk-take",
     )!;
     takes.push(id);
-    const dir = path.join(root, ".flick/takes", id);
+    const dir = path.join(root, ".clipmunk/takes", id);
     const take = validateTake(JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")));
     if (!take.ok) throw new Error(JSON.stringify(take.issues));
     expect(take.data.source.durationMs).toBeGreaterThan(1500);
@@ -273,23 +277,25 @@ describe("recorder", () => {
   }, 120_000);
 
   it("does not record the studio itself", async () => {
-    await page.goto(`${origin}/?flick=1&flick-record=1`);
-    await hud().locator(".status", { hasText: "records your app, not the Flick studio" }).waitFor({ timeout: 20_000 });
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-record=1`);
+    await hud()
+      .locator(".status", { hasText: "records your app, not the Clipmunk studio" })
+      .waitFor({ timeout: 20_000 });
     expect(await hud().locator("button.action").isDisabled()).toBe(true);
     await hud().locator("button.close").click();
   }, 60_000);
 
   it("opens a real recording in the editor and exports it with cursor, camera and voice", async () => {
-    await page.goto(`${origin}/?flick=1`);
+    await page.goto(`${origin}/?clipmunk=1`);
     await page.locator(".row").first().waitFor({ timeout: 20_000 });
     expect(await page.locator(".row").count()).toBeGreaterThanOrEqual(takes.length); // the folder may hold takes recorded by hand
     expect((await page.locator(".row").allTextContents()).some((text) => text.includes("camera + voice"))).toBe(true);
     // A real MediaRecorder file (variable frame rate, remuxed) decodes and composites in the editor.
-    await page.goto(`${origin}/?flick=1&flick-take=${withCamera}`);
-    await page.waitForFunction(() => (window as any).__FLICK__?.kind === "take", undefined, { timeout: 45_000 });
-    await page.evaluate(() => (window as any).__FLICK__.seek(1000));
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-take=${withCamera}`);
+    await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+    await page.evaluate(() => (window as any).__CLIPMUNK__.seek(1000));
     const drawn = await page.evaluate(() => {
-      const canvas = document.querySelector("[data-flick-chrome]")!.shadowRoot!.querySelector("canvas")!;
+      const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
       const centre = canvas.getContext("2d")!.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
       return { width: canvas.width, height: canvas.height, centre: [centre[0], centre[1], centre[2]] };
     });
@@ -298,7 +304,7 @@ describe("recorder", () => {
       120,
     );
 
-    const output = ".flick/exports/zz-test-recorded.mp4";
+    const output = ".clipmunk/exports/zz-test-recorded.mp4";
     const result = await exportTake({ takeId: withCamera, url: origin, output, fps: 30, height: 540 }, { root });
     try {
       if (!result.ok) throw new Error(JSON.stringify(result.issues));

@@ -88,7 +88,7 @@ export function useTakeBridge(
       durationMs,
       width,
       height,
-      selector: "canvas[data-flick-take]",
+      selector: "canvas[data-clipmunk-take]",
       ready: async () => renderer.renderAt(clock.get()),
       async seek(timeMs) {
         seek(timeMs);

@@ -161,12 +161,12 @@ export function ScenePreview({
   }, [width, height]);
 
   return (
-    <div data-flick-preview="" style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden" }}>
+    <div data-clipmunk-preview="" style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden" }}>
       <div ref={viewport} style={{ position: "absolute", inset: 0 }}>
         {current && (
           <div
-            data-flick-capture="scene"
-            data-flick-scene-id={sceneId}
+            data-clipmunk-capture="scene"
+            data-clipmunk-scene-id={sceneId}
             style={{
               position: "absolute",
               left: fit.left,

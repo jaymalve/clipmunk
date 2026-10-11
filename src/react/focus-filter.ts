@@ -60,7 +60,7 @@ export function createFocusFilters(defs: () => SVGDefsElement | null) {
       let entry = filters.get(token);
       if (!entry) {
         const element = document.createElementNS(SVG_NS, "filter");
-        const id = `flick-focus-${nextId++}`;
+        const id = `clipmunk-focus-${nextId++}`;
         element.setAttribute("id", id);
         element.setAttribute("filterUnits", "userSpaceOnUse");
         element.setAttribute("primitiveUnits", "userSpaceOnUse");

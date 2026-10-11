@@ -21,7 +21,7 @@ declare const RestrictionTarget: { fromElement(element: Element): Promise<unknow
 type RestrictableTrack = MediaStreamTrack & { restrictTo(target: unknown): Promise<void> };
 
 /** Survives a reload of the tab, so an interrupted recording can still be saved afterwards. */
-const MARKER_KEY = "flick:recording";
+const MARKER_KEY = "clipmunk:recording";
 type Marker = { takeId: string; startedAt: number; aliveAt: number; payload: Record<string, unknown> };
 const readMarker = (): Marker | undefined => {
   try {
@@ -58,7 +58,7 @@ function preparePage() {
   const source = !transparent(html.backgroundColor) || html.backgroundImage !== "none" ? html : own;
   const background = transparent(source.backgroundColor) ? "rgb(255, 255, 255)" : source.backgroundColor;
   const shim = document.createElement("div");
-  shim.setAttribute("data-flick-recorder", "backdrop");
+  shim.setAttribute("data-clipmunk-recorder", "backdrop");
   shim.style.cssText = `position:fixed;inset:0;z-index:-2147483647;pointer-events:none;background:${source.backgroundImage !== "none" ? source.background : background}`;
   const previousIsolation = body.style.isolation;
   body.style.isolation = "isolate"; // required for the element to be capturable, and scopes the shim's z-index
@@ -71,7 +71,7 @@ function preparePage() {
   tick.style.cssText = `position:absolute;right:0;bottom:0;width:1px;height:1px;background:${background}`;
   shim.append(tick);
   const hideCursor = document.createElement("style");
-  hideCursor.setAttribute("data-flick-recorder", "cursor");
+  hideCursor.setAttribute("data-clipmunk-recorder", "cursor");
   hideCursor.textContent = "body, body * { cursor: none !important; }";
   return {
     background,
@@ -176,7 +176,7 @@ async function daemonProblem(client: DaemonClient): Promise<string | undefined> 
   const status = await client.get<DaemonStatus>("/v1/status");
   if (!status.ok) return status.issues[0]!.message;
   if (!status.data.ffmpeg)
-    return "The Flick daemon cannot find FFmpeg, which it needs to save a recording. Install FFmpeg, or run `npm install -D ffmpeg-static` in your project, then restart `npx flick dev`.";
+    return "The Clipmunk daemon cannot find FFmpeg, which it needs to save a recording. Install FFmpeg, or run `npm install -D ffmpeg-static` in your project, then restart `npx clipmunk dev`.";
   return undefined;
 }
 
@@ -204,7 +204,7 @@ async function openStreams(options: RecorderOptions, streams: MediaStream[], ste
   streams.push(display);
   const screenTrack = display.getVideoTracks()[0] as RestrictableTrack;
   if (screenTrack.getSettings().displaySurface !== "browser")
-    throw new Error("Choose “This tab” in the sharing dialog. Flick records the app's own tab.");
+    throw new Error("Choose “This tab” in the sharing dialog. Clipmunk records the app's own tab.");
   return { voice, display, screenTrack };
 }
 

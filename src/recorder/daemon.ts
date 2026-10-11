@@ -1,11 +1,11 @@
 import { DAEMON_HASH, type Issue, type Result } from "../core";
 
 /** Browser-side client for the local daemon.
- * `flick dev` prints a link whose fragment carries the daemon's port and session token.
+ * `clipmunk dev` prints a link whose fragment carries the daemon's port and session token.
  * Opening it once stores them for this origin, so every page of the app can reach the daemon.
  */
 export type DaemonLink = { port: number; token: string };
-const STORAGE_KEY = "flick:daemon";
+const STORAGE_KEY = "clipmunk:daemon";
 
 /** Take the link out of the URL fragment (if present), remember it, and clean the address bar. */
 export function adoptDaemonLink(): DaemonLink | undefined {
@@ -35,7 +35,8 @@ export function createDaemonClient(link: DaemonLink) {
   const origin = `http://127.0.0.1:${link.port}`;
   const unreachable: Issue = {
     code: "daemon-unreachable",
-    message: "The Flick daemon is not answering. Run `npx flick dev` in your project and open the link it prints.",
+    message:
+      "The Clipmunk daemon is not answering. Run `npx clipmunk dev` in your project and open the link it prints.",
   };
   async function request<T>(method: string, route: string, body?: unknown, raw?: Blob): Promise<Result<T>> {
     try {
@@ -85,7 +86,7 @@ export async function connectDaemon(): Promise<
     return {
       problem: {
         reason: "no-link",
-        message: `This browser profile has no daemon link for ${location.origin}. Run \`npx flick dev\` in your project and open the full link it prints, here, on this same address.`,
+        message: `This browser profile has no daemon link for ${location.origin}. Run \`npx clipmunk dev\` in your project and open the full link it prints, here, on this same address.`,
       },
     };
   const client = createDaemonClient(link);
@@ -95,14 +96,14 @@ export async function connectDaemon(): Promise<
     return {
       problem: {
         reason: "unreachable",
-        message: `Nothing answers at 127.0.0.1:${link.port}. Start \`npx flick dev\`; if your project runs on another machine, forward port ${link.port} as well as the dev server's.`,
+        message: `Nothing answers at 127.0.0.1:${link.port}. Start \`npx clipmunk dev\`; if your project runs on another machine, forward port ${link.port} as well as the dev server's.`,
       },
     };
   return {
     problem: {
       reason: "rejected",
       message:
-        "This browser holds a link from an earlier daemon session. Open the link the running `npx flick dev` printed.",
+        "This browser holds a link from an earlier daemon session. Open the link the running `npx clipmunk dev` printed.",
     },
   };
 }

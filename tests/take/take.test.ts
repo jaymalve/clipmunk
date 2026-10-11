@@ -24,17 +24,17 @@ const CAM = [1787, 947] as const;
 const pixel = (x: number, y: number) =>
   page.evaluate(
     ([px, py]) => {
-      const canvas = document.querySelector("[data-flick-chrome]")!.shadowRoot!.querySelector("canvas")!;
+      const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
       return [...canvas.getContext("2d")!.getImageData(Math.round(px!), Math.round(py!), 1, 1).data.slice(0, 3)];
     },
     [x, y],
   );
-const seek = (ms: number) => page.evaluate((time) => (window as any).__FLICK__.seek(time), ms);
-const takeFile = (id: string) => path.join(root, ".flick/takes", id, "take.json");
+const seek = (ms: number) => page.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
+const takeFile = (id: string) => path.join(root, ".clipmunk/takes", id, "take.json");
 
 beforeAll(async () => {
-  process.env.FLICK_FFMPEG ??= FFMPEG;
-  projectFile = await readFile(path.join(root, ".flick/project.json"), "utf8");
+  process.env.CLIPMUNK_FFMPEG ??= FFMPEG;
+  projectFile = await readFile(path.join(root, ".clipmunk/project.json"), "utf8");
   for (const id of IDS) await makeTake(root, id);
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
@@ -43,16 +43,16 @@ beforeAll(async () => {
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on("pageerror", (error) => console.error("pageerror:", error.message));
-  await page.goto(`${origin}/?flick=1&flick-take=zz-test-edit#flick-daemon=${daemon.port}.${daemon.token}`);
-  await page.waitForFunction(() => (window as any).__FLICK__?.kind === "take", undefined, { timeout: 45_000 });
+  await page.goto(`${origin}/?clipmunk=1&clipmunk-take=zz-test-edit#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+  await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
 }, 120_000);
 afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of IDS) await rm(path.join(root, ".flick/takes", id), { recursive: true, force: true });
+  for (const id of IDS) await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
-  await writeFile(path.join(root, ".flick/project.json"), projectFile);
+  await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
 });
 
 describe("take compositor", () => {
@@ -184,7 +184,7 @@ describe("exporting from the editor", () => {
     await page.locator(".command code", { hasText: "Wrote" }).waitFor({ timeout: 180_000 });
     const output = (await page.locator(".command code").textContent())!.match(/Wrote (\S+)/)![1]!;
     made.push(output);
-    expect(output).toBe(".flick/exports/zz-test-edit.mp4");
+    expect(output).toBe(".clipmunk/exports/zz-test-edit.mp4");
     // The editor's trim (1.0 s to 3.0 s, set above) and the chosen size both reach the file.
     expect(await probeVideo(output, root)).toMatchObject({ width: 1280, height: 720, fps: 30, frames: 60 });
   }, 240_000);
@@ -194,7 +194,7 @@ describe("take export", () => {
   const colour = (file: string, at: number, crop: string) => colourAt(path.join(root, file), at, crop);
 
   it("renders the composited take to an MP4 with the voice track", async () => {
-    const output = ".flick/exports/zz-test-take.mp4";
+    const output = ".clipmunk/exports/zz-test-take.mp4";
     made.push(output);
     const progress: number[] = [];
     const result = await exportTake(
@@ -235,7 +235,7 @@ describe("take export", () => {
         edit: { ...take.edit, music: { style: "lofi" }, audio: { ...take.edit.audio, muted: true } },
       }),
     );
-    const musicOnly = ".flick/exports/zz-test-take-music.mp4";
+    const musicOnly = ".clipmunk/exports/zz-test-take-music.mp4";
     made.push(musicOnly);
     const result = await exportTake(
       { takeId: "zz-test-export", url: origin, output: musicOnly, fps: 30, height: 360 },
@@ -247,7 +247,7 @@ describe("take export", () => {
     expect(await probeMedia(musicOnly, root)).toMatchObject({ hasAudio: true, durationMs: 4000 });
 
     await writeFile(file, JSON.stringify({ ...take, edit: { ...take.edit, music: { style: "lofi" } } }));
-    const both = ".flick/exports/zz-test-take-music-voice.mp4";
+    const both = ".clipmunk/exports/zz-test-take-music-voice.mp4";
     made.push(both);
     const mixed = await exportTake(
       { takeId: "zz-test-export", url: origin, output: both, fps: 30, height: 360 },
@@ -258,14 +258,14 @@ describe("take export", () => {
       {
         takeId: "zz-test-export",
         url: origin,
-        output: ".flick/exports/zz-test-take-nomusic.mp4",
+        output: ".clipmunk/exports/zz-test-take-nomusic.mp4",
         fps: 30,
         height: 360,
         music: false,
       },
       { root },
     );
-    made.push(".flick/exports/zz-test-take-nomusic.mp4");
+    made.push(".clipmunk/exports/zz-test-take-nomusic.mp4");
     expect(off.ok && off.data.audio).toBe(true); // the voice alone
     await writeFile(file, JSON.stringify(take));
   }, 400_000);
@@ -276,7 +276,7 @@ describe("take export", () => {
     take.edit.trim = { startMs: 1500, endMs: 2500 };
     take.edit.audio.muted = true;
     await writeFile(file, JSON.stringify(take));
-    const output = ".flick/exports/zz-test-take-trim.mp4";
+    const output = ".clipmunk/exports/zz-test-take-trim.mp4";
     made.push(output);
     const result = await exportTake({ takeId: "zz-test-export", url: origin, output, fps: 30, height: 360 }, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
@@ -291,12 +291,12 @@ describe("take export", () => {
       ok: false,
       issues: [{ code: "invalid-export" }],
     });
-    expect(existsSync(path.join(root, ".flick/exports/nope.mp4"))).toBe(false);
+    expect(existsSync(path.join(root, ".clipmunk/exports/nope.mp4"))).toBe(false);
   }, 240_000);
 });
 
-describe("flick zoom", () => {
-  const flick = async (...args: string[]) => {
+describe("clipmunk zoom", () => {
+  const clipmunk = async (...args: string[]) => {
     const out: string[] = [];
     const code = await run(args, {
       cwd: root,
@@ -307,15 +307,15 @@ describe("flick zoom", () => {
     return { code, out: out.join("\n") };
   };
   it("shows the automatic zooms and stores them as editable keyframes", async () => {
-    const shown = JSON.parse((await flick("zoom", "zz-test-zoom", "--json")).out);
+    const shown = JSON.parse((await clipmunk("zoom", "zz-test-zoom", "--json")).out);
     expect(shown.data.mode).toBe("auto");
     expect(shown.data.segments).toEqual([{ startMs: 1000, endMs: 4000, scale: 2.2 }]);
-    expect((await flick("zoom", "zz-test-zoom")).out).toContain("1.00s to 4.00s  at 2.20x");
-    expect((await flick("zoom", "zz-test-zoom", "--write")).out).toContain("Stored 1 zoom as manual keyframes");
+    expect((await clipmunk("zoom", "zz-test-zoom")).out).toContain("1.00s to 4.00s  at 2.20x");
+    expect((await clipmunk("zoom", "zz-test-zoom", "--write")).out).toContain("Stored 1 zoom as manual keyframes");
     const edit = JSON.parse(await readFile(takeFile("zz-test-zoom"), "utf8")).edit;
     expect(edit.zoom.mode).toBe("manual");
     expect(edit.zoom.tracks.map((track: { property: string }) => track.property)).toEqual(["x", "y", "scale"]);
-    expect(JSON.parse((await flick("zoom", "zz-test-zoom", "--json")).out).data.mode).toBe("manual");
-    expect((await flick("zoom", "nope")).code).toBe(1);
+    expect(JSON.parse((await clipmunk("zoom", "zz-test-zoom", "--json")).out).data.mode).toBe("manual");
+    expect((await clipmunk("zoom", "nope")).code).toBe(1);
   });
 });

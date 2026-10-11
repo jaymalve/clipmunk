@@ -44,8 +44,8 @@ async function call(route: string, options: Options = {}) {
 }
 
 beforeAll(async () => {
-  process.env.FLICK_FFMPEG ??= ffmpeg;
-  root = await mkdtemp(path.join(os.tmpdir(), "flick-daemon-"));
+  process.env.CLIPMUNK_FFMPEG ??= ffmpeg;
+  root = await mkdtemp(path.join(os.tmpdir(), "clipmunk-daemon-"));
   await writeFile(path.join(root, "package.json"), "{}");
   // Stand-ins for MediaRecorder output: VP8 video, and VP8 + Opus for the camera.
   const make = (name: string, args: string[]) =>
@@ -77,13 +77,13 @@ afterAll(async () => {
 
 describe("daemon security", () => {
   it("records its address for the CLI and removes it on close", async () => {
-    const file = JSON.parse(await readFile(path.join(root, ".flick/daemon.json"), "utf8"));
+    const file = JSON.parse(await readFile(path.join(root, ".clipmunk/daemon.json"), "utf8"));
     expect(file).toMatchObject({ port: daemon.port, token: daemon.token, pid: process.pid });
-    const other = await mkdtemp(path.join(os.tmpdir(), "flick-daemon-close-"));
+    const other = await mkdtemp(path.join(os.tmpdir(), "clipmunk-daemon-close-"));
     const second = await startDaemon({ root: other, port: 0 });
-    expect(existsSync(path.join(other, ".flick/daemon.json"))).toBe(true);
+    expect(existsSync(path.join(other, ".clipmunk/daemon.json"))).toBe(true);
     await second.close();
-    expect(existsSync(path.join(other, ".flick/daemon.json"))).toBe(false);
+    expect(existsSync(path.join(other, ".clipmunk/daemon.json"))).toBe(false);
     await rm(other, { recursive: true, force: true });
   });
 
@@ -156,11 +156,11 @@ describe("recording a take", () => {
     expect(
       (await call(`/v1/takes/${id}/media/screen?seq=0`, { method: "PUT", raw: screen.subarray(0, cut) })).json,
     ).toMatchObject({ ok: true, data: { next: 1 } });
-    expect((await stat(path.join(root, `.flick/takes/${id}/screen.raw.webm`))).size).toBe(cut);
+    expect((await stat(path.join(root, `.clipmunk/takes/${id}/screen.raw.webm`))).size).toBe(cut);
     expect(
       (await call(`/v1/takes/${id}/log`, { method: "PUT", raw: Buffer.from("start 1280x720\nsecond line") })).status,
     ).toBe(200);
-    expect(await readFile(path.join(root, `.flick/takes/${id}/recorder.log`), "utf8")).toMatch(
+    expect(await readFile(path.join(root, `.clipmunk/takes/${id}/recorder.log`), "utf8")).toMatch(
       /^\d{4}-.*Z start 1280x720 second line\n$/,
     );
     expect((await call("/v1/takes/missing/log", { method: "PUT", raw: Buffer.from("x") })).status).toBe(404);
@@ -189,7 +189,7 @@ describe("recording a take", () => {
       body: { durationMs: 2000, screen: { latencyMs: 35 }, cam: { offsetMs: 12, hasAudio: true } },
     });
     expect(done.json.issues).toBeUndefined();
-    const take = validateTake(JSON.parse(await readFile(path.join(root, `.flick/takes/${id}/take.json`), "utf8")));
+    const take = validateTake(JSON.parse(await readFile(path.join(root, `.clipmunk/takes/${id}/take.json`), "utf8")));
     if (!take.ok) throw new Error(JSON.stringify(take.issues));
     expect(take.data.source).toMatchObject({
       width: 1280,
@@ -206,15 +206,15 @@ describe("recording a take", () => {
       zoom: { mode: "auto" },
       canvas: { width: 1920, height: 1080 },
     });
-    const log = await readFile(path.join(root, `.flick/takes/${id}/events.jsonl`), "utf8");
+    const log = await readFile(path.join(root, `.clipmunk/takes/${id}/events.jsonl`), "utf8");
     expect(log).not.toContain('"key"');
-    expect(existsSync(path.join(root, `.flick/takes/${id}/screen.raw.webm`))).toBe(false);
-    expect(existsSync(path.join(root, `.flick/takes/${id}/recording.json`))).toBe(false);
+    expect(existsSync(path.join(root, `.clipmunk/takes/${id}/screen.raw.webm`))).toBe(false);
+    expect(existsSync(path.join(root, `.clipmunk/takes/${id}/recording.json`))).toBe(false);
     // The remuxed file reports a duration, which a raw MediaRecorder file never does.
     expect(
       execFileSync(
         ffmpeg,
-        ["-hide_banner", "-i", path.join(root, `.flick/takes/${id}/screen.webm`), "-f", "null", "-"],
+        ["-hide_banner", "-i", path.join(root, `.clipmunk/takes/${id}/screen.webm`), "-f", "null", "-"],
         { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
       ),
     ).toBe("");
@@ -252,7 +252,7 @@ describe("recording a take", () => {
     expect(invalid.status).toBe(400);
 
     expect((await call(`/v1/takes/${id}`, { method: "DELETE" })).status).toBe(200);
-    expect(existsSync(path.join(root, `.flick/takes/${id}`))).toBe(false);
+    expect(existsSync(path.join(root, `.clipmunk/takes/${id}`))).toBe(false);
     expect((await call(`/v1/takes/${id}`)).status).toBe(404);
   });
 
@@ -264,17 +264,17 @@ describe("recording a take", () => {
     const takeId = created.json.data.id;
     await call(`/v1/takes/${takeId}/media/screen?seq=0`, { method: "PUT", raw: screen });
     const body = { durationMs: 2000, screen: { latencyMs: 0 } };
-    const real = process.env.FLICK_FFMPEG;
-    process.env.FLICK_FFMPEG = "/nonexistent/ffmpeg";
+    const real = process.env.CLIPMUNK_FFMPEG;
+    process.env.CLIPMUNK_FFMPEG = "/nonexistent/ffmpeg";
     try {
       expect((await call("/v1/status")).json.data.ffmpeg).toBe(false);
       const failed = await call(`/v1/takes/${takeId}/finalize`, { method: "POST", body });
       expect(failed.json).toMatchObject({ ok: false, issues: [{ code: "missing-ffmpeg" }] });
       expect(failed.json.issues[0].message).toContain("ffmpeg-static");
     } finally {
-      process.env.FLICK_FFMPEG = real;
+      process.env.CLIPMUNK_FFMPEG = real;
     }
-    expect(existsSync(path.join(root, `.flick/takes/${takeId}/screen.raw.webm`))).toBe(true);
+    expect(existsSync(path.join(root, `.clipmunk/takes/${takeId}/screen.raw.webm`))).toBe(true);
     const retried = await call(`/v1/takes/${takeId}/finalize`, { method: "POST", body });
     expect(retried.json).toMatchObject({ ok: true, data: { id: takeId, source: { durationMs: 2000 } } });
     await call(`/v1/takes/${takeId}`, { method: "DELETE" });

@@ -15,7 +15,7 @@ import {
 import { extractAudio } from "../export";
 import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
 
-/** Narration recorded over a scene. The sound is stored as WAV in .flick/audio and the
+/** Narration recorded over a scene. The sound is stored as WAV in .clipmunk/audio and the
  * scene's recipe points at it, so preview and export find it the same way.
  */
 type Context = { root: string };
@@ -93,7 +93,7 @@ export async function removeNarration(sceneId: string, context: Context): Promis
   }
 }
 
-/** Absolute path of a sound in .flick/audio. Only plain file names are accepted. */
+/** Absolute path of a sound in .clipmunk/audio. Only plain file names are accepted. */
 export async function audioFile(name: string, context: Context): Promise<string> {
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(name) || name.includes(".."))
     throw new Fault("unknown-file", `"${name}" is not an audio file name.`);

@@ -217,19 +217,19 @@ export function Scene({
         leaf.style.opacity = opacity === undefined ? "" : String(opacity);
         leaf.style.pointerEvents = "auto";
         leaf.style.transformStyle = "";
-        leaf.setAttribute("data-flick-leaf", "");
+        leaf.setAttribute("data-clipmunk-leaf", "");
       }
       if (group) {
         binding.children.style.filter = "none";
         binding.children.style.opacity = "";
         binding.children.style.pointerEvents = "none";
         binding.children.style.transformStyle = "preserve-3d";
-        binding.children.removeAttribute("data-flick-leaf");
+        binding.children.removeAttribute("data-clipmunk-leaf");
       }
     });
     filters.keepOnly(filtered);
 
-    rootElement.setAttribute("data-flick-valid", issues.length ? "false" : "true");
+    rootElement.setAttribute("data-clipmunk-valid", issues.length ? "false" : "true");
     const key = JSON.stringify(issues);
     if (reported.current !== key) {
       reported.current = key;
@@ -276,7 +276,7 @@ export function Scene({
         <div
           ref={root}
           className={className}
-          data-flick-scene=""
+          data-clipmunk-scene=""
           style={{
             ...style,
             position: style?.position ?? "relative",
@@ -290,7 +290,7 @@ export function Scene({
           </svg>
           <div
             ref={stage}
-            data-flick-stage=""
+            data-clipmunk-stage=""
             style={{
               position: "relative",
               width: "100%",
@@ -323,7 +323,7 @@ export function Surface({ id, transform, content, children, className, style }: 
   const scene = useContext(SceneContext);
   if (!scene) throw new Error("Surface must be rendered inside a Scene.");
   const parent = useContext(ParentContext);
-  const [token] = useState(() => Symbol("flick-surface"));
+  const [token] = useState(() => Symbol("clipmunk-surface"));
   const element = useRef<HTMLDivElement>(null);
   const contentElement = useRef<HTMLDivElement>(null);
   const childrenElement = useRef<HTMLDivElement>(null);
@@ -352,7 +352,7 @@ export function Surface({ id, transform, content, children, className, style }: 
       <div
         ref={element}
         className={className}
-        data-flick-id={id}
+        data-clipmunk-id={id}
         style={{
           ...style,
           position: style?.position ?? "relative",
@@ -362,7 +362,7 @@ export function Surface({ id, transform, content, children, className, style }: 
         }}
       >
         {content !== undefined && (
-          <div ref={contentElement} data-flick-leaf="">
+          <div ref={contentElement} data-clipmunk-leaf="">
             {content}
           </div>
         )}

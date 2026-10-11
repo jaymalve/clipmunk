@@ -6,7 +6,7 @@ import { build } from "vite";
 
 const root = new URL("..", import.meta.url).pathname;
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-const shared = { root, configFile: false, logLevel: "warn", define: { __FLICK_VERSION__: JSON.stringify(version) } };
+const shared = { root, configFile: false, logLevel: "warn", define: { __CLIPMUNK_VERSION__: JSON.stringify(version) } };
 rmSync(new URL("../dist", import.meta.url), { recursive: true, force: true });
 
 await build({

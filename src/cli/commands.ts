@@ -36,7 +36,7 @@ export const init: Command = async ({ values, context, print, usage }) => {
   if (values.adapter && !ADAPTERS.includes(values.adapter as Adapter))
     return usage(`--adapter must be one of: ${ADAPTERS.join(", ")}`);
   return print(await initProject({ adapter: values.adapter as Adapter | undefined }, context), (data) => {
-    const lines = [`Connected Flick (${data.adapter}).`, ""];
+    const lines = [`Connected Clipmunk (${data.adapter}).`, ""];
     for (const file of data.files) lines.push(`  ${file.status.padEnd(8)} ${file.path}`);
     if (data.entry.status === "wrapped") lines.push(`  wrapped  ${data.entry.path}`);
     if (data.entry.status === "already") lines.push(`  verified ${data.entry.path}`);
@@ -45,7 +45,7 @@ export const init: Command = async ({ values, context, print, usage }) => {
     if (data.recorder.instruction && data.entry.status !== "manual") lines.push(data.recorder.instruction, "");
     lines.push(
       `Studio: ${data.studioUrl} (with your dev server running)`,
-      "To record your app: npx flick dev",
+      "To record your app: npx clipmunk dev",
       "",
       "Give your coding agent this prompt:",
       "",
@@ -74,15 +74,15 @@ export const dev: Command = async ({ io, values, human, usage }) => {
   // Saving a recording and exporting both need FFmpeg; say so now, not after the first take.
   if (human && !(await ffmpegVersion()))
     io.err(
-      `\nWarning: ${MISSING_FFMPEG}\nRecordings cannot be saved until it is available. Restart flick dev afterwards.\n`,
+      `\nWarning: ${MISSING_FFMPEG}\nRecordings cannot be saved until it is available. Restart clipmunk dev afterwards.\n`,
     );
   const project = await readProject(io.cwd).catch(() => undefined);
-  const studio = project ? studioUrl(project.devUrl, project.studioPath) : "http://127.0.0.1:5173/?flick=1";
+  const studio = project ? studioUrl(project.devUrl, project.studioPath) : "http://127.0.0.1:5173/?clipmunk=1";
   const link = `${studio}#${DAEMON_HASH}=${daemon.port}.${daemon.token}`;
   if (human)
     io.out(
       [
-        `Flick daemon listening on ${daemon.origin}`,
+        `Clipmunk daemon listening on ${daemon.origin}`,
         "",
         "Open this link once to connect your browser (your dev server must be running):",
         "",
@@ -113,7 +113,7 @@ export const scenes: Command = async ({ context, print }) => {
       ? catalog.scenes.map(
           (scene) => `  ${scene.id.padEnd(24)} ${scene.title}${scene.snapshot ? "" : "  (no snapshot)"}`,
         )
-      : ["  No scenes yet. Create a pair in src/flick/scenes; see flick guide."];
+      : ["  No scenes yet. Create a pair in src/clipmunk/scenes; see clipmunk guide."];
     return withIssues(lines, catalog.issues);
   });
   return result.ok && result.data.issues.length ? 1 : code;
@@ -128,7 +128,7 @@ export const sequences: Command = async ({ context, print }) => {
           return `  ${sequence.id.padEnd(24)} ${clips}  ${sequence.width}x${sequence.height}@${sequence.fps}  ${sequence.title}`;
         })
       : [
-          "  No sequences yet. Create src/flick/sequences/<id>.sequence.json (see flick guide) or build one in the studio.",
+          "  No sequences yet. Create src/clipmunk/sequences/<id>.sequence.json (see clipmunk guide) or build one in the studio.",
         ];
     return withIssues(lines, data.issues);
   });
@@ -143,7 +143,7 @@ export const takes: Command = async ({ context, print }) =>
           const extras = `${take.hasCam ? "  cam" : ""}${take.hasAudio ? "  voice" : ""}`;
           return `  ${take.id.padEnd(24)} ${length}  ${take.width}x${take.height}${extras}  ${take.title}`;
         })
-      : ["  No takes yet. Run flick dev, open its link, then press Alt+Shift+R in your app."];
+      : ["  No takes yet. Run clipmunk dev, open its link, then press Alt+Shift+R in your app."];
     return withIssues(lines, data.issues);
   });
 
@@ -182,7 +182,7 @@ export const open: Command = async ({ values, context, human, print }) => {
 
 export const zoom: Command = async ({ values, args, context, print, usage }) => {
   const id = args[0] ?? values.take;
-  if (!id) return usage("zoom needs a take id: flick zoom <take>.");
+  if (!id) return usage("zoom needs a take id: clipmunk zoom <take>.");
   const loaded = await readTake(id, context);
   if (!loaded.ok) return print(loaded, String);
   const { take, revision } = loaded.data;
@@ -196,7 +196,7 @@ export const zoom: Command = async ({ values, args, context, print, usage }) => 
     );
     return print(
       saved,
-      () => `Stored ${plural(segments.length, "zoom")} as manual keyframes in .flick/takes/${id}/take.json.`,
+      () => `Stored ${plural(segments.length, "zoom")} as manual keyframes in .clipmunk/takes/${id}/take.json.`,
     );
   }
   const seconds = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
@@ -221,7 +221,7 @@ export const music: Command = async ({ io, values, args, print, usage }) => {
     seconds = number(values.seconds) ?? 20;
   if (!Number.isInteger(seed) || seed < 0 || !(seconds > 0 && seconds <= 600))
     return usage("--seed is a whole number and --seconds is between 1 and 600.");
-  const output = values.output ?? `flick-${style}-${seed}.wav`;
+  const output = values.output ?? `clipmunk-${style}-${seed}.wav`;
   if (!output.endsWith(".wav")) return usage("--output must end in .wav.");
   try {
     const target = await resolveInside(io.cwd, output);
@@ -230,7 +230,7 @@ export const music: Command = async ({ io, values, args, print, usage }) => {
     return print(
       { ok: true, data: { output, style, seed, seconds, bpm: rendered.bpm } },
       (data) =>
-        `Wrote ${data.output}: ${data.style}, seed ${data.seed}, ${data.seconds} s at ${data.bpm} beats per minute. Generated by Flick, so it is yours to use.`,
+        `Wrote ${data.output}: ${data.style}, seed ${data.seed}, ${data.seconds} s at ${data.bpm} beats per minute. Generated by Clipmunk, so it is yours to use.`,
     );
   } catch (error) {
     const taken = (error as NodeJS.ErrnoException).code === "EEXIST";
@@ -259,7 +259,7 @@ async function checks(root: string): Promise<Check[]> {
       ? { ok: false, detail: project.message }
       : project
         ? { ok: true, detail: `${project.adapter}, dev server ${project.devUrl}` }
-        : { ok: false, detail: `${PROJECT_FILE} not found; run npx flick init` };
+        : { ok: false, detail: `${PROJECT_FILE} not found; run npx clipmunk init` };
   return [
     {
       name: "Node",

@@ -48,7 +48,7 @@ async function planRender(browser: Browser, url: string, request: SceneRequest):
   if (info.durationMs <= 0)
     throw new Fault(
       "still-scene",
-      "This scene has no motion, so there is no video to export. Use flick snapshot for a still.",
+      "This scene has no motion, so there is no video to export. Use clipmunk snapshot for a still.",
     );
   if (info.durationMs > MAX_EXPORT_DURATION_MS)
     throw new Fault("too-long", `Scenes longer than ${MAX_EXPORT_DURATION_MS / 60000} minutes are not supported.`);
@@ -230,7 +230,7 @@ export async function snapshotScene(input: unknown, context: ExportContext): Pro
   try {
     const studio = await resolveStudio({ url: parsed.data.url, sceneId: parsed.data.sceneId }, context);
     if (!studio.ok) return studio;
-    const source = `src/flick/scenes/${parsed.data.sceneId}.scene.json`;
+    const source = `src/clipmunk/scenes/${parsed.data.sceneId}.scene.json`;
     const original = await readText(context.root, source);
     if (original === undefined) throw new Fault("unknown-scene", `${source} was not found.`, source);
     const recipe = SceneRecipeSchema.parse(JSON.parse(original));

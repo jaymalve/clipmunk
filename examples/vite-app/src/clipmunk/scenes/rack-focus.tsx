@@ -1,4 +1,4 @@
-import { Surface } from "@flickjs/record";
+import { Surface } from "clipmunk";
 import { CustomerTable, MetricCard } from "../../components/dashboard";
 
 // Two flat layers at different depths: each gets one uniform blur, the cheapest path.

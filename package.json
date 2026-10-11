@@ -1,5 +1,5 @@
 {
-  "name": "@flickjs/record",
+  "name": "clipmunk",
   "version": "0.0.0",
   "private": true,
   "description": "Cinematic 3D scenes and polished screen recordings from your live web app.",
@@ -9,7 +9,7 @@
     "node": ">=22.12.0"
   },
   "bin": {
-    "flick": "./dist/cli.js"
+    "clipmunk": "./dist/cli.js"
   },
   "exports": {
     ".": {

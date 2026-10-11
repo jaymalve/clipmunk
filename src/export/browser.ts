@@ -13,7 +13,7 @@ export type ClipPage = {
 };
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const HIDE_CHROME = "[data-flick-chrome],nextjs-portal,vite-error-overlay{display:none!important}";
+const HIDE_CHROME = "[data-clipmunk-chrome],nextjs-portal,vite-error-overlay{display:none!important}";
 
 export async function launchBrowser(): Promise<Browser> {
   let playwright: typeof import("playwright");
@@ -64,21 +64,21 @@ export async function openClip(
     await page.addStyleTag({ content: HIDE_CHROME });
     try {
       await page.waitForFunction(
-        () => typeof (window as { __FLICK__?: { seek?: unknown } }).__FLICK__?.seek === "function",
+        () => typeof (window as { __CLIPMUNK__?: { seek?: unknown } }).__CLIPMUNK__?.seek === "function",
         undefined,
         { timeout: 20_000 },
       );
     } catch {
       const issues = await page.evaluate(
-        () => document.querySelector("[data-flick-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "",
+        () => document.querySelector("[data-clipmunk-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "",
       );
       throw new Fault(
         "clip-not-ready",
-        `The scene did not open at ${url}. ${issues || pageErrors[0] || "Check that this URL shows the scene in your browser and that the app was connected with flick init."}`,
+        `The scene did not open at ${url}. ${issues || pageErrors[0] || "Check that this URL shows the scene in your browser and that the app was connected with clipmunk init."}`,
       );
     }
     const info = await page.evaluate(async () => {
-      const bridge = (window as unknown as { __FLICK__: ClipInfo & { ready(): Promise<void> } }).__FLICK__;
+      const bridge = (window as unknown as { __CLIPMUNK__: ClipInfo & { ready(): Promise<void> } }).__CLIPMUNK__;
       await bridge.ready();
       return {
         kind: bridge.kind,
@@ -101,7 +101,8 @@ export async function openClip(
       async frame(timeMs, format) {
         try {
           await page.evaluate(
-            (time) => (window as unknown as { __FLICK__: { seek(t: number): Promise<void> } }).__FLICK__.seek(time),
+            (time) =>
+              (window as unknown as { __CLIPMUNK__: { seek(t: number): Promise<void> } }).__CLIPMUNK__.seek(time),
             timeMs,
           );
         } catch (error) {

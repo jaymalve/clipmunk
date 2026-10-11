@@ -9,7 +9,7 @@
       "examples/**/*.ts",
       "*.json",
       "!**/*.scene.json",
-      "!**/.flick",
+      "!**/.clipmunk",
       "!package-lock.json"
     ]
   },

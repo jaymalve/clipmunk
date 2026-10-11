@@ -28,7 +28,7 @@ export function admit(
     return undefined;
   }
   if (origin !== undefined && !LOOPBACK_ORIGIN.test(origin)) {
-    deny(response, "forbidden", "Only pages served from this machine may use the Flick daemon.");
+    deny(response, "forbidden", "Only pages served from this machine may use the Clipmunk daemon.");
     return undefined;
   }
   if (origin) {
@@ -48,7 +48,7 @@ export function admit(
   const header = /^Bearer (.+)$/.exec(request.headers.authorization ?? "")?.[1];
   const offered = Buffer.from(header ?? (request.method === "GET" ? (url.searchParams.get("token") ?? "") : ""));
   if (offered.length !== token.length || !timingSafeEqual(offered, token)) {
-    deny(response, "unauthorized", "Missing or wrong session token. Open the link that `flick dev` printed.");
+    deny(response, "unauthorized", "Missing or wrong session token. Open the link that `clipmunk dev` printed.");
     return undefined;
   }
   return { url, origin };

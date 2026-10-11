@@ -15,12 +15,12 @@ export {
 } from "./daemon";
 export { mountRecorderHud, type RecorderHud } from "./hud";
 
-export const RECORD_PARAM = "flick-record";
+export const RECORD_PARAM = "clipmunk-record";
 let booted = false;
 
 /** Called once by the generated dev-only adapter on every page of the app.
  * It remembers the daemon link if this page was opened with one, and makes the recorder
- * reachable: Alt+Shift+R toggles it (and stops a running recording), and `?flick-record=1` opens it straight away.
+ * reachable: Alt+Shift+R toggles it (and stops a running recording), and `?clipmunk-record=1` opens it straight away.
  */
 export function bootRecorder(): void {
   if (booted || typeof window === "undefined") return;

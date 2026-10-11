@@ -12,12 +12,12 @@ export const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
 
 export type Claim = { output: string; target: string };
 
-/** The requested output if it is free, otherwise `.flick/exports/<stem>.mp4`, then `-2`, `-3`, … */
+/** The requested output if it is free, otherwise `.clipmunk/exports/<stem>.mp4`, then `-2`, `-3`, … */
 export async function claimOutput(root: string, requested: string | undefined, stem: string): Promise<Claim> {
   if (requested && (await exists(root, requested)))
     throw new Fault(
       "output-exists",
-      `${requested} already exists. Choose another --output; Flick never overwrites a file.`,
+      `${requested} already exists. Choose another --output; Clipmunk never overwrites a file.`,
       requested,
     );
   let output = requested;
@@ -31,7 +31,7 @@ export async function claimOutput(root: string, requested: string | undefined, s
 }
 
 /** A scratch directory next to the output, so publishing is a link on the same disk. */
-export const workDirectory = (claim: Claim) => mkdtemp(path.join(path.dirname(claim.target), ".flick-export-"));
+export const workDirectory = (claim: Claim) => mkdtemp(path.join(path.dirname(claim.target), ".clipmunk-export-"));
 export const removeDirectory = (directory: string | undefined) =>
   directory ? rm(directory, { recursive: true, force: true }) : Promise.resolve();
 

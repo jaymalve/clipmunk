@@ -258,7 +258,7 @@ describe("recipes", () => {
     expect(messages(result)).toContain("Motion targets an unknown surface: ghost");
   });
   it("accepts every recipe in the example app", () => {
-    const directory = new URL("../../examples/vite-app/src/flick/scenes/", import.meta.url);
+    const directory = new URL("../../examples/vite-app/src/clipmunk/scenes/", import.meta.url);
     const files = readdirSync(directory).filter((file) => file.endsWith(".scene.json"));
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {

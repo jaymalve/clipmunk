@@ -1,4 +1,4 @@
-import { Surface, useSceneTime } from "@flickjs/record";
+import { Surface, useSceneTime } from "clipmunk";
 import { CustomerTable, Header, Metrics, RevenueChart, Sidebar } from "../../components/dashboard";
 
 // The chart's own reveal follows scene time instead of a wall-clock animation.

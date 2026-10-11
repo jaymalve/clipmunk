@@ -95,7 +95,7 @@ export function Chrome({ children, style }: { children: ReactNode; style?: CSSPr
     setShadow(element.shadowRoot ?? element.attachShadow({ mode: "open" }));
   }, []);
   return (
-    <div ref={host} data-flick-chrome="" style={style}>
+    <div ref={host} data-clipmunk-chrome="" style={style}>
       {shadow &&
         createPortal(
           <>

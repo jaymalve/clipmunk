@@ -43,7 +43,8 @@ type Encoded = { codec: string; frames: number; width: number; height: number; d
 async function readTake(root: string, takeId: string): Promise<Result<Take>> {
   const source = `${TAKES_DIR}/${takeId}/take.json`;
   const text = await readText(root, source);
-  if (text === undefined) throw new Fault("unknown-take", `No take named "${takeId}". Run flick takes to list them.`);
+  if (text === undefined)
+    throw new Fault("unknown-take", `No take named "${takeId}". Run clipmunk takes to list them.`);
   const take = TakeSchema.safeParse(JSON.parse(text));
   if (take.success) return ok(take.data);
   return fail(zodIssues(take.error, "invalid-take").map((issue) => ({ ...issue, path: `${source}: ${issue.path}` })));
@@ -72,11 +73,13 @@ async function encodeInPage(options: {
   });
   const file = await open(options.video, "w");
   try {
-    await tab.exposeFunction("__FLICK_WRITE__", async (base64: string, position: number) => {
+    await tab.exposeFunction("__CLIPMUNK_WRITE__", async (base64: string, position: number) => {
       const bytes = Buffer.from(base64, "base64");
       await file.write(bytes, 0, bytes.length, position);
     });
-    await tab.exposeFunction("__FLICK_PROGRESS__", (done: number, total: number) => options.onProgress?.(done, total));
+    await tab.exposeFunction("__CLIPMUNK_PROGRESS__", (done: number, total: number) =>
+      options.onProgress?.(done, total),
+    );
     try {
       await tab.goto(options.editorUrl, { waitUntil: "load", timeout: 30_000 });
     } catch {
@@ -87,21 +90,22 @@ async function encodeInPage(options: {
     }
     try {
       await tab.waitForFunction(
-        () => (window as { __FLICK__?: { kind?: string } }).__FLICK__?.kind === "take",
+        () => (window as { __CLIPMUNK__?: { kind?: string } }).__CLIPMUNK__?.kind === "take",
         undefined,
         { timeout: 45_000 },
       );
     } catch {
       const shown = await tab.evaluate(
-        () => document.querySelector("[data-flick-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "",
+        () => document.querySelector("[data-clipmunk-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "",
       );
-      const reason = shown || errors[0] || "Check that the app was connected with flick init.";
+      const reason = shown || errors[0] || "Check that the app was connected with clipmunk init.";
       throw new Fault("clip-not-ready", `The take did not open at ${options.studioUrl}. ${reason}`);
     }
     cancel.check();
     try {
       return await tab.evaluate(
-        (job) => (window as unknown as { __FLICK__: { encode(job: unknown): Promise<Encoded> } }).__FLICK__.encode(job),
+        (job) =>
+          (window as unknown as { __CLIPMUNK__: { encode(job: unknown): Promise<Encoded> } }).__CLIPMUNK__.encode(job),
         { fps: request.fps, width: request.width, height: request.height },
       );
     } catch (error) {

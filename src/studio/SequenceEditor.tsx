@@ -8,7 +8,7 @@ import { IssueList } from "./IssueList";
 import { MusicControls } from "./music";
 
 /** Builds a sequence: an ordered list of scenes and takes with a cut or a fade between
- * them. Every change is saved to src/flick/sequences/<id>.sequence.json through the
+ * them. Every change is saved to src/clipmunk/sequences/<id>.sequence.json through the
  * daemon, which also checks that each clip exists.
  */
 const SHAPES = [

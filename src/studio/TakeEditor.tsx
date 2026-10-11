@@ -150,7 +150,7 @@ function Editor(props: {
           <ExportPanel clip={{ takeId: take.id }} daemon={props.daemon} before={save.flush} frame={edit.canvas} />
         )}
         <div className="stage">
-          <canvas ref={setCanvas} data-flick-take={take.id} width={edit.canvas.width} height={edit.canvas.height} />
+          <canvas ref={setCanvas} data-clipmunk-take={take.id} width={edit.canvas.width} height={edit.canvas.height} />
           {failure && (
             <div className="issues" role="alert">
               <strong>This take cannot be previewed.</strong> {failure}

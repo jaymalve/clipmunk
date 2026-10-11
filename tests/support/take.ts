@@ -18,7 +18,7 @@ export async function makeTake(
   options: { durationMs?: number; cam?: boolean } = {},
 ): Promise<Take> {
   const durationMs = options.durationMs ?? 4000;
-  const dir = path.join(root, ".flick/takes", id);
+  const dir = path.join(root, ".clipmunk/takes", id);
   await mkdir(dir, { recursive: true });
   const run = (args: string[]) => execFileSync(FFMPEG, ["-y", "-loglevel", "error", ...args], { cwd: dir });
   const d = durationMs / 1000;

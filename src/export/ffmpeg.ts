@@ -4,12 +4,12 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { Fault } from "../project";
 
-/** FFmpeg process handling. The binary is, in order: FLICK_FFMPEG, the `ffmpeg-static`
+/** FFmpeg process handling. The binary is, in order: CLIPMUNK_FFMPEG, the `ffmpeg-static`
  * package if the project has it installed, then `ffmpeg` on PATH.
  */
 let resolved: string | undefined;
 export function ffmpegPath(): string {
-  if (process.env.FLICK_FFMPEG) return process.env.FLICK_FFMPEG;
+  if (process.env.CLIPMUNK_FFMPEG) return process.env.CLIPMUNK_FFMPEG;
   if (resolved) return resolved;
   try {
     const manifest = createRequire(path.join(process.cwd(), "package.json")).resolve("ffmpeg-static/package.json");
@@ -25,7 +25,7 @@ export function ffmpegPath(): string {
   return resolved;
 }
 export const MISSING_FFMPEG =
-  "FFmpeg was not found. Install it (https://ffmpeg.org/download.html) so `ffmpeg` is on your PATH, or run `npm install -D ffmpeg-static` in this project, or set FLICK_FFMPEG to its location.";
+  "FFmpeg was not found. Install it (https://ffmpeg.org/download.html) so `ffmpeg` is on your PATH, or run `npm install -D ffmpeg-static` in this project, or set CLIPMUNK_FFMPEG to its location.";
 const MISSING = MISSING_FFMPEG;
 
 export type Encoder = { write(frame: Buffer): Promise<void>; finish(): Promise<void>; kill(): void };
@@ -166,7 +166,7 @@ export async function ffmpegVersion(): Promise<string | undefined> {
   });
 }
 
-/** Decode a file and report what is really in it. Used by tests and `flick doctor`-style checks. */
+/** Decode a file and report what is really in it. Used by tests and `clipmunk doctor`-style checks. */
 export async function probeVideo(
   file: string,
   cwd: string,

@@ -38,8 +38,8 @@ function hasUncoveredContent(root: Element): boolean {
     if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) return true;
     if (!(child instanceof Element)) continue;
     if (
-      child.hasAttribute("data-flick-id") ||
-      child.hasAttribute("data-flick-leaf") ||
+      child.hasAttribute("data-clipmunk-id") ||
+      child.hasAttribute("data-clipmunk-leaf") ||
       child.matches("script,style,template")
     )
       continue;

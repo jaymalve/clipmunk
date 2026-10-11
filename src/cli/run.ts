@@ -8,9 +8,9 @@ import { exportClip, snapshot } from "./render-commands";
  */
 export type { Io } from "./invocation";
 
-const HELP = `flick <command> [options]
+const HELP = `clipmunk <command> [options]
 
-  init [--adapter ${ADAPTERS.join("|")}]   Connect this app to Flick
+  init [--adapter ${ADAPTERS.join("|")}]   Connect this app to Clipmunk
   dev [--port <n>]                         Start the local daemon for recording and studio exports
   guide                                    Print the scene authoring guide
   scenes                                   List scenes and validation issues
@@ -23,7 +23,7 @@ const HELP = `flick <command> [options]
   export --sequence <id> [--output file.mp4]
   sequences                                List sequences (scenes and takes joined into one video)
   music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n] [--output file.wav]
-                                           Write a sample of Flick's generated music, to hear a style
+                                           Write a sample of Clipmunk's generated music, to hear a style
   zoom <take> [--write]                    Show a take's automatic zooms, or store them for hand editing
   doctor                                   Check Node, FFmpeg, Chromium and the project
 

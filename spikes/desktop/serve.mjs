@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 const dir = new URL(".", import.meta.url);
 const port = Number(process.env.PORT ?? 4747);
 const pages = { "/cursor": "cursor.html", "/dof": "dof.html" };
-const index = `<body style="font:16px system-ui;max-width:40em;margin:3em auto"><h1>Flick desktop spikes</h1>
+const index = `<body style="font:16px system-ui;max-width:40em;margin:3em auto"><h1>Clipmunk desktop spikes</h1>
 <p>Use desktop Chrome. Run both; each posts its result back automatically.</p>
 <p><a href="/cursor">1. Cursor capture test</a> (about 30 seconds, needs you to move the mouse)</p>
 <p><a href="/dof">2. Depth-of-field performance test</a> (about 40 seconds, hands off)</p>`;

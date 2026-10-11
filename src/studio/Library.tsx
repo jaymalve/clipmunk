@@ -48,7 +48,7 @@ function TakeList({ takes }: { takes: TakeSummary[] }) {
   if (!takes.length) return <p>No takes yet. Press Alt+Shift+R on any page of your app to record one.</p>;
   return (
     <>
-      <p>{count(takes.length, "recording")} in .flick/takes</p>
+      <p>{count(takes.length, "recording")} in .clipmunk/takes</p>
       <div className="rows">
         {takes.map((take) => (
           <a key={take.id} className="row" href={studioHref({ take: take.id })}>
@@ -163,10 +163,10 @@ export function Library({
         <h1>Scenes</h1>
         <p>
           {catalog.scenes.length ? (
-            `${count(catalog.scenes.length, "scene")} in src/flick/scenes`
+            `${count(catalog.scenes.length, "scene")} in src/clipmunk/scenes`
           ) : (
             <>
-              No scenes yet. Ask your coding agent to read <code>FLICK.md</code> and create one.
+              No scenes yet. Ask your coding agent to read <code>CLIPMUNK.md</code> and create one.
             </>
           )}
         </p>
@@ -185,7 +185,7 @@ export function Library({
           <>
             <p>
               {sequences.length
-                ? `${count(sequences.length, "sequence")} in src/flick/sequences`
+                ? `${count(sequences.length, "sequence")} in src/clipmunk/sequences`
                 : "Join scenes and takes into one video, with cuts or fades between them."}
             </p>
             {sequenceIssues.length > 0 && <IssueList issues={sequenceIssues} style={{ marginBottom: 16 }} />}

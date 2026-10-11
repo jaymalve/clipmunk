@@ -1,0 +1,7 @@
+# Clipmunk: media, caches and local state stay out of git. Take edits (take.json) are kept.
+exports/
+audio/
+cache/
+daemon.json
+takes/*/*
+!takes/*/take.json

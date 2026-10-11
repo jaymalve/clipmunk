@@ -68,7 +68,7 @@ export function ExportPanel({
       : "takeId" in clip
         ? `--take ${clip.takeId}`
         : `--sequence ${clip.sequenceId}`;
-  const command = `npx flick export ${flag} --url ${location.origin}${size && size.label !== "Original" ? ` --size ${size.width}x${size.height}` : ""}`;
+  const command = `npx clipmunk export ${flag} --url ${location.origin}${size && size.label !== "Original" ? ` --size ${size.width}x${size.height}` : ""}`;
   // A sequence carries its own frame rate.
   const fpsChoices = "sceneId" in clip ? EXPORT_FPS : "takeId" in clip ? ([30, 60] as const) : [];
   if (!daemon?.client)
@@ -123,7 +123,7 @@ export function ExportPanel({
         current.phase === "running"
           ? {
               phase: "failed",
-              issues: [{ code: "daemon-unreachable", message: "Lost the connection to the Flick daemon." }],
+              issues: [{ code: "daemon-unreachable", message: "Lost the connection to the Clipmunk daemon." }],
             }
           : current,
       );
@@ -157,7 +157,7 @@ export function ExportPanel({
           {state.phase === "failed" && (
             <code style={{ color: "#fca5a5" }}>{state.issues.map((issue) => issue.message).join(" ")}</code>
           )}
-          {state.phase === "idle" && <span style={{ flex: 1 }}>Render to an MP4 in .flick/exports</span>}
+          {state.phase === "idle" && <span style={{ flex: 1 }}>Render to an MP4 in .clipmunk/exports</span>}
           {sizes.length > 0 && (
             <select
               value={size!.label}

@@ -13,7 +13,7 @@ import {
 import { type Context, discoverScenes } from "./operations";
 import { exists, Fault, listFiles, readText, resolveInside, toIssues, writeText } from "./services";
 
-/** Sequences on disk: src/flick/sequences/<id>.sequence.json. Every clip a sequence
+/** Sequences on disk: src/clipmunk/sequences/<id>.sequence.json. Every clip a sequence
  * names must exist, and that is checked here so the CLI, the daemon and export agree.
  */
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -45,7 +45,7 @@ export async function readSequence(id: string, context: Context): Promise<Result
     const source = fileOf(id);
     const text = await readText(context.root, source);
     if (text === undefined)
-      throw new Fault("unknown-sequence", `No sequence named "${id}". Run flick sequences to list them.`);
+      throw new Fault("unknown-sequence", `No sequence named "${id}". Run clipmunk sequences to list them.`);
     let json: unknown;
     try {
       json = JSON.parse(text);

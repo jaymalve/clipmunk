@@ -7,7 +7,7 @@ import { initProject, listScenes, resolveInside, resolveStudio, syncProject, wra
 
 const roots: string[] = [];
 async function host(files: Record<string, string>) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "flick-test-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "clipmunk-test-"));
   roots.push(root);
   for (const [name, content] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, name)), { recursive: true });
@@ -52,24 +52,28 @@ describe("init", () => {
     expect(first.data.adapter).toBe("vite");
     expect(first.data.entry).toEqual({ status: "wrapped", path: "src/main.tsx" });
     const main = await read(root, "src/main.tsx");
-    expect(main).toContain('import { FlickStudioHost } from "./flick/Studio";');
-    expect(main.match(/<FlickStudioHost>/g)).toHaveLength(1);
-    expect(await read(root, "src/flick/Studio.tsx")).toContain("import.meta.glob");
-    expect(await read(root, "src/flick/Studio.tsx")).toMatch(
-      /import\.meta\.env\.DEV && typeof window !== "undefined"\) void import\("@flickjs\/record\/recorder"\)/,
+    expect(main).toContain('import { ClipmunkStudioHost } from "./clipmunk/Studio";');
+    expect(main.match(/<ClipmunkStudioHost>/g)).toHaveLength(1);
+    expect(await read(root, "src/clipmunk/Studio.tsx")).toContain("import.meta.glob");
+    expect(await read(root, "src/clipmunk/Studio.tsx")).toMatch(
+      /import\.meta\.env\.DEV && typeof window !== "undefined"\) void import\("clipmunk\/recorder"\)/,
     );
     expect(first.data.recorder).toEqual({ status: "automatic" });
-    expect(await read(root, "FLICK.md")).toContain("npx flick guide");
+    expect(await read(root, "CLIPMUNK.md")).toContain("npx clipmunk guide");
 
     const snapshot = await Promise.all(
-      ["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)),
+      ["src/main.tsx", "src/clipmunk/Studio.tsx", ".clipmunk/project.json", "CLIPMUNK.md"].map((file) =>
+        read(root, file),
+      ),
     );
     const second = await initProject({}, { root });
     expect(second.ok && second.data.files.every((file) => file.status === "verified")).toBe(true);
     expect(second.ok && second.data.entry.status).toBe("already");
     expect(
       await Promise.all(
-        ["src/main.tsx", "src/flick/Studio.tsx", ".flick/project.json", "FLICK.md"].map((file) => read(root, file)),
+        ["src/main.tsx", "src/clipmunk/Studio.tsx", ".clipmunk/project.json", "CLIPMUNK.md"].map((file) =>
+          read(root, file),
+        ),
       ),
     ).toEqual(snapshot);
   });
@@ -77,8 +81,8 @@ describe("init", () => {
   it("generates untyped files for a JavaScript host", async () => {
     const root = await host({ "package.json": manifest({ vite: "8" }), "src/main.jsx": MAIN.replace("!)", ")") });
     const result = await initProject({}, { root });
-    expect(result.ok && result.data.files.map((file) => file.path)).toContain("src/flick/Studio.jsx");
-    expect(await read(root, "src/flick/Studio.jsx")).not.toContain("ReactNode");
+    expect(result.ok && result.data.files.map((file) => file.path)).toContain("src/clipmunk/Studio.jsx");
+    expect(await read(root, "src/clipmunk/Studio.jsx")).not.toContain("ReactNode");
   });
 
   it("adds a development-only route to Next.js without touching layouts", async () => {
@@ -92,23 +96,23 @@ describe("init", () => {
     const result = await initProject({}, { root });
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data.adapter).toBe("next-app");
-    expect(result.data.entry).toEqual({ status: "route", path: "app/flick/page.tsx" });
-    expect(result.data.studioUrl).toBe("http://127.0.0.1:3000/flick?flick=1");
+    expect(result.data.entry).toEqual({ status: "route", path: "app/clipmunk/page.tsx" });
+    expect(result.data.studioUrl).toBe("http://127.0.0.1:3000/clipmunk?clipmunk=1");
     expect(await read(root, "app/layout.tsx")).toBe(layout);
-    const page = await read(root, "app/flick/page.tsx");
-    expect(page).toContain('from "../../src/flick/Studio"');
+    const page = await read(root, "app/clipmunk/page.tsx");
+    expect(page).toContain('from "../../src/clipmunk/Studio"');
     expect(page).toContain("notFound()");
-    expect(await read(root, "src/flick/Studio.tsx")).toMatch(/^"use client";/);
-    expect(await read(root, "src/flick/catalog.ts")).toContain(
+    expect(await read(root, "src/clipmunk/Studio.tsx")).toMatch(/^"use client";/);
+    expect(await read(root, "src/clipmunk/catalog.ts")).toContain(
       '"./scenes/page-survey.tsx": () => import("./scenes/page-survey")',
     );
     // Recording needs one line in the root layout; init generates the component and says where it goes.
-    expect(await read(root, "src/flick/Recorder.tsx")).toContain("bootRecorder");
+    expect(await read(root, "src/clipmunk/Recorder.tsx")).toContain("bootRecorder");
     expect(result.data.recorder.status).toBe("manual");
-    expect(result.data.recorder.instruction).toContain('import { FlickRecorder } from "../src/flick/Recorder";');
+    expect(result.data.recorder.instruction).toContain('import { ClipmunkRecorder } from "../src/clipmunk/Recorder";');
     await writeFile(
       path.join(root, "app/layout.tsx"),
-      `import { FlickRecorder } from "../src/flick/Recorder";\n${layout}`,
+      `import { ClipmunkRecorder } from "../src/clipmunk/Recorder";\n${layout}`,
     );
     const wired = await initProject({}, { root });
     expect(wired.ok && wired.data.recorder).toEqual({ status: "automatic" });
@@ -121,8 +125,8 @@ describe("init", () => {
       "src/pages/index.tsx": "export default () => null;",
     });
     const result = await initProject({}, { root });
-    expect(result.ok && result.data.entry).toEqual({ status: "route", path: "src/pages/flick.tsx" });
-    expect(await read(root, "src/pages/flick.tsx")).toContain('from "../flick/Studio"');
+    expect(result.ok && result.data.entry).toEqual({ status: "route", path: "src/pages/clipmunk.tsx" });
+    expect(await read(root, "src/pages/clipmunk.tsx")).toContain('from "../clipmunk/Studio"');
   });
 
   it("gives other React hosts a wrapper and an instruction instead of guessing", async () => {
@@ -131,23 +135,23 @@ describe("init", () => {
     if (!result.ok) throw new Error(JSON.stringify(result.issues));
     expect(result.data.adapter).toBe("react");
     expect(result.data.entry.status).toBe("manual");
-    expect(result.data.entry.instruction).toContain("<FlickStudioHost>");
+    expect(result.data.entry.instruction).toContain("<ClipmunkStudioHost>");
     expect(await read(root, "src/index.jsx")).toBe(MAIN);
-    expect(await read(root, "src/flick/Studio.jsx")).toContain('process.env.NODE_ENV !== "production"');
+    expect(await read(root, "src/clipmunk/Studio.jsx")).toContain('process.env.NODE_ENV !== "production"');
   });
 
   it("refuses to overwrite a file it did not write, and upgrades one it did", async () => {
-    const root = await host({ ...VITE, "FLICK.md": "my own notes" });
+    const root = await host({ ...VITE, "CLIPMUNK.md": "my own notes" });
     const conflict = await initProject({}, { root });
     expect(!conflict.ok && conflict.issues[0]!.code).toBe("file-conflict");
-    expect(await read(root, "FLICK.md")).toBe("my own notes");
+    expect(await read(root, "CLIPMUNK.md")).toBe("my own notes");
     expect(await read(root, "src/main.tsx")).toBe(MAIN);
 
-    await rm(path.join(root, "FLICK.md"));
+    await rm(path.join(root, "CLIPMUNK.md"));
     expect((await initProject({}, { root })).ok).toBe(true);
-    await writeFile(path.join(root, "src/flick/Studio.tsx"), "// edited by hand");
+    await writeFile(path.join(root, "src/clipmunk/Studio.tsx"), "// edited by hand");
     const edited = await initProject({}, { root });
-    expect(!edited.ok && edited.issues[0]!.path).toBe("src/flick/Studio.tsx");
+    expect(!edited.ok && edited.issues[0]!.path).toBe("src/clipmunk/Studio.tsx");
   });
 
   it("explains unsupported hosts", async () => {
@@ -166,19 +170,23 @@ describe("entry wrapping", () => {
   it("handles one-line and self-closing roots and keeps other code intact", () => {
     const edit = wrapRootRender(
       `import ReactDOM from "react-dom/client";\nimport App from "./App";\n\nReactDOM.createRoot(document.getElementById("root")).render(<App />);\n`,
-      "./flick/Studio",
+      "./clipmunk/Studio",
     );
     if (edit.status !== "wrapped") throw new Error(edit.status);
-    expect(edit.source).toContain(".render(\n  <FlickStudioHost>\n    <App />\n  </FlickStudioHost>,\n);");
-    expect(edit.source.indexOf("FlickStudioHost }")).toBeGreaterThan(edit.source.indexOf('import App from "./App";'));
+    expect(edit.source).toContain(".render(\n  <ClipmunkStudioHost>\n    <App />\n  </ClipmunkStudioHost>,\n);");
+    expect(edit.source.indexOf("ClipmunkStudioHost }")).toBeGreaterThan(
+      edit.source.indexOf('import App from "./App";'),
+    );
   });
   it("places the import after a multi-line import", () => {
     const edit = wrapRootRender(
       `import {\n  StrictMode,\n} from "react";\nconst root = createRoot(el);\nroot.render(<StrictMode><App title="a (b)" /></StrictMode>);\n`,
-      "./flick/Studio",
+      "./clipmunk/Studio",
     );
     if (edit.status !== "wrapped") throw new Error(edit.status);
-    expect(edit.source).toMatch(/\} from "react";\nimport \{ FlickStudioHost \} from "\.\/flick\/Studio";\nconst root/);
+    expect(edit.source).toMatch(
+      /\} from "react";\nimport \{ ClipmunkStudioHost \} from "\.\/clipmunk\/Studio";\nconst root/,
+    );
     expect(edit.source).toContain('<StrictMode><App title="a (b)" /></StrictMode>');
   });
   it("declines anything it cannot read safely", () => {
@@ -186,7 +194,9 @@ describe("entry wrapping", () => {
     expect(wrapRootRender("a.render(<A />); b.render(<B />);", "./x").status).toBe("manual");
     expect(wrapRootRender("hydrateRoot(el, <App />);", "./x").status).toBe("manual");
     expect(wrapRootRender("root.render(<p>Don't (</p>);", "./x").status).toBe("manual");
-    expect(wrapRootRender("root.render(<FlickStudioHost><App /></FlickStudioHost>);", "./x").status).toBe("already");
+    expect(wrapRootRender("root.render(<ClipmunkStudioHost><App /></ClipmunkStudioHost>);", "./x").status).toBe(
+      "already",
+    );
   });
 });
 
@@ -196,16 +206,16 @@ describe("scenes", () => {
     const root = await host({
       ...VITE,
       ...scenePair,
-      "src/flick/scenes/orphan.scene.json": JSON.stringify({ ...recipe, id: "orphan" }),
-      "src/flick/scenes/renamed.scene.json": JSON.stringify(recipe),
-      "src/flick/scenes/renamed.tsx": "export default () => null;",
-      "src/flick/scenes/broken.scene.json": "{ not json",
-      "src/flick/scenes/typo.scene.json": JSON.stringify({
+      "src/clipmunk/scenes/orphan.scene.json": JSON.stringify({ ...recipe, id: "orphan" }),
+      "src/clipmunk/scenes/renamed.scene.json": JSON.stringify(recipe),
+      "src/clipmunk/scenes/renamed.tsx": "export default () => null;",
+      "src/clipmunk/scenes/broken.scene.json": "{ not json",
+      "src/clipmunk/scenes/typo.scene.json": JSON.stringify({
         ...recipe,
         id: "typo",
         definition: { ...recipe.definition, scene: { nodes: [{ id: "page" }], camra: {} } },
       }),
-      "src/flick/scenes/typo.tsx": "export default () => null;",
+      "src/clipmunk/scenes/typo.tsx": "export default () => null;",
     });
     const result = await listScenes({ root });
     if (!result.ok) throw new Error("failed");
@@ -232,14 +242,14 @@ describe("scenes", () => {
       "package.json": manifest({ next: "16" }),
       "tsconfig.json": "{}",
       "app/page.tsx": "",
-      "src/flick/scenes/lonely.scene.json": "{}",
+      "src/clipmunk/scenes/lonely.scene.json": "{}",
     });
     expect((await syncProject({ root })).ok).toBe(false); // not initialised yet
     await initProject({}, { root });
     for (const [file, content] of Object.entries(scenePair)) await writeFile(path.join(root, file), content);
     const synced = await syncProject({ root });
     expect(synced.ok && [synced.data.status, synced.data.scenes]).toEqual(["updated", 1]);
-    const catalog = await read(root, "src/flick/catalog.ts");
+    const catalog = await read(root, "src/clipmunk/catalog.ts");
     expect(catalog).toContain("page-survey.scene.json");
     expect(catalog).not.toContain("lonely");
     expect(
@@ -251,9 +261,9 @@ describe("scenes", () => {
     const root = await host({ ...VITE, ...scenePair });
     await initProject({}, { root });
     const opened = await resolveStudio({ url: "http://localhost:4321/", sceneId: "page-survey" }, { root });
-    expect(opened.ok && opened.data.url).toBe("http://localhost:4321/?flick=1&flick-scene=page-survey");
+    expect(opened.ok && opened.data.url).toBe("http://localhost:4321/?clipmunk=1&clipmunk-scene=page-survey");
     expect(opened.ok && opened.data.reachable).toBe(false);
-    expect(JSON.parse(await read(root, ".flick/project.json")).devUrl).toBe("http://localhost:4321");
+    expect(JSON.parse(await read(root, ".clipmunk/project.json")).devUrl).toBe("http://localhost:4321");
     expect(await resolveStudio({ url: "https://example.com" }, { root })).toMatchObject({
       ok: false,
       issues: [{ code: "invalid-url" }],

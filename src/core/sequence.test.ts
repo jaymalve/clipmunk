@@ -21,7 +21,7 @@ describe("sequence schema", () => {
       { kind: "fade", ms: 500 },
     ]);
   });
-  it("rejects an empty sequence, odd sizes, bad ids and audio outside .flick/audio", () => {
+  it("rejects an empty sequence, odd sizes, bad ids and audio outside .clipmunk/audio", () => {
     const base = { version: 1, id: "launch", title: "Launch", items: [item("scene", "intro")] };
     expect(validateSequence({ ...base, items: [] }).ok).toBe(false);
     expect(validateSequence({ ...base, width: 1921 }).ok).toBe(false);

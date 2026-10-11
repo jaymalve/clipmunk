@@ -1,8 +1,8 @@
 {
-  "name": "flick-example-vite-app",
+  "name": "clipmunk-example-vite-app",
   "private": true,
   "type": "module",
-  "description": "Development host for Flick. Dependencies resolve from the repository root.",
-  "dependencies": { "react": "*", "react-dom": "*", "@flickjs/record": "*" },
+  "description": "Development host for Clipmunk. Dependencies resolve from the repository root.",
+  "dependencies": { "react": "*", "react-dom": "*", "clipmunk": "*" },
   "devDependencies": { "vite": "*", "@vitejs/plugin-react": "*" }
 }

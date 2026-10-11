@@ -80,7 +80,7 @@ export function loadSceneCatalog(input: CatalogInput): SceneCatalog {
     issues.push({
       code: "unknown-scene",
       path: input.sceneId,
-      message: `No valid scene named "${input.sceneId}". Run flick scenes to list them.`,
+      message: `No valid scene named "${input.sceneId}". Run clipmunk scenes to list them.`,
     });
   return { scenes, selected, issues };
 }

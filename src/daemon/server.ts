@@ -19,7 +19,7 @@ export type DaemonOptions = {
   port?: number;
   version?: string;
   log?: (line: string) => void;
-  /** Write .flick/daemon.json. Off for a second daemon on a project that may already have one (tests). */
+  /** Write .clipmunk/daemon.json. Off for a second daemon on a project that may already have one (tests). */
   announce?: boolean;
 };
 

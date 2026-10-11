@@ -2,12 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./style.css";
-import { FlickStudioHost } from "./flick/Studio";
+import { ClipmunkStudioHost } from "./clipmunk/Studio";
 
 createRoot(document.getElementById("root")!).render(
-  <FlickStudioHost>
+  <ClipmunkStudioHost>
     <StrictMode>
       <App />
     </StrictMode>
-  </FlickStudioHost>,
+  </ClipmunkStudioHost>,
 );

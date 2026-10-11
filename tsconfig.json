@@ -13,10 +13,10 @@
     "isolatedModules": true,
     "types": ["vite/client", "node"],
     "paths": {
-      "@flickjs/record": ["./src/index.ts"],
-      "@flickjs/record/core": ["./src/core/index.ts"],
-      "@flickjs/record/studio": ["./src/studio/index.ts"],
-      "@flickjs/record/recorder": ["./src/recorder/index.ts"]
+      "clipmunk": ["./src/index.ts"],
+      "clipmunk/core": ["./src/core/index.ts"],
+      "clipmunk/studio": ["./src/studio/index.ts"],
+      "clipmunk/recorder": ["./src/recorder/index.ts"]
     }
   },
   "include": ["src", "examples", "tests", "scripts"]

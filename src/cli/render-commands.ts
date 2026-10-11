@@ -3,7 +3,7 @@ import { readProject } from "../project";
 import { type Command, type Invocation, number, plural } from "./invocation";
 
 /** The commands that render: a thumbnail, or an MP4 of a scene, a take or a sequence. */
-const NO_URL = "This app is not connected to Flick yet. Run npx flick init, or pass your dev server with --url.";
+const NO_URL = "This app is not connected to Clipmunk yet. Run npx clipmunk init, or pass your dev server with --url.";
 const seconds = (ms: number) => (ms / 1000).toFixed(2);
 const took = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 

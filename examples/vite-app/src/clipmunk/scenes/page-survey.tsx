@@ -1,4 +1,4 @@
-import { Surface } from "@flickjs/record";
+import { Surface } from "clipmunk";
 import { Dashboard } from "../../components/dashboard";
 
 export default function PageSurvey() {

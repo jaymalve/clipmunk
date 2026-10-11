@@ -74,7 +74,7 @@ const concepts: GuideConcept[] = [
     id: "delivery",
     title: "Look before exporting",
     idea: "A scene is finished when its rendered frames communicate the intended reveal, not when its JSON validates.",
-    how: `Open the studio at ?${STUDIO_PARAM}=1 on the running dev server and select the scene (or add &${SCENE_PARAM}=<id>). Edit the two files; the dev server hot-reloads them and the studio lists any issue with a fix. Save a thumbnail with flick snapshot. Export only when asked.`,
+    how: `Open the studio at ?${STUDIO_PARAM}=1 on the running dev server and select the scene (or add &${SCENE_PARAM}=<id>). Edit the two files; the dev server hot-reloads them and the studio lists any issue with a fix. Save a thumbnail with clipmunk snapshot. Export only when asked.`,
     avoid: "Reporting success from a typecheck alone. Validation cannot judge framing or readability.",
     check: "No issues listed in the studio, several frames inspected, snapshot saved.",
   },
@@ -143,10 +143,10 @@ export function getGuide() {
       `Read ${HANDOFF_FILE}, then this guide. Inspect the requested page: its components, providers, styles and data.`,
       "Decide the shot before writing: the subject, which edge is near, the camera's travel direction, what is in focus, and what gives depth.",
       `Create ${SCENES_DIR}/<id>.scene.json and ${SCENES_DIR}/<id>.tsx. The id is a lowercase slug and equals the file name.`,
-      "Run flick scenes to validate. Fix every issue it lists.",
+      "Run clipmunk scenes to validate. Fix every issue it lists.",
       `Open the studio (?${STUDIO_PARAM}=1&${SCENE_PARAM}=<id>) on the running dev server and look at the opening frame before tuning motion.`,
-      "Scrub several times, adjust the source, repeat. Then run flick snapshot --scene <id> to save its thumbnail.",
-      "Export with flick export --scene <id> only when the user asks for a video.",
+      "Scrub several times, adjust the source, repeat. Then run clipmunk snapshot --scene <id> to save its thumbnail.",
+      "Export with clipmunk export --scene <id> only when the user asks for a video.",
     ],
     files: {
       directory: SCENES_DIR,
@@ -155,7 +155,7 @@ export function getGuide() {
       component:
         "<id>.tsx or <id>.jsx (one, not both): default-exports a component returning Surface elements. Surface props: id, transform?, content?, children, className?, style?. Give each Surface an explicit size through style when its content would otherwise stretch.",
       helpers: `Keep helper modules outside ${SCENES_DIR}; every .tsx there is treated as a scene component.`,
-      sync: "Vite discovers new scene files automatically. In Next.js and other hosts run flick sync after adding or removing a scene.",
+      sync: "Vite discovers new scene files automatically. In Next.js and other hosts run clipmunk sync after adding or removing a scene.",
     },
     defaults: {
       frame: { width: 1400, height: 980 },
@@ -177,28 +177,29 @@ export function getGuide() {
       component: exampleComponent,
     },
     commands: {
-      "flick scenes [--json]": "List scenes and every validation issue.",
-      "flick sync": "Regenerate the scene catalog (Next.js and generic React hosts).",
-      "flick open [--scene <id>] [--url <origin>]": "Print and open the studio URL.",
-      "flick snapshot --scene <id> [--url <origin>] [--time <ms>]":
+      "clipmunk scenes [--json]": "List scenes and every validation issue.",
+      "clipmunk sync": "Regenerate the scene catalog (Next.js and generic React hosts).",
+      "clipmunk open [--scene <id>] [--url <origin>]": "Print and open the studio URL.",
+      "clipmunk snapshot --scene <id> [--url <origin>] [--time <ms>]":
         "Save a thumbnail into the recipe. The dev server must be running.",
-      [`flick export --scene <id> [--url <origin>] [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]`]:
+      [`clipmunk export --scene <id> [--url <origin>] [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]`]:
         "Render an MP4. Needs FFmpeg and Playwright's Chromium. Never overwrites a file.",
-      "flick takes": "List recorded takes.",
-      "flick zoom <take> [--write]": "Show a take's automatic zooms, or store them as editable keyframes in take.json.",
-      "flick export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]":
+      "clipmunk takes": "List recorded takes.",
+      "clipmunk zoom <take> [--write]":
+        "Show a take's automatic zooms, or store them as editable keyframes in take.json.",
+      "clipmunk export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]":
         "Render a take with cursor, zoom, camera and voice.",
-      "flick sequences": "List sequences and every validation issue.",
-      "flick export --sequence <id> [--output file.mp4]": "Render every clip of a sequence and join them.",
-      [`flick music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n]`]:
+      "clipmunk sequences": "List sequences and every validation issue.",
+      "clipmunk export --sequence <id> [--output file.mp4]": "Render every clip of a sequence and join them.",
+      [`clipmunk music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n]`]:
         "Write a WAV sample of the generated music, to hear a style.",
-      "flick doctor": "Check Node, FFmpeg, Chromium and the project connection.",
+      "clipmunk doctor": "Check Node, FFmpeg, Chromium and the project connection.",
     },
     sequences: {
       what: "A sequence joins scenes and takes into one video. It is a JSON file a person, the studio or an agent can write.",
       path: `${SEQUENCES_DIR}/<id>.sequence.json`,
       shape:
-        '{ version: 1, id, title, width?, height?, fps?: 30 | 60, items: [{ clip: { kind: "scene" | "take", id }, transition?: { kind: "cut" | "fade", ms? } }], audio?: [{ file, offsetMs?, gain? }] }. `transition` says how an item arrives from the one before it; a fade overlaps the two clips. `audio` files live in .flick/audio and play over the whole sequence.',
+        '{ version: 1, id, title, width?, height?, fps?: 30 | 60, items: [{ clip: { kind: "scene" | "take", id }, transition?: { kind: "cut" | "fade", ms? } }], audio?: [{ file, offsetMs?, gain? }] }. `transition` says how an item arrives from the one before it; a fade overlaps the two clips. `audio` files live in .clipmunk/audio and play over the whole sequence.',
       example: SequenceSchema.parse({
         version: 1,
         id: "launch",
@@ -208,7 +209,7 @@ export function getGuide() {
           { clip: { kind: "take", id: "take-20261005-142233" }, transition: { kind: "fade", ms: 600 } },
         ],
       }),
-      music: `Scenes (recipe.music), takes (edit.music) and sequences (music) accept { style: ${MUSIC_STYLES.map((style) => `"${style}"`).join(" | ")}, seed?, gain?, duck?, sync? }. The music is synthesized by Flick from code, so it carries no third-party rights. Without a seed every clip gets its own tune, derived from its name; a seed picks a specific one. duck lowers it under a voice. sync (on by default) fits the tempo so beats land on the clip's key moments and marks each with an accent: in a scene, when a surface finishes arriving (the last keyframe of its tracks); in a take, the first click of each burst; in a sequence, each join. To make music hit a reveal, give that surface an entrance track that ends at the moment you want. A sequence's music replaces its clips' own.`,
+      music: `Scenes (recipe.music), takes (edit.music) and sequences (music) accept { style: ${MUSIC_STYLES.map((style) => `"${style}"`).join(" | ")}, seed?, gain?, duck?, sync? }. The music is synthesized by Clipmunk from code, so it carries no third-party rights. Without a seed every clip gets its own tune, derived from its name; a seed picks a specific one. duck lowers it under a voice. sync (on by default) fits the tempo so beats land on the clip's key moments and marks each with an accent: in a scene, when a surface finishes arriving (the last keyframe of its tracks); in a take, the first click of each burst; in a sequence, each join. To make music hit a reveal, give that surface an entrance track that ends at the moment you want. A sequence's music replaces its clips' own.`,
       narration:
         "A scene's recipe may carry `audio: [{ file, offsetMs?, gain? }]`. The studio's Narrate button records the microphone while the scene plays and fills this in.",
     },
@@ -225,7 +226,7 @@ export type Guide = ReturnType<typeof getGuide>;
 /** Plain-text rendering of the guide for terminals and agents that prefer prose. */
 export function formatGuide(guide: Guide = getGuide()): string {
   const lines: string[] = [
-    `# Flick authoring guide (${guide.package})`,
+    `# Clipmunk authoring guide (${guide.package})`,
     "",
     guide.purpose,
     "",
@@ -278,23 +279,23 @@ export function formatGuide(guide: Guide = getGuide()): string {
 
 /** The short project-root handoff that tells any coding agent where to start. */
 export function handoffDocument(): string {
-  return `# Flick
+  return `# Clipmunk
 
-This app has [Flick](https://www.npmjs.com/package/${PACKAGE_NAME}) installed. Flick turns this app's real components into cinematic 3D scenes and exports them as video.
+This app has [Clipmunk](https://www.npmjs.com/package/${PACKAGE_NAME}) installed. Clipmunk turns this app's real components into cinematic 3D scenes and exports them as video.
 
 ## For coding agents
 
-1. Run \`npx flick guide\` and read it fully. It is the authoring reference for the installed version.
+1. Run \`npx clipmunk guide\` and read it fully. It is the authoring reference for the installed version.
 2. Scenes live in \`${SCENES_DIR}/\` as a pair: \`<id>.scene.json\` and \`<id>.tsx\`.
-3. Validate with \`npx flick scenes\`, then look at the result in the studio: open the running dev server with \`?${STUDIO_PARAM}=1\`.
+3. Validate with \`npx clipmunk scenes\`, then look at the result in the studio: open the running dev server with \`?${STUDIO_PARAM}=1\`.
 4. Do not redesign the app's UI for a scene. Import the existing components and providers.
 
 ## Recording the app
 
-\`npx flick dev\` starts a local daemon and prints a link. Open the link once, then press Alt+Shift+R on any page of the running app to record it. Takes are saved in \`.flick/takes/\`.
+\`npx clipmunk dev\` starts a local daemon and prints a link. Open the link once, then press Alt+Shift+R on any page of the running app to record it. Takes are saved in \`.clipmunk/takes/\`.
 
 ## Example prompt
 
-> Read FLICK.md and run \`npx flick guide\`. Inspect this app's dashboard page and create a cinematic Flick scene from its existing components. Choose a close perspective, camera travel and depth of field on purpose. Verify it in the studio, save a snapshot, and give me the scene URL.
+> Read CLIPMUNK.md and run \`npx clipmunk guide\`. Inspect this app's dashboard page and create a cinematic Clipmunk scene from its existing components. Choose a close perspective, camera travel and depth of field on purpose. Verify it in the studio, save a snapshot, and give me the scene URL.
 `;
 }
