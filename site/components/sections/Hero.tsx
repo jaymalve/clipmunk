@@ -7,13 +7,13 @@ export default function Hero() {
       <div className="wrap hero__top">
         <div className="hero__copy">
           <h1 className="hero__h1">
-            Ship the feature. <span className="grad">Clipmunk cuts the clip.</span>
+            Ship the feature. <span className="munk">Clipmunk cuts the clip.</span>
           </h1>
 
           <p className="hero__sub">
-            Clipmunk lives inside your web app. Your coding agent directs{" "}
-            <strong>cinematic shots of your real UI</strong>, you record a take with one shortcut, and Clipmunk handles
-            the cursor, zooms and soundtrack. You get an MP4, made on your machine.
+            Clipmunk is a drop-in SDK for React and Next.js apps, added with one command. Your coding agent directs{" "}
+            <strong>cinematic shots of your real UI</strong>, or you record a take yourself. Out comes a polished MP4
+            with a smooth cursor, auto-zooms and music, made on your machine.
           </p>
 
           <div className="hero__ctas">
