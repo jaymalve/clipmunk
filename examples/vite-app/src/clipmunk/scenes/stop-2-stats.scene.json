@@ -10,7 +10,7 @@
       "camera": {
         "perspective": 1400,
         "x": -316,
-        "y": -263,
+        "y": -213,
         "z": -663
       },
       "focus": {
@@ -98,7 +98,7 @@
             },
             {
               "timeMs": 1500,
-              "value": 548,
+              "value": 341,
               "easing": "linear"
             }
           ]

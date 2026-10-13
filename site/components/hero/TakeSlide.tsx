@@ -130,7 +130,7 @@ export default function TakeSlide({ onProgress, onDone }: SlideProps) {
           </div>
         </div>
       )}
-      <p className="slide__note mono">A recorded take: smooth cursor, click ripples, auto-zoom.</p>
+      <p className="slide__note mono">A screen recording, enhanced: smooth cursor, click ripples, auto-zoom.</p>
     </div>
   );
 }

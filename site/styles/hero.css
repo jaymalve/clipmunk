@@ -97,18 +97,22 @@
   }
 }
 
+/* The title bar, with the two slides as tabs the way a terminal window has them. */
 .player__bar {
-  position: relative;
   display: flex;
-  align-items: center;
-  height: 42px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--line);
+  align-items: flex-end;
+  gap: 14px;
+  height: 44px;
+  padding: 0 12px;
+  background: var(--bg-0);
+  border-bottom: 1px solid var(--line-2);
 }
 
 .player__dots {
   display: flex;
   gap: 6px;
+  align-self: center;
+  flex: none;
 }
 
 .player__dots i {
@@ -127,41 +131,55 @@
 }
 
 .player__tabs {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
-  gap: 2px;
-  height: 100%;
+  gap: 4px;
+  min-width: 0;
 }
 
+/* Each tab is its own box with a rounded top, so the two labels never read as one phrase. */
 .player__tabs button {
   position: relative;
-  padding: 0 14px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
   font-family: var(--display);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--fg-3);
-  transition: color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
 }
 
 .player__tabs button:hover {
   color: var(--fg-2);
+  background: rgba(255, 255, 255, 0.06);
 }
 
+/* The active tab joins the stage below it: same surface, and it covers the bar's bottom line. */
 .player__tabs .is-on {
+  margin-bottom: -1px;
+  height: 35px;
+  border-color: var(--line-2);
+  background: var(--bg-2);
   color: var(--fg);
 }
 
-/* The line under the active tab fills as its slide plays. */
+/* The line along the top of the active tab fills as its slide plays. */
 .player__line {
   position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: -1px;
+  left: 0;
+  right: 0;
+  top: 0;
   height: 2px;
-  border-radius: 1px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 
@@ -332,6 +350,13 @@
   }
   .player {
     animation: none;
+  }
+  .player__dots {
+    display: none;
+  }
+  .player__tabs button {
+    padding: 0 12px;
+    font-size: 12.5px;
   }
   .slide__note {
     font-size: 9.5px;
