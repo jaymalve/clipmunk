@@ -177,6 +177,18 @@ ol {
   border-color: rgba(255, 255, 255, 0.5);
 }
 
+/* White, for the agent-prompt button, so the agents' own logo colours read on it. */
+.btn--paper {
+  background: #fff;
+  color: var(--bg);
+  border-color: #fff;
+}
+
+.btn--paper:hover {
+  background: #e9e9e9;
+  border-color: #e9e9e9;
+}
+
 .btn--ghost {
   background: transparent;
   border-color: transparent;
@@ -210,12 +222,31 @@ ol {
 
 .prompt svg {
   flex: none;
+}
+
+.prompt__state {
   width: 17px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* The agents the prompt is for */
+.prompt__agents {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 2px;
+}
+
+.prompt__openai {
+  width: 13px;
+}
+
+.prompt__claude {
+  width: 18px;
 }
 
 .prompt__state {

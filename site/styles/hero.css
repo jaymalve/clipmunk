@@ -3,15 +3,16 @@
 .hero {
   position: relative;
   isolation: isolate;
-  padding-top: 40px;
+  padding: 88px 0 120px;
   overflow-x: clip;
 }
 
-.hero__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 40px;
+/* The copy and the scene side by side, centred on each other, so the whole hero sits on the first screen. */
+.hero__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
 }
 
 .hero__copy > * {
@@ -38,7 +39,6 @@
 }
 
 .hero__h1 {
-  margin-top: 64px;
   font-size: clamp(36px, 4vw, 48px);
   font-weight: 450;
   line-height: 1.08;
@@ -60,6 +60,11 @@
   letter-spacing: -0.02em;
 }
 
+/* Each half of the tagline keeps to its own line. */
+.hero__tag .munk {
+  display: block;
+}
+
 .hero__ctas {
   display: flex;
   flex-wrap: wrap;
@@ -70,12 +75,9 @@
 
 /* ── The scene ───────────────────────────────────────────── */
 
-/* Under the copy, at the full width of the page. */
 .hero__art {
   position: relative;
-  width: min(100% - 2 * var(--gutter), var(--max));
-  margin: 48px auto 0;
-  padding-bottom: 150px;
+  min-width: 0;
 }
 
 .scene {
@@ -410,14 +412,11 @@
 
 @media (max-width: 900px) {
   .hero {
-    padding-top: 16px;
+    padding: 40px 0 80px;
   }
-  .hero__h1 {
-    margin-top: 24px;
-  }
-  .hero__art {
-    margin-top: 32px;
-    padding-bottom: 110px;
+  .hero__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
   }
   .scene__tilt,
   .scene.is-settled .scene__tilt {

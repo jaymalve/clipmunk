@@ -2,11 +2,11 @@ import CopyCommand from "@/components/ui/CopyCommand";
 import CopyPromptButton from "@/components/ui/CopyPromptButton";
 import HeroScene from "./HeroScene";
 
-/** The copy, then the scene underneath at the full width of the page. */
+/** Two columns of about the same height: the copy, and the scene beside it. */
 export default function Hero() {
   return (
     <section className="hero" id="top">
-      <div className="wrap hero__top">
+      <div className="wrap hero__grid">
         <div className="hero__copy">
           <h1 className="hero__h1">TypeScript SDK for product videos</h1>
 
@@ -19,10 +19,10 @@ export default function Hero() {
             <CopyCommand />
           </div>
         </div>
-      </div>
 
-      <div className="hero__art">
-        <HeroScene />
+        <div className="hero__art">
+          <HeroScene />
+        </div>
       </div>
     </section>
   );
