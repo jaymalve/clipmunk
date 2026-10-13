@@ -29,14 +29,14 @@ export default function Story() {
               <span className="panel__sfx panel__sfx--tl">click.</span>
             </div>
             <figcaption>
-              <time className="mono">4:58 PM</time>
+              <time className="display">4:58 PM</time>
               You merge #312. It&apos;s good. Nobody has seen it move.
             </figcaption>
           </figure>
 
           <figure className="panel panel--2">
             <div className="panel__art">
-              <div className="term mono">
+              <div className="term display">
                 <p>
                   <span className="munk">›</span> make a clip of the new plans page
                 </p>
@@ -49,7 +49,7 @@ export default function Story() {
               </div>
             </div>
             <figcaption>
-              <time className="mono">4:59 PM</time>
+              <time className="display">4:59 PM</time>
               You ask your agent for a clip. In one sentence. Lowercase.
             </figcaption>
           </figure>
@@ -68,7 +68,7 @@ export default function Story() {
               <span className="panel__sfx panel__sfx--tr">CLACK!</span>
             </div>
             <figcaption>
-              <time className="mono">5:03 PM</time>
+              <time className="display">5:03 PM</time>
               Clipmunk picks a lens, pulls focus, and calls action on your real components.
             </figcaption>
           </figure>
@@ -82,7 +82,7 @@ export default function Story() {
                 <p>Here&apos;s how it moves 👇</p>
                 <div className="cmt__vid">
                   <span className="cmt__play">▶</span>
-                  <span className="cmt__len mono">0:18</span>
+                  <span className="cmt__len display">0:18</span>
                   <i className="cmt__bar" />
                 </div>
                 <p className="cmt__react">
@@ -93,13 +93,13 @@ export default function Story() {
               </div>
             </div>
             <figcaption>
-              <time className="mono">5:06 PM</time>
+              <time className="display">5:06 PM</time>
               The clip is in the PR before your coffee is cold.
             </figcaption>
           </figure>
         </InView>
 
-        <div className="story__foot mono">
+        <div className="story__foot display">
           <span>SFX: a screen recorder, not opening</span>
           <span>To be continued… (every release)</span>
         </div>

@@ -50,7 +50,7 @@ export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
           }, 60);
         }}
       />
-      <button type="button" className="slide__chip mono" onClick={toggleSound} aria-pressed={sound}>
+      <button type="button" className="slide__chip display" onClick={toggleSound} aria-pressed={sound}>
         <span className={`slide__eq ${sound ? "is-on" : ""}`} aria-hidden="true">
           <i />
           <i />
@@ -58,7 +58,7 @@ export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
         </span>
         {sound ? "Sound on" : "Sound off"}
       </button>
-      <p className="slide__note mono">Shot and scored by Clipmunk. No editing.</p>
+      <p className="slide__note display">Shot and scored by Clipmunk. No editing.</p>
     </div>
   );
 }

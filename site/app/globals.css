@@ -2,7 +2,7 @@
    Clipmunk: design tokens + primitives
    Look: near black, lit from above, one accent
    Colour: Near Black #171717, Munk Orange #F47A38, white at varying strength
-   Type: Host Grotesk (headings, wordmark), Inter (body), Geist Mono
+   Type: Host Grotesk (headings, wordmark, labels), Inter (body), Geist Mono (commands only)
    ───────────────────────────────────────────────────────────── */
 
 :root {
@@ -117,8 +117,13 @@ ol {
   margin-inline: auto;
 }
 
+/* Only commands a visitor would type are set in mono. */
 .mono {
   font-family: var(--mono);
+}
+
+.display {
+  font-family: var(--display);
 }
 
 .sr-only {
@@ -320,7 +325,7 @@ a.pill:hover {
   height: 22px;
   padding: 0 8px;
   border-radius: 7px;
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 11px;
   font-weight: 500;
   background: rgba(255, 255, 255, 0.06);
@@ -333,9 +338,9 @@ a.pill:hover {
   color: var(--munk);
 }
 
-/* Small capitals in mono, the way a slate is labelled */
+/* Small capitals, the way a slate is labelled */
 .label {
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 11.5px;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -375,7 +380,7 @@ kbd {
   border: 1px solid var(--line-2);
   border-bottom-width: 2px;
   background: var(--bg-2);
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 12px;
   color: var(--fg);
 }
@@ -472,7 +477,7 @@ kbd {
   height: 40px;
   padding: 0 14px;
   border-bottom: 1px solid var(--line);
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 11.5px;
   color: var(--fg-3);
   white-space: nowrap;

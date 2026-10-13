@@ -36,7 +36,7 @@ export default function UseCases() {
                   <Thumb />
                   <i className="mock__bar" />
                 </div>
-                <p className="mock__meta mono">LGTM, and I did not even pull the branch.</p>
+                <p className="mock__meta display">LGTM, and I did not even pull the branch.</p>
               </div>
             </div>
             <p className="label label--munk">PR walkthroughs</p>
@@ -53,21 +53,21 @@ export default function UseCases() {
                   <span>
                     <b>v2.4</b> Usage-based plans
                   </span>
-                  <i className="mono">today</i>
+                  <i className="display">today</i>
                 </li>
                 <li>
                   <Thumb className="thumb--sm" />
                   <span>
                     <b>v2.3</b> Bulk invites
                   </span>
-                  <i className="mono">Oct 2</i>
+                  <i className="display">Oct 2</i>
                 </li>
                 <li>
                   <Thumb className="thumb--sm" />
                   <span>
                     <b>v2.2</b> Keyboard shortcuts
                   </span>
-                  <i className="mono">Sep 18</i>
+                  <i className="display">Sep 18</i>
                 </li>
               </ul>
             </div>
@@ -79,7 +79,7 @@ export default function UseCases() {
 
           <article className="card use">
             <div className="use__art">
-              <div className="diff mono">
+              <div className="diff display">
                 <p className="diff__del">− &lt;Button&gt;Save&lt;/Button&gt;</p>
                 <p className="diff__add">+ &lt;Button&gt;Publish&lt;/Button&gt;</p>
                 <p className="diff__out">
@@ -119,13 +119,13 @@ export default function UseCases() {
             <div className="use__art">
               <ul className="tour">
                 <li>
-                  <i>▶</i> Create a workspace <span className="mono">0:14</span>
+                  <i>▶</i> Create a workspace <span className="display">0:14</span>
                 </li>
                 <li>
-                  <i>▶</i> Invite your team <span className="mono">0:11</span>
+                  <i>▶</i> Invite your team <span className="display">0:11</span>
                 </li>
                 <li>
-                  <i>▶</i> Send a first invoice <span className="mono">0:19</span>
+                  <i>▶</i> Send a first invoice <span className="display">0:19</span>
                 </li>
               </ul>
             </div>
@@ -145,7 +145,6 @@ export default function UseCases() {
                   <i />
                 </span>
               </div>
-              <p className="launch__meta mono">launch.mp4 · 4K · 0:42 · lofi</p>
             </div>
             <div>
               <p className="label label--munk">Launch videos</p>

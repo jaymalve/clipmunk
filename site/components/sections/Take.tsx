@@ -234,7 +234,7 @@ export default function Take() {
               <audio ref={audio} src="/music/upbeat.m4a" loop preload="none" />
               <button
                 type="button"
-                className={`tv__sound mono ${audible ? "is-on" : ""}`}
+                className={`tv__sound display ${audible ? "is-on" : ""}`}
                 onClick={toggleSound}
                 aria-pressed={audible}
                 tabIndex={scored ? 0 : -1}
@@ -258,7 +258,7 @@ export default function Take() {
                       setStep(index);
                     }}
                   >
-                    <span className="take__num mono">{index < step ? "✓" : String(index + 1).padStart(2, "0")}</span>
+                    <span className="take__num display">{index < step ? "✓" : String(index + 1).padStart(2, "0")}</span>
                     <span>
                       <b>{item.label}</b>
                       <em>{item.text}</em>
@@ -269,7 +269,7 @@ export default function Take() {
             </ol>
           </div>
 
-          <div className="tl mono" aria-hidden>
+          <div className="tl display" aria-hidden>
             <span className="tl__head" />
             <div className="tl__row tl__row--screen">
               <span>Screen</span>

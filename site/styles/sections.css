@@ -218,7 +218,7 @@
 }
 
 .log b {
-  font-family: var(--mono);
+  font-family: var(--display);
   font-weight: 500;
   font-size: 12px;
   color: var(--munk);
@@ -487,14 +487,6 @@
   background: var(--munk);
 }
 
-.launch__meta {
-  position: absolute;
-  left: 14px;
-  bottom: 12px;
-  font-size: 11px;
-  color: var(--fg-3);
-}
-
 .step__keys {
   display: flex;
   gap: 6px;
@@ -523,6 +515,7 @@
 
 .dir pre {
   margin: 0;
+  font-family: var(--display);
   padding: 18px 0;
   font-size: 12.5px;
   line-height: 1.75;
