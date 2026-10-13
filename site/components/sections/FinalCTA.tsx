@@ -4,7 +4,6 @@ import EarlyAccessForm from "./EarlyAccessForm";
 export default function FinalCTA() {
   return (
     <section className="cta" id="early-access">
-      <div className="cta__glow" aria-hidden />
       <div className="wrap cta__in">
         <div className="cta__chip">
           <Chip eye="happy" motion="float" />

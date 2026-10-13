@@ -407,7 +407,7 @@ kbd {
   margin-top: 28px;
 }
 
-/* Lit panel: a big rounded frame with light falling from its top edge */
+/* Panel: a big rounded frame */
 .lit {
   position: relative;
   border-radius: var(--r-lg);
@@ -417,36 +417,12 @@ kbd {
   overflow: hidden;
 }
 
-.lit::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(60% 55% at 50% 0%, var(--light, rgba(255, 255, 255, 0.07)), transparent 70%);
-  pointer-events: none;
-  z-index: -1;
-  transition: background 0.8s ease;
-}
-
-.lit::after {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 20%;
-  right: 20%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--edge, rgba(255, 255, 255, 0.45)), transparent);
-  pointer-events: none;
-  transition: background 0.8s ease;
-}
-
 /* Card: smaller surface for product mockups and features */
 .card {
   position: relative;
   border-radius: var(--r-md);
   border: 1px solid var(--line);
-  background:
-    radial-gradient(45% 12% at 50% 0%, rgba(255, 255, 255, 0.07), transparent),
-    linear-gradient(180deg, var(--bg-2) 0%, var(--bg-0) 100%);
+  background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-0) 100%);
 }
 
 /* Window chrome */
