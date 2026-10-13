@@ -177,18 +177,6 @@ ol {
   border-color: rgba(255, 255, 255, 0.5);
 }
 
-/* White, for the agent-prompt button, so the agents' own logo colours read on it. */
-.btn--paper {
-  background: #fff;
-  color: var(--bg);
-  border-color: #fff;
-}
-
-.btn--paper:hover {
-  background: #e9e9e9;
-  border-color: #e9e9e9;
-}
-
 .btn--ghost {
   background: transparent;
   border-color: transparent;
@@ -233,7 +221,7 @@ ol {
   stroke-linejoin: round;
 }
 
-/* The agents the prompt is for */
+/* The agents the prompt is for, in the button's own ink so they read on orange */
 .prompt__agents {
   display: inline-flex;
   align-items: center;
@@ -246,7 +234,15 @@ ol {
 }
 
 .prompt__claude {
-  width: 18px;
+  width: 17px;
+}
+
+.prompt__cursor {
+  width: 14px;
+}
+
+.prompt__opencode {
+  width: 13px;
 }
 
 .prompt__state {
