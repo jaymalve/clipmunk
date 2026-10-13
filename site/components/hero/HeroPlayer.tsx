@@ -6,7 +6,7 @@ import type { SlideProps } from "./slide";
 import TakeSlide from "./TakeSlide";
 
 const SLIDES: { id: string; label: string; Slide: ComponentType<SlideProps> }[] = [
-  { id: "film", label: "Stop motion", Slide: FilmSlide },
+  { id: "film", label: "Demo video", Slide: FilmSlide },
   { id: "take", label: "Enhanced screen recording", Slide: TakeSlide },
 ];
 

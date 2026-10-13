@@ -9,12 +9,23 @@ export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
   const video = useRef<HTMLVideoElement>(null);
   const [sound, setSound] = useState(false);
 
+  // The latest callback, so the loop below can start once and keep running.
+  const report = useRef(onProgress);
+  report.current = onProgress;
+
   useEffect(() => {
     const player = video.current;
     if (!player || prefersStillness()) return;
     // Browsers only start a video by themselves when it is silent.
     player.muted = true;
     player.play().catch(() => {});
+    // A video reports its time only a few times a second, which makes a progress line stutter,
+    // so read the time on every frame instead.
+    let raf = requestAnimationFrame(function tick() {
+      if (player.duration) report.current(player.currentTime / player.duration);
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   function toggleSound() {
@@ -35,10 +46,6 @@ export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
         playsInline
         muted
         preload="auto"
-        onTimeUpdate={(event) => {
-          const { currentTime, duration } = event.currentTarget;
-          if (duration) onProgress(currentTime / duration);
-        }}
         onEnded={(event) => {
           onDone();
           // Still here a moment later means the player kept this slide, so play it again.
