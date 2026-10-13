@@ -81,12 +81,6 @@
   pointer-events: none;
 }
 
-.hero__glow {
-  position: absolute;
-  inset: -96px -200px -40px 22%;
-  background: radial-gradient(farthest-side, rgba(255, 255, 255, 0.055) 40%, transparent);
-}
-
 .scene {
   position: relative;
   width: min(64%, 780px);
@@ -438,9 +432,6 @@
     display: block;
     margin-top: 32px;
     padding-bottom: 110px;
-  }
-  .hero__glow {
-    display: none;
   }
   .scene {
     width: auto;

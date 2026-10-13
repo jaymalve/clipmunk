@@ -23,7 +23,6 @@ export default function Hero() {
       </div>
 
       <div className="hero__art">
-        <div className="hero__glow" aria-hidden />
         <HeroScene />
       </div>
     </section>
