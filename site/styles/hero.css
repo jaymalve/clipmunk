@@ -245,55 +245,6 @@
   pointer-events: none;
 }
 
-.slide__chip {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 99px;
-  border: 1px solid var(--line-3);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  font-size: 10.5px;
-  color: var(--fg);
-}
-
-.slide__chip:hover {
-  border-color: var(--munk);
-}
-
-.slide__eq {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 10px;
-}
-
-.slide__eq i {
-  width: 2px;
-  height: 100%;
-  border-radius: 1px;
-  background: var(--fg-3);
-  transform: scaleY(0.35);
-}
-
-.slide__eq.is-on i {
-  background: var(--munk);
-  animation: eq 0.7s ease-in-out infinite alternate;
-}
-
-.slide__eq i:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.slide__eq i:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
 /* The take: the page zooms, the cursor glides, each click leaves a ripple. */
 
 .take-page {

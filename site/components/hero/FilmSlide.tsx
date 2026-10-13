@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { SlideProps } from "./slide";
 import { prefersStillness } from "./useFit";
 
-/** A real Clipmunk export: a stop-motion film of the dashboard, five scenes joined into one sequence, with generated music. */
-export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
+/** A real Clipmunk export: a stop-motion film of the dashboard, five scenes joined into one sequence, with generated music. It plays silently. */
+export default function FilmSlide({ onProgress, onDone }: SlideProps) {
   const video = useRef<HTMLVideoElement>(null);
-  const [sound, setSound] = useState(false);
 
   // The latest callback, so the loop below can start once and keep running.
   const report = useRef(onProgress);
@@ -27,15 +26,6 @@ export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-
-  function toggleSound() {
-    const player = video.current;
-    if (!player) return;
-    onTouch();
-    player.muted = sound;
-    setSound(!sound);
-    if (player.paused) player.play().catch(() => {});
-  }
 
   return (
     <div className="slide slide--film">
@@ -57,14 +47,6 @@ export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
           }, 60);
         }}
       />
-      <button type="button" className="slide__chip display" onClick={toggleSound} aria-pressed={sound}>
-        <span className={`slide__eq ${sound ? "is-on" : ""}`} aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        {sound ? "Sound on" : "Sound off"}
-      </button>
       <p className="slide__note display">Shot and scored by Clipmunk. No editing.</p>
     </div>
   );
