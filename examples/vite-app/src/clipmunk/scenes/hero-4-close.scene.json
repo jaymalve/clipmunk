@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "id": "hero-4-close",
+  "title": "Hero film 4: close-up",
+  "description": "A push in on the revenue figure while it counts up.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400,
+        "rotateY": -12,
+        "rotateX": 5,
+        "x": -270,
+        "y": -70,
+        "z": -520
+      },
+      "focus": {
+        "distance": 880,
+        "fStop": 3.2,
+        "focalLength": 100,
+        "maxBlur": 7
+      },
+      "nodes": [
+        {
+          "id": "page"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stats",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 2400,
+      "tracks": [
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -520
+            },
+            {
+              "timeMs": 2400,
+              "value": -680
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -300
+            },
+            {
+              "timeMs": 2400,
+              "value": -250
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "focus"
+          },
+          "property": "distance",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 880
+            },
+            {
+              "timeMs": 2400,
+              "value": 720
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

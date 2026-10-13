@@ -9,6 +9,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "clipmunk": "file:vendor/clipmunk-0.0.1.tgz",
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

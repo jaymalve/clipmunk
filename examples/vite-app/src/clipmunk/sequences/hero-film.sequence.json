@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "id": "hero-film",
+  "title": "Landing page hero film",
+  "width": 1440,
+  "height": 900,
+  "fps": 30,
+  "items": [
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "hero-1-survey"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "hero-2-assemble"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "hero-3-rack"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "hero-4-close"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "hero-5-settle"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    }
+  ],
+  "music": {
+    "style": "upbeat"
+  }
+}

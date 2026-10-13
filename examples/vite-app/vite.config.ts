@@ -7,6 +7,8 @@ const src = (path: string) => fileURLToPath(new URL(`../../src/${path}`, import.
 // The example imports the package by its published name, resolved to source.
 export default defineConfig({
   plugins: [react()],
+  // The hero film's scenes are shot on the landing page's demo dashboard, which lives in site/demo.
+  server: { fs: { allow: [".", fileURLToPath(new URL("../../site/demo", import.meta.url))] } },
   resolve: {
     alias: [
       { find: "clipmunk/recorder", replacement: src("recorder/index.ts") },

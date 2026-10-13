@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "id": "hero-5-settle",
+  "title": "Hero film 5: settle",
+  "description": "The camera comes round to face the page straight on.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400,
+        "rotateY": -16,
+        "rotateX": 7,
+        "z": -220
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 8,
+        "focalLength": 50,
+        "maxBlur": 4
+      },
+      "nodes": [
+        {
+          "id": "page"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stats",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 2400,
+      "tracks": [
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "rotateY",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -16
+            },
+            {
+              "timeMs": 1800,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "rotateX",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 7
+            },
+            {
+              "timeMs": 1800,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -220
+            },
+            {
+              "timeMs": 1800,
+              "value": 0
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

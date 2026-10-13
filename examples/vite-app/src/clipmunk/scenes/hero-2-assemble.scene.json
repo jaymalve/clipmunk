@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "id": "hero-2-assemble",
+  "title": "Hero film 2: assemble",
+  "description": "Sections converge from separated depth into the page while the camera drifts and the charts draw.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1600,
+        "rotateY": 22,
+        "rotateX": 8,
+        "z": 120
+      },
+      "focus": {
+        "distance": 1480,
+        "fStop": 2.8,
+        "focalLength": 100,
+        "maxBlur": 6
+      },
+      "nodes": [
+        {
+          "id": "page"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stats",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 3400,
+      "tracks": [
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 190
+            },
+            {
+              "timeMs": 3400,
+              "value": -130
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "sidebar"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 520
+            },
+            {
+              "timeMs": 1200,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "header"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 420
+            },
+            {
+              "timeMs": 300,
+              "value": 420
+            },
+            {
+              "timeMs": 1600,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stats"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 340
+            },
+            {
+              "timeMs": 600,
+              "value": 340
+            },
+            {
+              "timeMs": 2000,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "chart"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 260
+            },
+            {
+              "timeMs": 900,
+              "value": 260
+            },
+            {
+              "timeMs": 2400,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "customers"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 200
+            },
+            {
+              "timeMs": 1200,
+              "value": 200
+            },
+            {
+              "timeMs": 2800,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "customers"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0
+            },
+            {
+              "timeMs": 1200,
+              "value": 0
+            },
+            {
+              "timeMs": 2200,
+              "value": 1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
