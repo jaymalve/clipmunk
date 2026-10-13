@@ -27,7 +27,7 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const title = `${SITE.name}: ${SITE.tagline}`;
+const title = `${SITE.name}: ${SITE.headline}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),

@@ -7,15 +7,13 @@ export default function Hero() {
     <section className="hero" id="top">
       <div className="wrap hero__top">
         <div className="hero__copy">
-          <h1 className="hero__h1">
-            Ship the feature. <span className="munk">Clipmunk cuts the clip.</span>
-          </h1>
+          <h1 className="hero__h1">TypeScript SDK for product videos</h1>
 
-          <p className="hero__sub">
-            Clipmunk is a drop-in SDK for React and Next.js apps, added with one command. Your coding agent directs{" "}
-            <strong>cinematic shots of your real UI</strong>, or you record a take yourself. Out comes a polished MP4
-            with a smooth cursor, auto-zooms and music, made on your machine.
+          <p className="hero__tag">
+            Ship the feature. <span className="munk">Clipmunk cuts the clip.</span>
           </p>
+
+          <p className="hero__sub">For React and Next.js apps. Added with one command.</p>
 
           <div className="hero__ctas">
             <CopyPromptButton />

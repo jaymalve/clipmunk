@@ -24,6 +24,9 @@
 .hero__copy > :nth-child(3) {
   animation-delay: 0.16s;
 }
+.hero__copy > :nth-child(4) {
+  animation-delay: 0.24s;
+}
 
 .hero__art {
   animation: hero-in 1.1s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
@@ -51,20 +54,20 @@
   max-width: 100%;
 }
 
-/* As wide as the headline above it, and never the thing that sets that width. */
-.hero__sub {
-  margin-top: 24px;
-  width: 0;
-  min-width: 100%;
-  font-size: 18px;
-  line-height: 1.55;
-  color: var(--fg-2);
-  text-wrap: pretty;
+.hero__tag {
+  margin-top: 18px;
+  font-family: var(--display);
+  font-size: clamp(20px, 2.1vw, 26px);
+  font-weight: 450;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
-.hero__sub strong {
-  font-weight: 500;
-  color: var(--fg);
+.hero__sub {
+  margin-top: 12px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fg-2);
 }
 
 .hero__ctas {
