@@ -246,9 +246,6 @@ export default function Take() {
                 </span>
                 {audible ? "upbeat · playing" : "Hear the soundtrack"}
               </button>
-              <p className="tv__stamp mono">
-                <b>send-invoice.mp4</b> · 1920 × 1080 · 0:12
-              </p>
             </div>
 
             <ol className="take__steps">

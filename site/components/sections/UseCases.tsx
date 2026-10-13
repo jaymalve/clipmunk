@@ -16,7 +16,9 @@ export default function UseCases() {
     <section className="section uses" id="uses">
       <div className="wrap">
         <div className="shead shead--left">
-          <h2>Six reasons to stop screen-recording by hand.</h2>
+          <h2>
+            Six reasons to stop <span className="nowrap">screen-recording</span> by hand.
+          </h2>
           <p>
             From the pull request you opened this morning to the launch video you have been putting off since spring.
           </p>

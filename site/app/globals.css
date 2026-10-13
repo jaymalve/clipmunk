@@ -206,7 +206,7 @@ ol {
   transform: translateX(2px);
 }
 
-/* The button that copies the agent prompt: a terminal on the left, and a copy mark that turns into a tick. */
+/* The button that copies the agent prompt: its copy mark turns into a tick. */
 
 .prompt svg {
   flex: none;
@@ -249,32 +249,6 @@ ol {
 
 .prompt.is-copied .prompt__state {
   opacity: 1;
-}
-
-/* A ring that leaves the button as the prompt lands on the clipboard. */
-.prompt::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  border: 1.5px solid var(--munk);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.prompt.is-copied::after {
-  animation: prompt-ring 0.9s ease-out;
-}
-
-@keyframes prompt-ring {
-  0% {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.18, 1.5);
-  }
 }
 
 /* ── Pills, badges, labels ───────────────────────────────── */
@@ -378,6 +352,10 @@ kbd {
 
 .munk {
   color: var(--munk);
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .dim {

@@ -800,35 +800,6 @@
   transform: scale(1);
 }
 
-.tv__stamp {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  padding: 10px 16px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  border: 1px solid var(--munk-line);
-  backdrop-filter: blur(8px);
-  font-size: clamp(10px, 2.2cqw, 13px);
-  color: var(--fg-2);
-  white-space: nowrap;
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(1.5);
-  transition:
-    opacity 0.35s ease 1.5s,
-    transform 0.35s cubic-bezier(0.3, 1.4, 0.5, 1) 1.5s;
-}
-
-.tv__stamp b {
-  color: var(--munk);
-  font-weight: 500;
-}
-
-.is-s6 .tv__stamp {
-  opacity: 1;
-  transform: translate(-50%, -50%);
-}
-
 /* The soundtrack switch, shown once the music pass is on */
 
 .tv__sound {
