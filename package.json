@@ -1,7 +1,6 @@
 {
   "name": "clipmunk",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
   "description": "Cinematic 3D scenes and polished screen recordings from your live web app.",
   "type": "module",
   "license": "MIT",
@@ -85,5 +84,22 @@
   },
   "allowScripts": {
     "ffmpeg-static@5.3.0": true
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaymalve/clipmunk.git"
+  },
+  "homepage": "https://clipmunk.dev",
+  "bugs": {
+    "url": "https://github.com/jaymalve/clipmunk/issues"
+  },
+  "keywords": [
+    "video",
+    "screen-recording",
+    "react",
+    "nextjs",
+    "product-video",
+    "sdk",
+    "typescript"
+  ]
 }
