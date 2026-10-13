@@ -39,10 +39,6 @@ export default function CopyPromptButton({ className = "" }: { className?: strin
       onClick={async () => setCopied(await copy(AGENT_PROMPT))}
       aria-label="Copy the coding-agent prompt"
     >
-      <svg className="prompt__agent" viewBox="0 0 20 20" aria-hidden="true">
-        <rect x="2" y="3.5" width="16" height="13" rx="3" />
-        <path d="M6 8l2.5 2L6 12M10.5 12.5H14" />
-      </svg>
       Copy agent prompt
       <svg className="prompt__state" viewBox="0 0 20 20" aria-hidden="true">
         <g className="prompt__copy">

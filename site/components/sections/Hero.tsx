@@ -13,8 +13,6 @@ export default function Hero() {
             Ship the feature. <span className="munk">Clipmunk cuts the clip.</span>
           </p>
 
-          <p className="hero__sub">For React and Next.js apps. Added with one command.</p>
-
           <div className="hero__ctas">
             <CopyPromptButton />
             <a href="#early-access" className="btn">

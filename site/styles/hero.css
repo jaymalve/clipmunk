@@ -24,9 +24,6 @@
 .hero__copy > :nth-child(3) {
   animation-delay: 0.16s;
 }
-.hero__copy > :nth-child(4) {
-  animation-delay: 0.24s;
-}
 
 .hero__art {
   animation: hero-in 1.1s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
@@ -61,13 +58,6 @@
   font-weight: 450;
   line-height: 1.25;
   letter-spacing: -0.02em;
-}
-
-.hero__sub {
-  margin-top: 12px;
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--fg-2);
 }
 
 .hero__ctas {
@@ -172,6 +162,22 @@
 .app .win__bar {
   height: 3.2em;
   font-size: 0.9em;
+}
+
+.app .win__dots i {
+  border: 0;
+}
+
+.app .win__dots i:nth-child(1) {
+  background: #ff5f57;
+}
+
+.app .win__dots i:nth-child(2) {
+  background: #febc2e;
+}
+
+.app .win__dots i:nth-child(3) {
+  background: #28c840;
 }
 
 .app__body {
