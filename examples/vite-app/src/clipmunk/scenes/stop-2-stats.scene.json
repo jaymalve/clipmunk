@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "id": "stop-2-stats",
+  "title": "Hero film 2: stats",
+  "description": "A close view hops from stat card to stat card while the numbers count up.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400,
+        "x": -316,
+        "y": -263,
+        "z": -663
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "page"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-0",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-1",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-2",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-3",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 2000,
+      "tracks": [
+        {
+          "target": {
+            "kind": "camera"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -316,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 499,
+              "value": -316,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 500,
+              "value": -28,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 999,
+              "value": -28,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1000,
+              "value": 260,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1499,
+              "value": 260,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1500,
+              "value": 548,
+              "easing": "linear"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

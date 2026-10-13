@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SlideProps } from "./slide";
 import { prefersStillness } from "./useFit";
 
-/** A real Clipmunk export: several scenes of the dashboard joined into one sequence, with generated music. */
+/** A real Clipmunk export: a stop-motion film of the dashboard, five scenes joined into one sequence, with generated music. */
 export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
   const video = useRef<HTMLVideoElement>(null);
   const [sound, setSound] = useState(false);

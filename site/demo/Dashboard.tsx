@@ -1,5 +1,5 @@
 /**
- * Relay's dashboard: the page the hero's film and its live scene are shot on.
+ * Relay's dashboard: the page the hero's film is shot on.
  * Plain React with no state. `progress` runs from 0 to 1 and draws the charts and counts the numbers
  * up, so a scene can drive them from its own clock and an ordinary page can leave them finished.
  */
@@ -108,16 +108,6 @@ export function Stat({ index, progress = 1 }: { index: number; progress?: number
   );
 }
 
-export function Stats({ progress = 1 }: { progress?: number }) {
-  return (
-    <div className="dash-stats">
-      {STATS.map((stat, index) => (
-        <Stat key={stat.label} index={index} progress={progress} />
-      ))}
-    </div>
-  );
-}
-
 export function RevenueChart({ progress = 1 }: { progress?: number }) {
   const width = 760,
     height = 300;
@@ -174,7 +164,8 @@ export function RevenueChart({ progress = 1 }: { progress?: number }) {
   );
 }
 
-export function Customers({ progress = 1 }: { progress?: number }) {
+/** `shown` is how many rows have arrived; the rest keep their place but stay invisible. */
+export function Customers({ progress = 1, shown = CUSTOMERS.length }: { progress?: number; shown?: number }) {
   return (
     <section className="dm-card dash-list">
       <div className="dash-list__head">
@@ -183,7 +174,7 @@ export function Customers({ progress = 1 }: { progress?: number }) {
       </div>
       <ul>
         {CUSTOMERS.map((customer, index) => (
-          <li key={customer.name}>
+          <li key={customer.name} style={index < shown ? undefined : { opacity: 0 }}>
             <span className={`dm-avatar ${index === 0 ? "dm-avatar--munk" : ""}`}>{customer.name[0]}</span>
             <span>
               <b>{customer.name}</b>
@@ -197,22 +188,5 @@ export function Customers({ progress = 1 }: { progress?: number }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-/** The whole page, flat, as a visitor of Relay would see it. */
-export function Dashboard({ progress = 1 }: { progress?: number }) {
-  return (
-    <div className="dm dm-dash">
-      <Sidebar />
-      <main className="dash-main">
-        <Header />
-        <Stats progress={progress} />
-        <div className="dash-row">
-          <RevenueChart progress={progress} />
-          <Customers progress={progress} />
-        </div>
-      </main>
-    </div>
   );
 }

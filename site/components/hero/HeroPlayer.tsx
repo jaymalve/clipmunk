@@ -2,18 +2,16 @@
 
 import { type ComponentType, useRef, useState } from "react";
 import FilmSlide from "./FilmSlide";
-import LiveSlide from "./LiveSlide";
 import type { SlideProps } from "./slide";
 import TakeSlide from "./TakeSlide";
 
 const SLIDES: { id: string; label: string; Slide: ComponentType<SlideProps> }[] = [
-  { id: "film", label: "Cinematic", Slide: FilmSlide },
-  { id: "live", label: "Live", Slide: LiveSlide },
+  { id: "film", label: "Stop motion", Slide: FilmSlide },
   { id: "take", label: "Take", Slide: TakeSlide },
 ];
 
 /**
- * The hero's player: three kinds of video Clipmunk makes, one at a time.
+ * The hero's player: two kinds of video Clipmunk makes, one at a time.
  * It moves on by itself when a slide finishes, until the visitor picks a tab or touches a slide;
  * after that it stays where they put it.
  */

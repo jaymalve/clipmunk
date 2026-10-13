@@ -9,7 +9,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "hero-1-survey"
+        "id": "stop-1-build"
       },
       "transition": {
         "kind": "cut"
@@ -18,7 +18,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "hero-2-assemble"
+        "id": "stop-2-stats"
       },
       "transition": {
         "kind": "cut"
@@ -27,7 +27,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "hero-3-rack"
+        "id": "stop-3-chart"
       },
       "transition": {
         "kind": "cut"
@@ -36,7 +36,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "hero-4-close"
+        "id": "stop-4-list"
       },
       "transition": {
         "kind": "cut"
@@ -45,7 +45,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "hero-5-settle"
+        "id": "stop-5-page"
       },
       "transition": {
         "kind": "cut"

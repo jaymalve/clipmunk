@@ -80,7 +80,7 @@
   min-width: 0;
 }
 
-/* ── The player: three kinds of video, one at a time ─────── */
+/* ── The player: two kinds of video, one at a time ───────── */
 
 .player {
   border-radius: 16px;
@@ -208,11 +208,6 @@
   height: 900px;
   transform-origin: 0 0;
   overflow: hidden;
-}
-
-.slide--live {
-  cursor: move;
-  touch-action: pan-y;
 }
 
 .slide__note {
