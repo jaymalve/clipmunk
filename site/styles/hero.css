@@ -410,6 +410,13 @@
   }
 }
 
+/* Between phone and desktop the two buttons reach the scene, so it starts just below them instead of beside them. */
+@media (max-width: 1260px) {
+  .hero__art {
+    margin-top: 24px;
+  }
+}
+
 @media (max-width: 900px) {
   .hero {
     padding-top: 16px;

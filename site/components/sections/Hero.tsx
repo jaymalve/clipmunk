@@ -1,3 +1,4 @@
+import CopyPromptButton from "@/components/ui/CopyPromptButton";
 import HeroScene from "./HeroScene";
 
 /** Copy on the left, then the scene, wide and tilted, underneath. */
@@ -17,11 +18,9 @@ export default function Hero() {
           </p>
 
           <div className="hero__ctas">
-            <a href="#early-access" className="btn btn--munk">
+            <CopyPromptButton />
+            <a href="#early-access" className="btn">
               Get early access
-            </a>
-            <a href="#take" className="btn btn--ghost">
-              Watch a take <span className="chev">›</span>
             </a>
           </div>
         </div>

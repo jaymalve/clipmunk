@@ -206,6 +206,77 @@ ol {
   transform: translateX(2px);
 }
 
+/* The button that copies the agent prompt: a terminal on the left, and a copy mark that turns into a tick. */
+
+.prompt svg {
+  flex: none;
+  width: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.prompt__state {
+  opacity: 0.75;
+}
+
+.prompt__copy,
+.prompt__tick {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity 0.2s ease,
+    transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+.prompt__tick {
+  opacity: 0;
+  transform: scale(0.4);
+  stroke-width: 2.2;
+}
+
+.prompt.is-copied .prompt__copy {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+.prompt.is-copied .prompt__tick {
+  opacity: 1;
+  transform: none;
+}
+
+.prompt.is-copied .prompt__state {
+  opacity: 1;
+}
+
+/* A ring that leaves the button as the prompt lands on the clipboard. */
+.prompt::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1.5px solid var(--munk);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.prompt.is-copied::after {
+  animation: prompt-ring 0.9s ease-out;
+}
+
+@keyframes prompt-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18, 1.5);
+  }
+}
+
 /* ── Pills, badges, labels ───────────────────────────────── */
 
 .pill {
