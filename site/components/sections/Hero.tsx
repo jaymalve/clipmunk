@@ -1,7 +1,8 @@
+import CopyCommand from "@/components/ui/CopyCommand";
 import CopyPromptButton from "@/components/ui/CopyPromptButton";
 import HeroScene from "./HeroScene";
 
-/** Copy on the left, then the scene, wide and tilted, underneath. */
+/** The copy, then the scene underneath at the full width of the page. */
 export default function Hero() {
   return (
     <section className="hero" id="top">
@@ -15,15 +16,12 @@ export default function Hero() {
 
           <div className="hero__ctas">
             <CopyPromptButton />
-            <a href="#early-access" className="btn">
-              Get early access
-            </a>
+            <CopyCommand />
           </div>
         </div>
       </div>
 
       <div className="hero__art">
-        <div className="hero__glow" aria-hidden />
         <HeroScene />
       </div>
     </section>
