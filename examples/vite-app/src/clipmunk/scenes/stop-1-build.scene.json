@@ -1,0 +1,607 @@
+{
+  "version": 1,
+  "id": "stop-1-build",
+  "title": "Hero film 1: build",
+  "description": "The dashboard puts itself together piece by piece, straight on, then its charts draw.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "page"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-0",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-1",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-2",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-3",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 4400,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "sidebar"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 299,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 300,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "sidebar"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 299,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 300,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 366,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 367,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 432,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 433,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "header"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 699,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 700,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "header"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 699,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 700,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 766,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 767,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 832,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 833,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-0"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1099,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1100,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-0"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1099,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1100,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1166,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1167,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1232,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1233,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-1"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1349,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1350,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-1"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1349,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1350,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1416,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1417,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1482,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1483,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-2"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1599,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1600,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-2"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1599,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1600,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1666,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1667,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1732,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1733,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-3"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1849,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1850,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-3"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1849,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1850,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1916,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1917,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1982,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 1983,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "chart"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2299,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2300,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "chart"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2299,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2300,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2366,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2367,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2432,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2433,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "customers"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2699,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2700,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "customers"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2699,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2700,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2766,
+              "value": 1.07,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2767,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2832,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2833,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

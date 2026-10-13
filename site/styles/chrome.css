@@ -78,7 +78,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 11px;
   color: var(--fg-3);
   white-space: nowrap;
@@ -184,7 +184,7 @@
 }
 
 .foot__col h3 {
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 11.5px;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -212,7 +212,7 @@
   margin-top: 56px;
   padding-top: 22px;
   border-top: 1px solid var(--line);
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 11.5px;
   color: var(--fg-3);
 }
@@ -242,7 +242,7 @@
   border-radius: 999px;
   background: var(--munk);
   color: var(--bg);
-  font-family: var(--mono);
+  font-family: var(--display);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;

@@ -1,8 +1,8 @@
+import HeroPlayer from "@/components/hero/HeroPlayer";
 import CopyCommand from "@/components/ui/CopyCommand";
 import CopyPromptButton from "@/components/ui/CopyPromptButton";
-import HeroScene from "./HeroScene";
 
-/** Two columns of about the same height: the copy, and the scene beside it. */
+/** Two columns of about the same height: the copy, and the player beside it. */
 export default function Hero() {
   return (
     <section className="hero" id="top">
@@ -21,7 +21,7 @@ export default function Hero() {
         </div>
 
         <div className="hero__art">
-          <HeroScene />
+          <HeroPlayer />
         </div>
       </div>
     </section>

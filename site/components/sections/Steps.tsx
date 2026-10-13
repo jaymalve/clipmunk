@@ -14,7 +14,7 @@ export default function Steps() {
 
         <InView className="steps" threshold={0.2}>
           <article className="card step">
-            <span className="step__num mono">01</span>
+            <span className="step__num display">01</span>
             <h3>Drop it in</h3>
             <p>
               One command connects Clipmunk to your app and leaves a guide your agent can read. Nothing reaches your
@@ -31,7 +31,7 @@ export default function Steps() {
           </article>
 
           <article className="card step">
-            <span className="step__num mono">02</span>
+            <span className="step__num display">02</span>
             <h3>Ask, or press record</h3>
             <p>
               Ask your agent for a scene in one sentence. Or press the shortcut and click through the feature yourself.
@@ -51,7 +51,7 @@ export default function Steps() {
           </article>
 
           <article className="card step">
-            <span className="step__num mono">03</span>
+            <span className="step__num display">03</span>
             <h3>Export and post it</h3>
             <p>
               Clipmunk renders an MP4 on your machine. Paste it into the PR, the changelog or the docs, and go outside.

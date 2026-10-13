@@ -109,7 +109,7 @@ export default function Directed() {
               </span>
               src/clipmunk/scenes/plans-reveal.scene.json
             </div>
-            <pre className="mono">
+            <pre className="display">
               {RECIPE.map((line, row) => (
                 <span key={row} className="dir__line">
                   <i>{row + 1}</i>
@@ -137,7 +137,7 @@ export default function Directed() {
                   <b>$0</b>
                 </span>
               </div>
-              <span className="shot__badge mono">
+              <span className="shot__badge display">
                 <i className="dot dot--live" /> preview · 0:07
               </span>
             </div>
@@ -151,7 +151,9 @@ export default function Directed() {
             </dl>
           </div>
         </InView>
-        <p className="dir__foot mono">Don&apos;t fancy writing JSON? Nobody does. That&apos;s what the agent is for.</p>
+        <p className="dir__foot display">
+          Don&apos;t fancy writing JSON? Nobody does. That&apos;s what the agent is for.
+        </p>
       </div>
     </section>
   );

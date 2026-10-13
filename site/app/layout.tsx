@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SITE } from "@/lib/site";
 import "./globals.css";
 import "@/components/chip/chip.css";
+import "@/demo/demo.css";
 import "@/styles/chrome.css";
 import "@/styles/hero.css";
 import "@/styles/take.css";

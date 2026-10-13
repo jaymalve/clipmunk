@@ -44,7 +44,7 @@ export default function Local() {
         <InView className="rules" threshold={0.15}>
           {RULES.map((rule, index) => (
             <article key={rule.title} className="card rule">
-              <span className="rule__num mono">{String(index + 1).padStart(2, "0")}</span>
+              <span className="rule__num display">{String(index + 1).padStart(2, "0")}</span>
               <h3>{rule.title}</h3>
               <p>{rule.text}</p>
             </article>
