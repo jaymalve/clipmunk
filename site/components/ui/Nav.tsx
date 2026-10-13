@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import ChipMark from "@/components/chip/ChipMark";
 import { isMuted, setMuted, subscribeMute } from "@/components/chip/sound";
 import { SITE } from "@/lib/site";
+import { GitHubLogo } from "./Logos";
 
 const LINKS = [
   { href: "#take", label: "A take" },
@@ -42,8 +43,8 @@ export default function Nav() {
             <span className={`nav__led ${muted ? "" : "is-on"}`} />
             {muted ? "Sound off" : "Sound on"}
           </button>
-          <a href={SITE.github} className="nav__plain">
-            GitHub
+          <a href={SITE.github} className="nav__plain nav__github" aria-label="Clipmunk on GitHub">
+            <GitHubLogo />
           </a>
           <a href={SITE.npm} className="btn btn--sm btn--munk nav__cta">
             View on npm
