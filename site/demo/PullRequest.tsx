@@ -46,7 +46,7 @@ export function PullRequest({ tab, approved, merged }: PullRequestState) {
           <span className={`dm-pill ${merged ? "dm-pill--dark" : ""}`}>{merged ? "Merged" : "Open"}</span>
         </div>
         <p className="pr-meta">
-          <b>maya</b> {merged ? "merged" : "wants to merge"} 9 commits into <code>main</code> from{" "}
+          <b>alvin</b> {merged ? "merged" : "wants to merge"} 9 commits into <code>main</code> from{" "}
           <code>feat/usage-plans</code>
         </p>
 
@@ -68,7 +68,7 @@ export function PullRequest({ tab, approved, merged }: PullRequestState) {
               <>
                 <section className="dm-card pr-note">
                   <p className="pr-note__who">
-                    <span className="dm-avatar">M</span> <b>maya</b> opened this 2 hours ago
+                    <span className="dm-avatar">A</span> <b>alvin</b> opened this 2 hours ago
                   </p>
                   <p>Plans now bill by usage. Here is how the new page moves:</p>
                   <div className="pr-clip">

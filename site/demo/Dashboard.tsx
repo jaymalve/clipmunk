@@ -59,9 +59,9 @@ export function Sidebar() {
         ))}
       </ul>
       <p className="dash-side__foot">
-        <span className="dm-avatar dm-avatar--munk">M</span>
+        <span className="dm-avatar dm-avatar--munk">A</span>
         <b>
-          Maya Okafor <span>Relay · Scale plan</span>
+          Alvin Okafor <span>Relay · Scale plan</span>
         </b>
       </p>
     </aside>
@@ -72,7 +72,7 @@ export function Header() {
   return (
     <header className="dash-head">
       <div>
-        <h1>Good morning, Maya</h1>
+        <h1>Good morning, Alvin</h1>
         <p>Here is how Relay is doing this week.</p>
       </div>
       <div className="dash-head__tools">
@@ -140,7 +140,7 @@ export function RevenueChart({ progress = 1 }: { progress?: number }) {
           </clipPath>
         </defs>
         {[0.25, 0.5, 0.75].map((row) => (
-          <line key={row} x1="0" x2={width} y1={height * row} y2={height * row} stroke="#e7e5e0" strokeWidth="1" />
+          <line key={row} x1="0" x2={width} y1={height * row} y2={height * row} stroke="#2b2b2b" strokeWidth="1" />
         ))}
         <g clipPath="url(#dm-reveal)">
           <path d={`${path(dots)} L${width} ${height} L0 ${height} Z`} fill="url(#dm-fill)" />
@@ -149,7 +149,7 @@ export function RevenueChart({ progress = 1 }: { progress?: number }) {
         {drawn > 0.02 && (
           <>
             <circle cx={tipX} cy={tipY} r="11" fill="#f47a38" opacity="0.2" />
-            <circle cx={tipX} cy={tipY} r="5.5" fill="#fff" stroke="#f47a38" strokeWidth="3" />
+            <circle cx={tipX} cy={tipY} r="5.5" fill="#1c1c1c" stroke="#f47a38" strokeWidth="3" />
           </>
         )}
       </svg>

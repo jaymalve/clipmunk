@@ -65,10 +65,11 @@
   display: block;
 }
 
+/* One above the other, both as wide as the wider. */
 .hero__ctas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  width: fit-content;
+  max-width: 100%;
   gap: 12px;
   margin-top: 32px;
 }
@@ -130,8 +131,11 @@
   background: #28c840;
 }
 
+/* Both tabs take the width of the wider one. */
 .player__tabs {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 4px;
   min-width: 0;
 }
@@ -353,6 +357,10 @@
   }
   .player__dots {
     display: none;
+  }
+  /* Too narrow for two tabs as wide as the longer label, so each takes what it needs. */
+  .player__tabs {
+    display: flex;
   }
   .player__tabs button {
     padding: 0 12px;
