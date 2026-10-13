@@ -70,21 +70,16 @@
 
 /* ── The scene ───────────────────────────────────────────── */
 
-/* Sits to the lower right of the copy, level with the buttons, so it is on screen the moment the page opens. */
+/* Under the copy, at the full width of the page. */
 .hero__art {
   position: relative;
   width: min(100% - 2 * var(--gutter), var(--max));
-  margin: -44px auto 0;
+  margin: 48px auto 0;
   padding-bottom: 150px;
-  display: flex;
-  justify-content: flex-end;
-  pointer-events: none;
 }
 
 .scene {
   position: relative;
-  width: min(64%, 780px);
-  pointer-events: auto;
   container-type: inline-size;
   user-select: none;
 }
@@ -386,9 +381,9 @@
 
 .scene__chip {
   position: absolute;
-  right: 3%;
-  bottom: -12%;
-  width: clamp(130px, 19cqw, 270px);
+  right: 2.5%;
+  bottom: 1.5%;
+  width: clamp(130px, 17cqw, 230px);
   z-index: 3;
 }
 
@@ -413,13 +408,6 @@
   }
 }
 
-/* Between phone and desktop the two buttons reach the scene, so it starts just below them instead of beside them. */
-@media (max-width: 1260px) {
-  .hero__art {
-    margin-top: 24px;
-  }
-}
-
 @media (max-width: 900px) {
   .hero {
     padding-top: 16px;
@@ -427,14 +415,9 @@
   .hero__h1 {
     margin-top: 24px;
   }
-  /* No room beside the copy: the scene goes underneath, at full width, with nothing cut off. */
   .hero__art {
-    display: block;
     margin-top: 32px;
     padding-bottom: 110px;
-  }
-  .scene {
-    width: auto;
   }
   .scene__tilt,
   .scene.is-settled .scene__tilt {

@@ -251,6 +251,18 @@ ol {
   opacity: 1;
 }
 
+/* The install command as a button */
+
+.command {
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.command__sign {
+  color: var(--munk);
+}
+
 /* ── Pills, badges, labels ───────────────────────────────── */
 
 .pill {

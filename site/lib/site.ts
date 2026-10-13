@@ -2,6 +2,8 @@
 export const SITE = {
   name: "Clipmunk",
   packageName: "clipmunk",
+  install: "npm install clipmunk",
+  npm: "https://www.npmjs.com/package/clipmunk",
   headline: "TypeScript SDK for product videos",
   tagline: "Ship the feature. Clipmunk cuts the clip.",
   description:

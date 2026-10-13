@@ -903,55 +903,12 @@
   text-wrap: pretty;
 }
 
-.cta__form {
+.cta__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
   margin-top: 34px;
-  width: min(100%, 460px);
-}
-
-.cta__form input {
-  flex: 1;
-  min-width: 200px;
-  height: 44px;
-  padding: 0 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line-2);
-  background: var(--bg-0);
-  color: var(--fg);
-  font: inherit;
-  font-size: 15px;
-}
-
-.cta__form input::placeholder {
-  color: var(--fg-3);
-}
-
-.cta__form input:focus {
-  outline: none;
-  border-color: var(--munk);
-}
-
-.cta__form button:disabled {
-  opacity: 0.7;
-  cursor: default;
-}
-
-.cta__error {
-  flex-basis: 100%;
-  font-size: 13.5px;
-  color: var(--munk);
-}
-
-.cta__done {
-  margin-top: 34px;
-  padding: 12px 18px;
-  border-radius: 14px;
-  border: 1px solid var(--munk-line);
-  background: var(--munk-bg);
-  font-size: 15px;
 }
 
 /* ── Smaller screens ─────────────────────────────────────── */

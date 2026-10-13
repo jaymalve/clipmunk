@@ -45,8 +45,8 @@ export default function Nav() {
           <a href={SITE.github} className="nav__plain">
             GitHub
           </a>
-          <a href="#early-access" className="btn btn--sm btn--munk nav__cta">
-            Get early access
+          <a href={SITE.npm} className="btn btn--sm btn--munk nav__cta">
+            View on npm
           </a>
           <button
             type="button"

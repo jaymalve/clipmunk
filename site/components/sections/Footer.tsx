@@ -17,7 +17,8 @@ const COLUMNS = [
       { href: "#local", label: "Manners" },
       { href: "#faq", label: "FAQ" },
       { href: SITE.github, label: "GitHub" },
-      { href: "#early-access", label: "Early access" },
+      { href: SITE.npm, label: "npm" },
+      { href: "#start", label: "Get started" },
     ],
   },
 ];
