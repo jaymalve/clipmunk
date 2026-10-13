@@ -8,7 +8,7 @@ export default function Steps() {
       <div className="wrap">
         <div className="shead">
           <ChipTile prop="acorn" />
-          <h2>Cracks open in three steps.</h2>
+          <h2>Your first product video is a prompt away</h2>
           <p>About five minutes. Most of it spent deciding which feature to show off first.</p>
         </div>
 
