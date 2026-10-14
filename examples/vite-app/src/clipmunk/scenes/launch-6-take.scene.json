@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "id": "launch-6-take",
+  "title": "Launch 6: take",
+  "description": "A recorded take: the cursor glides, each click ripples and the frame closes in on what was clicked.",
+  "definition": {
+    "width": 1920,
+    "height": 1080,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "window",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "window"
+        },
+        {
+          "id": "bar",
+          "parentId": "window"
+        },
+        {
+          "id": "screen",
+          "parentId": "app"
+        },
+        {
+          "id": "cursor",
+          "parentId": "app"
+        },
+        {
+          "id": "rec",
+          "parentId": "stage"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 5000,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 1,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1100,
+              "value": 1,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1900,
+              "value": 1.4,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2250,
+              "value": 1.4,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2900,
+              "value": 1.6,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3800,
+              "value": 1.6,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4500,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1100,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1900,
+              "value": 192,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2250,
+              "value": 192,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2900,
+              "value": -367,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3800,
+              "value": -367,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4500,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1100,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1900,
+              "value": 88,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2250,
+              "value": 88,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2900,
+              "value": -155,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3800,
+              "value": -155,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4500,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "rec"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 200,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

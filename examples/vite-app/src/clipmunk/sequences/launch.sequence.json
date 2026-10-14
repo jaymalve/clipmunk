@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "id": "hero-film",
-  "title": "Landing page demo video",
-  "width": 1440,
-  "height": 900,
+  "id": "launch",
+  "title": "Clipmunk launch video",
+  "width": 1920,
+  "height": 1080,
   "fps": 60,
   "items": [
     {
       "clip": {
         "kind": "scene",
-        "id": "demo-1-title"
+        "id": "launch-1-open"
       },
       "transition": {
         "kind": "cut"
@@ -18,7 +18,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "demo-2-overview"
+        "id": "launch-2-title"
       },
       "transition": {
         "kind": "cut"
@@ -27,7 +27,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "demo-3-stats"
+        "id": "launch-3-prompt"
       },
       "transition": {
         "kind": "cut"
@@ -36,7 +36,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "demo-4-chart"
+        "id": "launch-4-recipe"
       },
       "transition": {
         "kind": "cut"
@@ -45,7 +45,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "demo-5-list"
+        "id": "launch-5-scene"
       },
       "transition": {
         "kind": "cut"
@@ -54,7 +54,34 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "demo-6-end"
+        "id": "launch-6-take"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-7-music"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-8-export"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-9-end"
       },
       "transition": {
         "kind": "cut"

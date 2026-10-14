@@ -1,0 +1,338 @@
+/* Clipmunk's launch video: a caption above, the product below, cards at each end. 1920 x 1080. */
+
+@font-face {
+  font-family: "Launch Grotesk";
+  src: url("../../../../site/demo/fonts/host-grotesk.woff2") format("woff2");
+  font-weight: 300 800;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Launch Mono";
+  src: url("../../../../site/demo/fonts/geist-mono.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: block;
+}
+
+.lv {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  font-family: "Launch Grotesk", ui-sans-serif, system-ui, sans-serif;
+  color: #f4f4f4;
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(.lv) p {
+  margin: 0;
+}
+
+.lv__bg {
+  position: absolute;
+  width: 1920px;
+  height: 1080px;
+  background: radial-gradient(70% 55% at 50% 0%, #2a1c13, #101010 72%);
+}
+
+.lv__caption {
+  text-align: center;
+  font-size: 66px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.lv-words span {
+  display: inline-block;
+  white-space: pre;
+}
+
+.lv-words .is-munk {
+  color: #f47a38;
+}
+
+/* The window the product sits in */
+
+.lv__chrome {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  border: 1px solid #303030;
+  background: #141414;
+}
+
+.lv__bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 16px;
+  border-bottom: 1px solid #2b2b2b;
+  border-radius: 18px 18px 0 0;
+  background: #0c0c0c;
+  color: #767676;
+  font-size: 14px;
+}
+
+.lv__bar i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+
+.lv__bar i:nth-child(2) {
+  background: #febc2e;
+}
+
+.lv__bar i:nth-child(3) {
+  margin-right: 12px;
+  background: #28c840;
+}
+
+.lv__fit {
+  width: 1440px;
+  height: 900px;
+  transform: scale(0.8489);
+  transform-origin: 0 0;
+}
+
+/* Terminal and editor */
+
+.lv-term {
+  height: 100%;
+  padding: 48px 52px;
+  font-family: "Launch Mono", ui-monospace, monospace;
+  font-size: 30px;
+  line-height: 1.7;
+  color: #d6d6d6;
+  white-space: pre;
+}
+
+.lv-term .is-dim {
+  color: #6c6c6c;
+}
+
+.lv-term .is-prompt {
+  color: #fff;
+}
+
+.lv-term .is-prompt b {
+  color: #f47a38;
+  font-weight: 500;
+}
+
+.lv-term .is-ok {
+  color: #f9a777;
+}
+
+.lv-term .is-dot::first-letter {
+  color: #f47a38;
+}
+
+.lv-term__caret {
+  display: inline-block;
+  width: 15px;
+  height: 32px;
+  margin-left: 3px;
+  vertical-align: -5px;
+  background: #f47a38;
+}
+
+.lv-term__bar {
+  color: #f47a38;
+}
+
+.lv-code {
+  display: grid;
+  grid-template-rows: 46px 1fr;
+  height: 100%;
+}
+
+.lv-code__tabs {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 20px;
+  border-bottom: 1px solid #262626;
+  background: #101010;
+}
+
+.lv-code__tabs span {
+  padding: 10px 18px;
+  border: 1px solid #2b2b2b;
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+  background: #141414;
+  color: #e6e6e6;
+  font-size: 15px;
+}
+
+.lv-code__body {
+  padding: 26px 0;
+  font-family: "Launch Mono", ui-monospace, monospace;
+  font-size: 26px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.lv-code__line {
+  display: block;
+}
+
+.lv-code__line i {
+  display: inline-block;
+  width: 70px;
+  padding-right: 24px;
+  text-align: right;
+  font-style: normal;
+  color: #4d4d4d;
+}
+
+.tok-k {
+  color: #e9e9e9;
+}
+
+.tok-s {
+  color: #f47a38;
+}
+
+.tok-n {
+  color: #f9a777;
+}
+
+.tok-p {
+  color: #6c6c6c;
+}
+
+/* The recorded take */
+
+.lv-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1440px;
+  height: 900px;
+}
+
+.lv-cursor svg {
+  position: absolute;
+  width: 34px;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5));
+}
+
+.lv-cursor path {
+  fill: #fff;
+  stroke: #171717;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.lv-cursor b {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: -36px;
+  border-radius: 50%;
+  border: 3px solid #f47a38;
+}
+
+.lv-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 99px;
+  border: 1px solid #3a3a3a;
+  background: #161616;
+  font-family: "Launch Mono", ui-monospace, monospace;
+  font-size: 17px;
+  color: #f47a38;
+}
+
+.lv-rec i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #f47a38;
+}
+
+/* The soundtrack */
+
+.lv-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 420px;
+}
+
+.lv-bars i {
+  width: 14px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #f9a777, #f47a38 60%, #b4490f);
+}
+
+.lv-bars__label {
+  margin-top: 26px;
+  text-align: center;
+  font-family: "Launch Mono", ui-monospace, monospace;
+  font-size: 20px;
+  color: #8a8a8a;
+}
+
+/* Cards */
+
+.lv-card {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 34px;
+  width: 1920px;
+  height: 1080px;
+  text-align: center;
+}
+
+.lv-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 92px;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+}
+
+.lv-card__brand svg {
+  width: 116px;
+  color: #f47a38;
+}
+
+.lv-card__title {
+  max-width: 1500px;
+  font-size: 96px;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.lv-card__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  height: 76px;
+  padding: 0 34px;
+  border-radius: 18px;
+  border: 1px solid #3a3a3a;
+  background: #191919;
+  font-family: "Launch Mono", ui-monospace, monospace;
+  font-size: 32px;
+}
+
+.lv-card__pill > span:first-child {
+  color: #f47a38;
+}
+
+.lv-card__note {
+  font-size: 30px;
+  color: #9a9a9a;
+}

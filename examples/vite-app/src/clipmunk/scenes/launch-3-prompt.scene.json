@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "id": "demo-1-title",
-  "title": "Demo video 1: title",
-  "description": "Relay's mark settles in and the headline rises word by word.",
+  "id": "launch-3-prompt",
+  "title": "Launch 3: prompt",
+  "description": "One prompt goes into the agent and Clipmunk is set up.",
   "definition": {
-    "width": 1440,
-    "height": 900,
+    "width": 1920,
+    "height": 1080,
     "scene": {
       "camera": {
         "perspective": 1400
@@ -21,29 +21,41 @@
           "id": "stage"
         },
         {
-          "id": "mark",
+          "id": "caption",
           "parentId": "stage"
+        },
+        {
+          "id": "window",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "window"
+        },
+        {
+          "id": "bar",
+          "parentId": "window"
         }
       ]
     },
     "motion": {
-      "durationMs": 2800,
+      "durationMs": 4200,
       "tracks": [
         {
           "target": {
             "kind": "surface",
-            "id": "mark"
+            "id": "window"
           },
-          "property": "opacity",
+          "property": "y",
           "keyframes": [
             {
-              "timeMs": 0,
-              "value": 0,
+              "timeMs": 100,
+              "value": 120,
               "easing": "cinematic"
             },
             {
-              "timeMs": 500,
-              "value": 1,
+              "timeMs": 1000,
+              "value": 0,
               "easing": "cinematic"
             }
           ]
@@ -51,13 +63,13 @@
         {
           "target": {
             "kind": "surface",
-            "id": "mark"
+            "id": "window"
           },
-          "property": "scale",
+          "property": "opacity",
           "keyframes": [
             {
-              "timeMs": 0,
-              "value": 0.94,
+              "timeMs": 100,
+              "value": 0,
               "easing": "cinematic"
             },
             {
