@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "id": "demo-4-chart",
+  "title": "Demo video 4: chart",
+  "description": "A slow push in on the revenue chart as its line draws, then a ring around it.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "window",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "window"
+        },
+        {
+          "id": "page",
+          "parentId": "app"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-0",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-1",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-2",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-3",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        },
+        {
+          "id": "callout",
+          "parentId": "app"
+        },
+        {
+          "id": "bar",
+          "parentId": "window"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 3400,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 1.4,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3400,
+              "value": 1.58,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 97,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3400,
+              "value": 109,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -57,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3400,
+              "value": -65,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "callout"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2299,
+              "value": 0,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2300,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "callout"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2299,
+              "value": 0.86,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2300,
+              "value": 1.06,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2349,
+              "value": 1.06,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2350,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2399,
+              "value": 0.985,
+              "easing": "linear"
+            },
+            {
+              "timeMs": 2400,
+              "value": 1,
+              "easing": "linear"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "id": "demo-6-end",
+  "title": "Demo video 6: end card",
+  "description": "The closing card: the mark, one line and where to go.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "mark",
+          "parentId": "stage"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 2800,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "mark"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 400,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "mark"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.96,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 700,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "id": "demo-3-stats",
+  "title": "Demo video 3: stats",
+  "description": "The window closes in on the stat cards and pans across them as the numbers count.",
+  "definition": {
+    "width": 1440,
+    "height": 900,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "window",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "window"
+        },
+        {
+          "id": "page",
+          "parentId": "app"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-0",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-1",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-2",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-3",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        },
+        {
+          "id": "bar",
+          "parentId": "window"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 3200,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 1,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 900,
+              "value": 1.8,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "x",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 900,
+              "value": 410,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 3200,
+              "value": -410,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 900,
+              "value": 260,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

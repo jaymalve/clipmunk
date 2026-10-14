@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "id": "stop-1-build",
-  "title": "Hero film 1: build",
-  "description": "The dashboard puts itself together piece by piece, straight on, then its charts draw.",
+  "id": "demo-2-overview",
+  "title": "Demo video 2: overview",
+  "description": "The caption, then the app window rising into place and the dashboard building itself piece by piece.",
   "definition": {
     "width": 1440,
     "height": 900,
@@ -18,7 +18,23 @@
       },
       "nodes": [
         {
-          "id": "page"
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "window",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "window"
+        },
+        {
+          "id": "page",
+          "parentId": "app"
         },
         {
           "id": "sidebar",
@@ -51,15 +67,57 @@
         {
           "id": "customers",
           "parentId": "page"
+        },
+        {
+          "id": "bar",
+          "parentId": "window"
         }
       ]
     },
     "motion": {
-      "durationMs": 4400,
+      "durationMs": 4200,
       "tracks": [
         {
           "target": {
             "kind": "surface",
+            "id": "window"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 300,
+              "value": 150,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1200,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "window"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 300,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 900,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
             "id": "sidebar"
           },
           "property": "opacity",
@@ -70,12 +128,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 299,
+              "timeMs": 1299,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 300,
+              "timeMs": 1300,
               "value": 1,
               "easing": "linear"
             }
@@ -94,32 +152,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 299,
+              "timeMs": 1299,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 300,
-              "value": 1.07,
+              "timeMs": 1300,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 366,
-              "value": 1.07,
+              "timeMs": 1349,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 367,
+              "timeMs": 1350,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 432,
+              "timeMs": 1399,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 433,
+              "timeMs": 1400,
               "value": 1,
               "easing": "linear"
             }
@@ -138,12 +196,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 699,
+              "timeMs": 1519,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 700,
+              "timeMs": 1520,
               "value": 1,
               "easing": "linear"
             }
@@ -162,32 +220,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 699,
+              "timeMs": 1519,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 700,
-              "value": 1.07,
+              "timeMs": 1520,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 766,
-              "value": 1.07,
+              "timeMs": 1569,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 767,
+              "timeMs": 1570,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 832,
+              "timeMs": 1619,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 833,
+              "timeMs": 1620,
               "value": 1,
               "easing": "linear"
             }
@@ -206,12 +264,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1099,
+              "timeMs": 1739,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 1100,
+              "timeMs": 1740,
               "value": 1,
               "easing": "linear"
             }
@@ -230,32 +288,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1099,
+              "timeMs": 1739,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 1100,
-              "value": 1.07,
+              "timeMs": 1740,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1166,
-              "value": 1.07,
+              "timeMs": 1789,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1167,
+              "timeMs": 1790,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1232,
+              "timeMs": 1839,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1233,
+              "timeMs": 1840,
               "value": 1,
               "easing": "linear"
             }
@@ -274,12 +332,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1349,
+              "timeMs": 1899,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 1350,
+              "timeMs": 1900,
               "value": 1,
               "easing": "linear"
             }
@@ -298,32 +356,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1349,
+              "timeMs": 1899,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 1350,
-              "value": 1.07,
+              "timeMs": 1900,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1416,
-              "value": 1.07,
+              "timeMs": 1949,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1417,
+              "timeMs": 1950,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1482,
+              "timeMs": 1999,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1483,
+              "timeMs": 2000,
               "value": 1,
               "easing": "linear"
             }
@@ -342,12 +400,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1599,
+              "timeMs": 2059,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 1600,
+              "timeMs": 2060,
               "value": 1,
               "easing": "linear"
             }
@@ -366,32 +424,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1599,
+              "timeMs": 2059,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 1600,
-              "value": 1.07,
+              "timeMs": 2060,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1666,
-              "value": 1.07,
+              "timeMs": 2109,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1667,
+              "timeMs": 2110,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1732,
+              "timeMs": 2159,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1733,
+              "timeMs": 2160,
               "value": 1,
               "easing": "linear"
             }
@@ -410,12 +468,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1849,
+              "timeMs": 2219,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 1850,
+              "timeMs": 2220,
               "value": 1,
               "easing": "linear"
             }
@@ -434,32 +492,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 1849,
+              "timeMs": 2219,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 1850,
-              "value": 1.07,
+              "timeMs": 2220,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1916,
-              "value": 1.07,
+              "timeMs": 2269,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 1917,
+              "timeMs": 2270,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1982,
+              "timeMs": 2319,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 1983,
+              "timeMs": 2320,
               "value": 1,
               "easing": "linear"
             }
@@ -478,12 +536,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 2299,
+              "timeMs": 2499,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 2300,
+              "timeMs": 2500,
               "value": 1,
               "easing": "linear"
             }
@@ -502,32 +560,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 2299,
+              "timeMs": 2499,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 2300,
-              "value": 1.07,
+              "timeMs": 2500,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 2366,
-              "value": 1.07,
+              "timeMs": 2549,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 2367,
+              "timeMs": 2550,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 2432,
+              "timeMs": 2599,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 2433,
+              "timeMs": 2600,
               "value": 1,
               "easing": "linear"
             }
@@ -546,12 +604,12 @@
               "easing": "linear"
             },
             {
-              "timeMs": 2699,
+              "timeMs": 2759,
               "value": 0,
               "easing": "linear"
             },
             {
-              "timeMs": 2700,
+              "timeMs": 2760,
               "value": 1,
               "easing": "linear"
             }
@@ -570,32 +628,32 @@
               "easing": "linear"
             },
             {
-              "timeMs": 2699,
+              "timeMs": 2759,
               "value": 0.86,
               "easing": "linear"
             },
             {
-              "timeMs": 2700,
-              "value": 1.07,
+              "timeMs": 2760,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 2766,
-              "value": 1.07,
+              "timeMs": 2809,
+              "value": 1.06,
               "easing": "linear"
             },
             {
-              "timeMs": 2767,
+              "timeMs": 2810,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 2832,
+              "timeMs": 2859,
               "value": 0.985,
               "easing": "linear"
             },
             {
-              "timeMs": 2833,
+              "timeMs": 2860,
               "value": 1,
               "easing": "linear"
             }

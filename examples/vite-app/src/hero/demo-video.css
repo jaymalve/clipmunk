@@ -1,0 +1,154 @@
+/* The hero's demo video: a caption above, the app in a window below, cards at each end. */
+
+.dv {
+  position: relative;
+  width: 1440px;
+  height: 900px;
+  font-family: "Relay Inter", ui-sans-serif, system-ui, sans-serif;
+  color: #f4f4f4;
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(.dv) p {
+  margin: 0;
+}
+
+.dv__bg {
+  position: absolute;
+  width: 1440px;
+  height: 900px;
+  background: radial-gradient(70% 60% at 50% 0%, #241a14, #0e0e0e 70%);
+}
+
+.dv__caption {
+  text-align: center;
+  font-size: 54px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.dv__caption span,
+.dv-card__title span {
+  display: inline-block;
+  white-space: pre;
+}
+
+.dv__window {
+  position: absolute;
+  left: 200px;
+  top: 190px;
+  width: 1040px;
+  height: 682px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.dv__chrome {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  border: 1px solid #2f2f2f;
+  background: #141414;
+}
+
+.dv__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-bottom: 1px solid #2b2b2b;
+  background: #0c0c0c;
+  color: #6f6f6f;
+  font-size: 12.5px;
+}
+
+.dv__bar i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+
+.dv__bar i:nth-child(2) {
+  background: #febc2e;
+}
+
+.dv__bar i:nth-child(3) {
+  margin-right: 10px;
+  background: #28c840;
+}
+
+.dv__app {
+  position: absolute;
+  left: 0;
+  top: 32px;
+  width: 1040px;
+  height: 650px;
+}
+
+/* The dashboard is drawn at 1440 x 900 and shrunk to fit the window. */
+.dv__fit {
+  width: 1440px;
+  height: 900px;
+  transform: scale(0.7222);
+  transform-origin: 0 0;
+}
+
+.dv__callout {
+  position: absolute;
+  border: 3px solid #f47a38;
+  border-radius: 16px;
+}
+
+.dv-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1440px;
+  height: 900px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 26px;
+  text-align: center;
+}
+
+.dv-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.dv-card__mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #f47a38;
+  color: #171717;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.dv-card__title {
+  max-width: 1100px;
+  font-size: 76px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.dv-card__title .is-munk {
+  color: #f47a38;
+}
+
+.dv-card__note {
+  font-size: 22px;
+  color: #a8a8a8;
+}

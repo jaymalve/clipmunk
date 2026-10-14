@@ -1,7 +1,7 @@
 {
   "version": 1,
   "id": "hero-film",
-  "title": "Landing page hero film",
+  "title": "Landing page demo video",
   "width": 1440,
   "height": 900,
   "fps": 60,
@@ -9,7 +9,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "stop-1-build"
+        "id": "demo-1-title"
       },
       "transition": {
         "kind": "cut"
@@ -18,7 +18,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "stop-2-stats"
+        "id": "demo-2-overview"
       },
       "transition": {
         "kind": "cut"
@@ -27,7 +27,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "stop-3-chart"
+        "id": "demo-3-stats"
       },
       "transition": {
         "kind": "cut"
@@ -36,7 +36,7 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "stop-4-list"
+        "id": "demo-4-chart"
       },
       "transition": {
         "kind": "cut"
@@ -45,7 +45,16 @@
     {
       "clip": {
         "kind": "scene",
-        "id": "stop-5-page"
+        "id": "demo-5-list"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "demo-6-end"
       },
       "transition": {
         "kind": "cut"
