@@ -1,11 +1,11 @@
 /* ─────────────────────────────────────────────────────────────
-   Relay, the made-up product the hero films. Two pages share this look:
+   Acme, the made-up app the hero films. Two pages share this look:
    a dashboard and a pull request. Everything is sized in pixels for a
    1440 x 900 frame; whoever shows it scales the whole frame.
    ───────────────────────────────────────────────────────────── */
 
 @font-face {
-  font-family: "Relay Inter";
+  font-family: "Demo Inter";
   src: url("./fonts/inter.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
@@ -28,7 +28,7 @@
   --dm-on-munk: #171717;
   width: 1440px;
   height: 900px;
-  font-family: "Relay Inter", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Demo Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.4;
   color: var(--dm-ink);

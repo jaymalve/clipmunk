@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "id": "launch-3-prompt",
+  "title": "Launch 3: prompt",
+  "description": "One prompt goes into the agent and Clipmunk is set up.",
+  "definition": {
+    "width": 1920,
+    "height": 1080,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "window",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "window"
+        },
+        {
+          "id": "bar",
+          "parentId": "window"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 4200,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "window"
+          },
+          "property": "y",
+          "keyframes": [
+            {
+              "timeMs": 100,
+              "value": 120,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1000,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "window"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 100,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 700,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

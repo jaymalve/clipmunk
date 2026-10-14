@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "launch-7-music",
+  "title": "Launch 7: music",
+  "description": "The soundtrack, drawn as it plays.",
+  "definition": {
+    "width": 1920,
+    "height": 1080,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "bars",
+          "parentId": "stage"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 3000,
+      "tracks": []
+    }
+  }
+}

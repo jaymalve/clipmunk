@@ -1,0 +1,343 @@
+{
+  "version": 1,
+  "id": "launch-5-scene",
+  "title": "Launch 5: scene",
+  "description": "The app's real components in 3D: the camera comes round as the sections settle into the page.",
+  "definition": {
+    "width": 1920,
+    "height": 1080,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 2.4,
+        "focalLength": 100,
+        "maxBlur": 7
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "caption",
+          "parentId": "stage"
+        },
+        {
+          "id": "app",
+          "parentId": "stage"
+        },
+        {
+          "id": "page",
+          "parentId": "app"
+        },
+        {
+          "id": "sidebar",
+          "parentId": "page"
+        },
+        {
+          "id": "header",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-0",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-1",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-2",
+          "parentId": "page"
+        },
+        {
+          "id": "stat-3",
+          "parentId": "page"
+        },
+        {
+          "id": "chart",
+          "parentId": "page"
+        },
+        {
+          "id": "customers",
+          "parentId": "page"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 4600,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "rotateY",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -24,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4600,
+              "value": -8,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "rotateX",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 12,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4600,
+              "value": 4,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.78,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4600,
+              "value": 0.86,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "app"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": -80,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 4600,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "sidebar"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 80,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 200,
+              "value": 80,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1300,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "header"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 140,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 300,
+              "value": 140,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1500,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-0"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 450,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1700,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-1"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 570,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1820,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-2"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 690,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1940,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "stat-3"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 810,
+              "value": 240,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2060,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "chart"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 200,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 800,
+              "value": 200,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2300,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "customers"
+          },
+          "property": "z",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 320,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 1000,
+              "value": 320,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 2600,
+              "value": 0,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

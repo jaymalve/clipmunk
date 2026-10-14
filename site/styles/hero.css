@@ -198,7 +198,7 @@
 
 .player__stage {
   position: relative;
-  aspect-ratio: 1440 / 900;
+  aspect-ratio: 16 / 9;
   background: #000;
   overflow: hidden;
 }

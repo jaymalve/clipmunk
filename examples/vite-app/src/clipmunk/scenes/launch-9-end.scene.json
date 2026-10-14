@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "id": "launch-9-end",
+  "title": "Launch 9: end card",
+  "description": "The mark, the install command and the address.",
+  "definition": {
+    "width": 1920,
+    "height": 1080,
+    "scene": {
+      "camera": {
+        "perspective": 1400
+      },
+      "focus": {
+        "distance": 1400,
+        "fStop": 22,
+        "focalLength": 50,
+        "maxBlur": 0
+      },
+      "nodes": [
+        {
+          "id": "stage"
+        },
+        {
+          "id": "card",
+          "parentId": "stage"
+        }
+      ]
+    },
+    "motion": {
+      "durationMs": 3400,
+      "tracks": [
+        {
+          "target": {
+            "kind": "surface",
+            "id": "card"
+          },
+          "property": "opacity",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 250,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        },
+        {
+          "target": {
+            "kind": "surface",
+            "id": "card"
+          },
+          "property": "scale",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "value": 0.97,
+              "easing": "cinematic"
+            },
+            {
+              "timeMs": 900,
+              "value": 1,
+              "easing": "cinematic"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "id": "launch",
+  "title": "Clipmunk launch video",
+  "width": 1920,
+  "height": 1080,
+  "fps": 60,
+  "items": [
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-1-open"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-2-title"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-3-prompt"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-4-recipe"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-5-scene"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-6-take"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-7-music"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-8-export"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "launch-9-end"
+      },
+      "transition": {
+        "kind": "cut"
+      }
+    }
+  ],
+  "music": {
+    "style": "upbeat"
+  }
+}

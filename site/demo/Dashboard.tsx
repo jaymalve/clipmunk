@@ -1,5 +1,5 @@
 /**
- * Relay's dashboard: the page the hero's film is shot on.
+ * Acme's dashboard: the page the hero's film is shot on.
  * Plain React with no state. `progress` runs from 0 to 1 and draws the charts and counts the numbers
  * up, so a scene can drive them from its own clock and an ordinary page can leave them finished.
  */
@@ -49,7 +49,7 @@ export function Sidebar() {
   return (
     <aside className="dash-side">
       <p className="dash-side__brand">
-        <span className="dm-mark">R</span> Relay
+        <span className="dm-mark">A</span> Acme
       </p>
       <ul>
         {NAV.map((item, index) => (
@@ -61,7 +61,7 @@ export function Sidebar() {
       <p className="dash-side__foot">
         <span className="dm-avatar dm-avatar--munk">A</span>
         <b>
-          Alvin Okafor <span>Relay · Scale plan</span>
+          Alvin Okafor <span>Acme · Scale plan</span>
         </b>
       </p>
     </aside>
@@ -73,7 +73,7 @@ export function Header() {
     <header className="dash-head">
       <div>
         <h1>Good morning, Alvin</h1>
-        <p>Here is how Relay is doing this week.</p>
+        <p>Here is how Acme is doing this week.</p>
       </div>
       <div className="dash-head__tools">
         <p className="dash-range">

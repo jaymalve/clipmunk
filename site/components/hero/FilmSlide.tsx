@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { SlideProps } from "./slide";
 import { prefersStillness } from "./useFit";
 
-/** A real Clipmunk export: a stop-motion film of the dashboard, five scenes joined into one sequence, with generated music. It plays silently. */
+/** Clipmunk's launch video, made with Clipmunk: nine scenes joined into one sequence. It plays silently here. */
 export default function FilmSlide({ onProgress, onDone }: SlideProps) {
   const video = useRef<HTMLVideoElement>(null);
 

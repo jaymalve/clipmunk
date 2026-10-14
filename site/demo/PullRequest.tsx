@@ -1,5 +1,5 @@
 /**
- * Relay's pull request page: what the hero's recorded take clicks through.
+ * Acme's pull request page: what the hero's recorded take clicks through.
  * It has no state of its own; the take tells it which tab is open and how far the review has got.
  */
 
@@ -23,16 +23,16 @@ const DIFF: { kind: "" | "add" | "del"; line: number; text: string }[] = [
 const CHECKS = [
   { name: "Build", detail: "2m 04s" },
   { name: "Tests", detail: "312 passed" },
-  { name: "Preview", detail: "relay-pr-312.dev" },
+  { name: "Preview", detail: "acme-pr-312.dev" },
 ];
 
 export function PullRequest({ tab, approved, merged }: PullRequestState) {
   return (
     <div className="dm dm-pr">
       <header className="pr-top">
-        <span className="dm-mark">R</span>
+        <span className="dm-mark">A</span>
         <span className="pr-top__crumb">
-          relay / <b>web</b>
+          acme / <b>web</b>
         </span>
         <span className="pr-top__search">Search or jump to…</span>
         <span className="dm-avatar dm-avatar--munk">S</span>
