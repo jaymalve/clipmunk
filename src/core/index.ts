@@ -12,5 +12,6 @@ export * from "./recipe";
 export * from "./result";
 export * from "./scene";
 export * from "./sequence";
+export * from "./sounds";
 export * from "./spatial";
 export * from "./take";

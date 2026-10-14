@@ -256,7 +256,7 @@ const RECIPE: Token[][] = [
   [p("      "), k("keyframes"), p(": [{ "), k("timeMs"), p(": "), n(0), p(", "), k("value"), p(": "), n(180), p(" },")],
   [p("                  { "), k("timeMs"), p(": "), n(2300), p(", "), k("value"), p(": "), n(0), p(" }] }]")],
   [p("  },")],
-  [p("  "), k("music"), p(": { "), k("style"), p(": "), s("upbeat"), p(" }")],
+  [p("  "), k("music"), p(": { "), k("style"), p(": "), s("launch"), p(" }")],
   [p("}")],
 ];
 

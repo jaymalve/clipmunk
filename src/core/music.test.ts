@@ -92,6 +92,57 @@ describe("generated music", () => {
   });
 });
 
+describe("the launch style", () => {
+  // The launch video's joins: the drop lands on the second, and the end hit on the last.
+  const joins = [1800, 4400, 8600, 12400, 17000, 22000, 25000, 28600];
+  // Rendered once and shared: a 32 second render takes a moment.
+  let rendered: ReturnType<typeof renderMusic> | undefined;
+  const render = () =>
+    (rendered ??= renderMusic(
+      planMusic(
+        { style: "launch", gain: 0.5, duck: true, sync: true },
+        { key: "sequence:launch", durationMs: 32000, momentsMs: joins, accentLevel: 1 },
+      ),
+    ));
+  const at = (seconds: number) => Math.round(seconds * 44100);
+
+  it("stays quiet in the intro and drops on the first moment a bar or more in", () => {
+    const music = render();
+    const intro = rms(music.left, at(0.5), at(3.5));
+    const drop = rms(music.left, at(4.5), at(7.5));
+    expect(drop).toBeGreaterThan(intro * 2);
+  });
+
+  it("goes silent for a moment just before its biggest moments, then lands on them", () => {
+    const music = render();
+    const beat = 60 / music.bpm;
+    // 8.6 s is the first moment well into the drop, so it gets the gap.
+    const gap = rms(music.left, at(8.6 - beat / 2 + 0.03), at(8.6 - 0.02));
+    const landing = rms(music.left, at(8.6), at(8.6 + beat / 2));
+    expect(gap).toBeLessThan(landing / 4);
+  });
+
+  it("ends with a hit on the last moment that rings out and fades", () => {
+    const music = render();
+    const hit = rms(music.left, at(28.6), at(29.0));
+    const before = rms(music.left, at(27.6), at(28.4));
+    const tail = rms(music.left, at(30.5), at(31.5));
+    expect(hit).toBeGreaterThan(tail * 4);
+    expect(tail).toBeLessThan(before / 4);
+  });
+
+  it("is the same every time for the same moments and seed", () => {
+    const request = { style: "launch", seed: 9, durationMs: 6000, accentsMs: [4400] } as const;
+    expect(same(renderMusic(request).left, renderMusic(request).left)).toBe(true);
+    expect(same(renderMusic(request).left, renderMusic({ ...request, seed: 10 }).left)).toBe(false);
+  });
+
+  it("still makes music for a short clip with no moments", () => {
+    const music = renderMusic({ style: "launch", seed: 5, durationMs: 4000 });
+    expect(rms(music.left, at(1), at(3))).toBeGreaterThan(0.05);
+  });
+});
+
 describe("music settings", () => {
   it("defaults to a moderate level that lowers under a voice", () => {
     expect(MusicSchema.parse({ style: "lofi" })).toEqual({ style: "lofi", gain: 0.5, duck: true, sync: true });

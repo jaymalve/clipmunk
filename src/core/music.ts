@@ -1,4 +1,18 @@
 import { z } from "zod";
+import { LAUNCH_BPM, renderLaunch } from "./launch-music";
+import {
+  createTape,
+  hiss as noiseHiss,
+  pluck,
+  random,
+  saw,
+  sine,
+  swell,
+  TAU,
+  type Tape,
+  triangle,
+  type Wave,
+} from "./synth";
 
 /** Background music synthesized from code.
  * Every sample is computed here from a style, a seed and a length, so the result belongs
@@ -6,7 +20,7 @@ import { z } from "zod";
  * The function is pure and deterministic, which is why the preview in the browser and the
  * export in Node produce the same sound.
  */
-export const MUSIC_STYLES = ["upbeat", "lofi"] as const;
+export const MUSIC_STYLES = ["upbeat", "lofi", "launch"] as const;
 export type MusicStyle = (typeof MUSIC_STYLES)[number];
 
 export const MusicSchema = z.strictObject({
@@ -37,24 +51,13 @@ export type MusicRequest = {
   phaseMs?: number;
 };
 
-const TAU = Math.PI * 2;
 const NOTE = (semitonesFromA4: number) => 440 * 2 ** (semitonesFromA4 / 12);
-
-/** Small, fast, seedable random numbers: the same seed always gives the same tune. */
-function random(seed: number) {
-  let state = (seed * 2654435761 + 0x9e3779b9) >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 type Chord = { root: number; tones: number[] }; // semitones from the key's root
 type Plan = { bpm: number; swing: number; major: boolean; progressions: number[][]; barsPerChord: number };
-const PLANS: Record<MusicStyle, Plan> = {
+/** The styles built bar after bar from a plan; "launch" is arranged around its moments instead. */
+type BarStyle = Exclude<MusicStyle, "launch">;
+const PLANS: Record<BarStyle, Plan> = {
   upbeat: {
     bpm: 118,
     swing: 0,
@@ -79,9 +82,9 @@ const PLANS: Record<MusicStyle, Plan> = {
   },
 };
 /** Gain into the soft clipper, set by ear-free measurement so each style sits at a similar loudness. */
-const DRIVE: Record<MusicStyle, number> = { upbeat: 1.4, lofi: 1.7 };
+const DRIVE: Record<BarStyle, number> = { upbeat: 1.4, lofi: 1.7 };
 /** Keeps each style's tunes independent of the others, and stable if a style is added or removed. */
-const STYLE_SEED: Record<MusicStyle, number> = { upbeat: 1000, lofi: 2000 };
+const STYLE_SEED: Record<BarStyle, number> = { upbeat: 1000, lofi: 2000 };
 const MAJOR = [0, 2, 4, 5, 7, 9, 11],
   MINOR = [0, 2, 3, 5, 7, 8, 10];
 
@@ -91,82 +94,10 @@ function chordOn(degree: number, scale: number[], sevenths: boolean): Chord {
   return { root: at(0), tones: [at(0), at(2), at(4), ...(sevenths ? [at(6)] : [])] };
 }
 
-type Wave = (phase: number, age: number) => number;
-type Envelope = (age: number, duration: number) => number;
-const sine: Wave = (phase) => Math.sin(phase);
-const saw: Wave = (phase) => 2 * (phase / TAU - Math.floor(phase / TAU + 0.5));
-const triangle: Wave = (phase) => 2 * Math.abs(saw(phase, 0)) - 1;
-/** Fades in over `attack` seconds and out over the last `release` seconds. */
-const swell =
-  (attack: number, release: number): Envelope =>
-  (age, duration) =>
-    Math.min(1, age / attack) * Math.min(1, Math.max(0, (duration - age) / release));
-/** Starts at once and dies away, like a plucked string. */
-const pluck =
-  (decay: number): Envelope =>
-  (age, duration) =>
-    Math.min(1, age / 0.004) * Math.exp(-age / decay) * Math.min(1, Math.max(0, (duration - age) / 0.02));
-
-/** The stereo buffer being filled, and the one way sound gets onto it. */
-type Tape = {
-  sampleRate: number;
-  length: number;
-  left: Float32Array;
-  right: Float32Array;
-  /** One note: `wave` gives the raw tone for a phase, `shape` its loudness over the note's life.
-   * `pan` runs from -1 (left) to 1 (right). A `cutoff` above 0 low-passes the tone.
-   */
-  note(
-    start: number,
-    duration: number,
-    frequency: number,
-    level: number,
-    pan: number,
-    wave: Wave,
-    shape: Envelope,
-    cutoff?: number,
-  ): void;
-};
-
-function createTape(length: number, sampleRate: number): Tape {
-  const left = new Float32Array(length),
-    right = new Float32Array(length);
-  const write = (index: number, value: number, pan: number) => {
-    if (index < 0 || index >= length) return;
-    left[index] = left[index]! + value * Math.min(1, 1 - pan);
-    right[index] = right[index]! + value * Math.min(1, 1 + pan);
-  };
-  const note: Tape["note"] = (start, duration, frequency, level, pan, wave, shape, cutoff = 0) => {
-    const from = Math.round(start * sampleRate),
-      count = Math.round(duration * sampleRate);
-    const step = (frequency * TAU) / sampleRate;
-    // A one-pole low-pass takes the edge off bright waves; 0 leaves the tone as it is.
-    const smoothing = cutoff > 0 ? 1 - Math.exp((-TAU * cutoff) / sampleRate) : 1;
-    let phase = 0,
-      filtered = 0;
-    for (let i = 0; i < count && from + i < length; i++) {
-      const age = i / sampleRate;
-      filtered += smoothing * (wave(phase, age) - filtered);
-      write(from + i, filtered * shape(age, duration) * level, pan);
-      phase += step;
-    }
-  };
-  return { sampleRate, length, left, right, note };
-}
-
 /** Drums made from a pitch-swept sine (kick) and shaped noise (snare, hi-hat). */
 function drumKit(tape: Tape, noise: () => number) {
   const kickTone: Wave = (_phase, age) => Math.sin(TAU * (48 * age + (62 / 28) * (1 - Math.exp(-age * 28))));
-  /** White noise with its low end removed; `keep` is how much of the previous sample is subtracted. */
-  const hiss = (keep: number): Wave => {
-    let previous = 0;
-    return () => {
-      const sample = noise() * 2 - 1,
-        edge = sample - previous * keep;
-      previous = sample;
-      return edge;
-    };
-  };
+  const hiss = (keep: number) => noiseHiss(noise, keep);
   return {
     kick: (start: number, level: number) =>
       tape.note(start, 0.32, 1, level, 0, kickTone, (age) => Math.exp(-age / 0.11)),
@@ -182,7 +113,7 @@ function drumKit(tape: Tape, noise: () => number) {
 /** What one bar needs to know: where it starts, its chord, and the piece's shared settings. */
 type Bar = {
   tape: Tape;
-  style: MusicStyle;
+  style: BarStyle;
   plan: Plan;
   drums: ReturnType<typeof drumKit>;
   rng: () => number;
@@ -296,7 +227,7 @@ function addTapeNoise(tape: Tape, seed: number) {
  * added accent cannot change how loud the rest is), peaks rounded off instead of clipped, the
  * very top softened, and a fade at each end.
  */
-function master({ left, right, length, sampleRate }: Tape, style: MusicStyle) {
+function master({ left, right, length, sampleRate }: Tape, style: BarStyle) {
   const drive = DRIVE[style];
   const top = 1 - Math.exp((-TAU * (style === "upbeat" ? 11000 : 6000)) / sampleRate);
   let smoothLeft = 0,
@@ -318,7 +249,8 @@ function master({ left, right, length, sampleRate }: Tape, style: MusicStyle) {
 }
 
 export function renderMusic(request: MusicRequest): RenderedMusic {
-  const { style } = request;
+  if (request.style === "launch") return renderLaunch(request);
+  const style = request.style;
   const sampleRate = request.sampleRate ?? 44100;
   const tape = createTape(Math.max(1, Math.round((request.durationMs / 1000) * sampleRate)), sampleRate);
   const plan = PLANS[style];
@@ -365,7 +297,7 @@ export function renderMusic(request: MusicRequest): RenderedMusic {
 }
 
 /** The style's own tempo, before any fitting. */
-export const styleTempo = (style: MusicStyle): number => PLANS[style].bpm;
+export const styleTempo = (style: MusicStyle): number => (style === "launch" ? LAUNCH_BPM : PLANS[style].bpm);
 
 /** A tune number from a clip's name, so every clip gets its own music and keeps it across exports. */
 export function seedFor(key: string): number {

@@ -81,5 +81,14 @@
         }
       ]
     }
-  }
+  },
+  "sounds": [
+    {
+      "kind": "typing",
+      "atMs": 400,
+      "chars": 52,
+      "perSecond": 46,
+      "enter": true
+    }
+  ]
 }

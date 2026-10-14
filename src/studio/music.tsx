@@ -6,20 +6,27 @@ import {
   MusicSchema,
   type MusicStyle,
   planMusic,
+  type RenderedSounds,
   renderMusic,
+  renderSounds,
+  type Sound,
+  seedFor,
 } from "../core";
 import type { Clock } from "../react";
 
 /** Generated music in the studio: the controls that choose it, and playback alongside a
  * clip's clock. The sound comes from the same pure function the exporter uses.
  */
-const NAMES: Record<MusicStyle, string> = { upbeat: "Upbeat", lofi: "Lo-fi" };
+const NAMES: Record<MusicStyle, string> = { upbeat: "Upbeat", lofi: "Lo-fi", launch: "Launch" };
 let shared: AudioContext | undefined;
 const audio = () => (shared ??= new AudioContext());
 
 function toBuffer(request: MusicRequest): AudioBuffer {
+  return bufferOf(renderMusic({ ...request, sampleRate: audio().sampleRate }));
+}
+
+function bufferOf(rendered: RenderedSounds): AudioBuffer {
   const context = audio();
-  const rendered = renderMusic({ ...request, sampleRate: context.sampleRate });
   const buffer = context.createBuffer(2, rendered.left.length, rendered.sampleRate);
   buffer.copyToChannel(rendered.left as Float32Array<ArrayBuffer>, 0);
   buffer.copyToChannel(rendered.right as Float32Array<ArrayBuffer>, 1);
@@ -70,6 +77,50 @@ export function useMusicPreview(options: { music?: Music; clip: MusicClip; clock
       source.disconnect();
       gain.disconnect();
       volume.current = undefined;
+    };
+  }, [playing, buffer, clock]);
+}
+
+/** Play a scene's sound effects in step with its clock, rendered as the exporter renders them. */
+export function useSoundsPreview(options: {
+  sounds?: readonly Sound[];
+  speed?: number;
+  clip: MusicClip;
+  clock: Clock;
+  playing: boolean;
+}) {
+  const { clock, playing } = options;
+  const [buffer, setBuffer] = useState<AudioBuffer>();
+  const plan = options.sounds?.length
+    ? JSON.stringify({
+        sounds: options.sounds,
+        speed: options.speed,
+        durationMs: Math.round(options.clip.durationMs),
+        seed: seedFor(options.clip.key),
+      })
+    : "";
+  useEffect(() => {
+    setBuffer(undefined);
+    if (!plan) return;
+    const request = JSON.parse(plan) as Parameters<typeof renderSounds>[0];
+    if (request.durationMs <= 0) return;
+    const timer = setTimeout(
+      () => setBuffer(bufferOf(renderSounds({ ...request, sampleRate: audio().sampleRate }))),
+      30,
+    );
+    return () => clearTimeout(timer);
+  }, [plan]);
+  useEffect(() => {
+    if (!playing || !buffer) return;
+    const context = audio();
+    void context.resume();
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    source.start(0, Math.min(buffer.duration, Math.max(0, clock.get() / 1000)));
+    return () => {
+      source.stop();
+      source.disconnect();
     };
   }, [playing, buffer, clock]);
 }

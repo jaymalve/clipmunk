@@ -49,7 +49,7 @@ const out = (name: string) => {
   made.push(name);
   return name;
 };
-const loudness = (file: string) => loudnessOf(path.join(root, file));
+const loudness = (file: string, from?: number, seconds?: number) => loudnessOf(path.join(root, file), from, seconds);
 
 beforeAll(async () => {
   process.env.CLIPMUNK_FFMPEG ??= FFMPEG;
@@ -211,6 +211,39 @@ describe("generated music", () => {
       data: { music: null },
     });
     expect("music" in (await recipe())).toBe(false);
+  }, 400_000);
+});
+
+describe("sound effects", () => {
+  it("lay a scene's typing over a sequence where that scene plays, and nowhere else", async () => {
+    const recipe = JSON.parse(await readFile(recipePath, "utf8"));
+    // Typing from 0.3 s to 0.8 s of each 1.5 s copy of the scene.
+    await writeFile(
+      recipePath,
+      JSON.stringify({ ...recipe, sounds: [{ kind: "typing", atMs: 300, chars: 5, perSecond: 10 }] }),
+    );
+    await call("PUT", "/v1/sequences/zz-test-sounds", {
+      version: 1,
+      id: "zz-test-sounds",
+      title: "Sounds",
+      width: 640,
+      height: 360,
+      fps: 30,
+      items: [
+        { clip: { kind: "scene", id: "rack-focus" } },
+        { clip: { kind: "scene", id: "rack-focus" }, transition: { kind: "cut" } },
+      ],
+    });
+    const output = out(".clipmunk/exports/zz-test-sounds-sequence.mp4");
+    const result = await exportSequence({ sequenceId: "zz-test-sounds", url: origin, output }, { root });
+    await rm(sequenceFile("zz-test-sounds"), { force: true });
+    await writeFile(recipePath, recipeFile);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.data).toMatchObject({ durationMs: 3000, audio: true });
+    for (const start of [0, 1.5]) {
+      expect(loudness(output, start + 0.3, 0.5)).toBeGreaterThan(-60);
+      expect(loudness(output, start + 0.95, 0.5)).toBeLessThan(-80);
+    }
   }, 400_000);
 });
 

@@ -298,6 +298,15 @@ function underlay(main: string | undefined, musicInput: string, music: MusicInpu
   };
 }
 
+/** Filter lines that lay generated sound effects over everything else. They come after the
+ * music, so a key click never lowers the music the way a voice does.
+ */
+function effectsOver(main: string | undefined, input: string): { lines: string[]; out: string } {
+  const level = `${input}aresample=48000,aformat=channel_layouts=stereo[fx]`;
+  if (!main) return { lines: [level], out: "fx" };
+  return { lines: [level, `[${main}][fx]amix=inputs=2:normalize=0:dropout_transition=0[withfx]`], out: "withfx" };
+}
+
 export type PlacedAudio = { file: string; offsetMs: number; gain: number };
 /** One FFmpeg filter chain that places a sound on a timeline: delayed or cut at the front, at its volume. */
 const placed = (input: string, track: PlacedAudio, label: string) =>
@@ -311,10 +320,13 @@ export async function addAudio(options: {
   durationMs: number;
   tracks: PlacedAudio[];
   music?: MusicInput;
+  /** A WAV of generated sound effects, as long as the video. */
+  effects?: string;
 }): Promise<void> {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", options.video];
   for (const track of options.tracks) args.push("-i", track.file);
   if (options.music) args.push("-i", options.music.file);
+  if (options.effects) args.push("-i", options.effects);
   const graph = options.tracks.map((track, index) => placed(`[${index + 1}:a:0]`, track, `a${index}`));
   let sound: string | undefined;
   if (options.tracks.length) {
@@ -325,6 +337,11 @@ export async function addAudio(options: {
   }
   if (options.music) {
     const mixed = underlay(sound, `[${options.tracks.length + 1}:a:0]`, options.music);
+    graph.push(...mixed.lines);
+    sound = mixed.out;
+  }
+  if (options.effects) {
+    const mixed = effectsOver(sound, `[${options.tracks.length + (options.music ? 2 : 1)}:a:0]`);
     graph.push(...mixed.lines);
     sound = mixed.out;
   }
@@ -362,6 +379,8 @@ export async function joinClips(options: {
   height: number;
   overlay: PlacedAudio[];
   music?: MusicInput;
+  /** A WAV of generated sound effects, as long as the whole sequence. */
+  effects?: string;
   totalMs: number;
   output: string;
   cwd: string;
@@ -371,6 +390,7 @@ export async function joinClips(options: {
   for (const clip of clips) args.push("-i", clip.file);
   for (const track of options.overlay) args.push("-i", track.file);
   if (options.music) args.push("-i", options.music.file);
+  if (options.effects) args.push("-i", options.effects);
   // Clip sound is only wired up when some clip or overlay has any; music alone needs none of it.
   const audio = clips.some((clip) => clip.hasAudio) || options.overlay.length > 0;
   const seconds = (ms: number) => (ms / 1000).toFixed(3);
@@ -418,6 +438,11 @@ export async function joinClips(options: {
   let heard: string | undefined = audio ? sound : undefined;
   if (options.music) {
     const mixed = underlay(heard, `[${clips.length + options.overlay.length}:a:0]`, options.music);
+    graph.push(...mixed.lines);
+    heard = mixed.out;
+  }
+  if (options.effects) {
+    const mixed = effectsOver(heard, `[${clips.length + options.overlay.length + (options.music ? 1 : 0)}:a:0]`);
     graph.push(...mixed.lines);
     heard = mixed.out;
   }

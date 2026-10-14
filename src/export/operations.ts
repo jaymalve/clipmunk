@@ -9,18 +9,21 @@ import {
   fail,
   MAX_EXPORT_DURATION_MS,
   ok,
+  type RenderedSounds,
   type Result,
+  renderSounds,
   SceneRecipeSchema,
   SNAPSHOT_WIDTH,
   type SnapshotSceneResult,
   SnapshotSceneSchema,
   sceneMoments,
+  seedFor,
   zodIssues,
 } from "../core";
 import { type Context, exists, Fault, readText, resolveInside, resolveStudio, toIssues, writeText } from "../project";
 import { launchBrowser, openClip } from "./browser";
 import { addAudio, concatSegments, type Encoder, type PlacedAudio, startEncoder } from "./ffmpeg";
-import { writeMusic } from "./music";
+import { writeMusic, writeSounds } from "./music";
 import {
   CANCELLED,
   type Cancellation,
@@ -126,6 +129,18 @@ async function renderFrames(options: {
   return joined;
 }
 
+/** A scene's sound effects over `durationMs` of its clip. A sequence calls this too, so a
+ * scene sounds the same on its own and inside one.
+ */
+export function sceneSounds(scene: CatalogScene, durationMs: number): RenderedSounds {
+  return renderSounds({
+    sounds: scene.sounds ?? [],
+    durationMs,
+    speed: scene.definition.motion?.speed,
+    seed: seedFor(`scene:${scene.id}`),
+  });
+}
+
 /** The scene's sound: its audio clips that exist on disk, and its generated music.
  * A missing file is reported as a warning, not a failure.
  */
@@ -151,7 +166,9 @@ async function sceneSound(
       durationMs,
       momentsMs: sceneMoments(scene.definition),
     }));
-  return { tracks, music, warnings };
+  const effects =
+    request.sounds && scene.sounds?.length ? await writeSounds(directory, sceneSounds(scene, durationMs)) : undefined;
+  return { tracks, music, effects, warnings };
 }
 
 export async function exportScene(input: unknown, context: ExportContext): Promise<Result<ExportSceneResult>> {
@@ -189,7 +206,7 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
     const durationMs = (plan.frames * 1000) / request.fps;
     const sound = await sceneSound(root, scene, request, directory, durationMs);
     let finished = picture;
-    if (sound.tracks.length || sound.music) {
+    if (sound.tracks.length || sound.music || sound.effects) {
       finished = path.join(directory, "with-audio.mp4");
       await addAudio({
         video: picture,
@@ -198,6 +215,7 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
         durationMs,
         tracks: sound.tracks,
         music: sound.music,
+        effects: sound.effects,
       });
     }
     await publish(finished, claim);
@@ -209,7 +227,7 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
       width: plan.width,
       height: plan.height,
       workers: plan.workers,
-      audio: sound.tracks.length > 0 || !!sound.music,
+      audio: sound.tracks.length > 0 || !!sound.music || !!sound.effects,
       elapsedMs: Date.now() - started,
       ...(sound.warnings.length ? { warnings: sound.warnings } : {}),
     });
