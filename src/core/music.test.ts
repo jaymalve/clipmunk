@@ -122,6 +122,14 @@ describe("the launch style", () => {
     expect(gap).toBeLessThan(landing / 4);
   });
 
+  it("lands the ending on its moment after a silence, so it never falls between beats", () => {
+    const music = render();
+    // 28.6 s is about a third of a beat off the drop's beat; the music stops on its own beat
+    // and is silent until the moment, then hits on it.
+    expect(rms(music.left, at(28.25), at(28.59))).toBe(0);
+    expect(rms(music.left, at(28.6), at(28.7))).toBeGreaterThan(0.1);
+  });
+
   it("ends with a hit on the last moment that rings out and fades", () => {
     const music = render();
     const hit = rms(music.left, at(28.6), at(29.0));

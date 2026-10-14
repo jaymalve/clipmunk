@@ -64,13 +64,29 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   let end = Number.POSITIVE_INFINITY;
   if (late !== undefined) end = late;
   else if (total >= 10) for (let at = drop + BAR; at <= total - 2.4; at += BAR) end = at;
-  // Silence for two sixteenths before the biggest moments, no closer than two bars apart.
+  // The biggest moments, no closer than two bars apart, and the ending are landings: the
+  // music stops on its own beat, is silent for a moment, and lands on the moment itself.
+  // From each landing the beat is counted afresh, so a moment that falls between the
+  // music's beats still sounds on time. The silence takes up the difference.
   const gaps: number[] = [];
   for (const at of moments)
     if (at > drop + BAR / 2 && at < end - 0.01 && at - (gaps.at(-1) ?? Number.NEGATIVE_INFINITY) >= BAR * 2)
       gaps.push(at);
-  const gapOf = (at: number) => gaps.find((gap) => at >= gap - 2 * S16 - 0.001 && at < gap - 0.001);
-  const inGap = (at: number) => gapOf(at) !== undefined;
+  const anchors = [drop, ...gaps];
+  const sectionOf = (at: number) => anchors.filter((anchor) => anchor <= at + 0.001).at(-1) ?? drop;
+  /** The nearest sixteenth to `at` on the beat counted from the last landing. */
+  const onBeat = (at: number) => {
+    const anchor = sectionOf(at);
+    return anchor + Math.round((at - anchor) / S16) * S16;
+  };
+  // Each silence starts on the last sixteenth at least two before its landing.
+  const silences: [from: number, to: number][] = [];
+  for (const landing of Number.isFinite(end) && end < total ? [...gaps, end] : gaps) {
+    const anchor = anchors.filter((at) => at < landing - 0.001).at(-1) ?? drop;
+    const from = anchor + Math.floor((landing - 2 * S16 - anchor) / S16 + 0.001) * S16;
+    if (from > anchor + S16) silences.push([from, landing]);
+  }
+  const inGap = (at: number) => silences.some(([from, to]) => at >= from - 0.001 && at < to - 0.001);
 
   // ── Instruments
   const kicks: number[] = [];
@@ -135,29 +151,42 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     keys.note(drop - BAR / 2, BAR / 2 - 0.25, 1, 0.22, 0, riser, (age, seconds) => (age / seconds) ** 2);
   }
 
-  // ── The drop, bar after bar until the ending.
-  for (let bar = 0, start = drop; start < Math.min(end, total); bar++, start += BAR) {
-    const pattern = ORDER[bar % 4]!;
-    CHORDS[pattern].forEach((notes, half) => {
-      for (const midi of notes) chords.push({ at: start + (half * BAR) / 2, seconds: BAR / 2, midi, level: 0.024 });
-    });
-    for (const s of KICKS[pattern]) kick(start + s * S16, 0.75);
-    clap(start + 8 * S16, 0.42);
-    for (let s = 0; s < 16; s++) hat(start + s * S16, s % 4 === 0 ? 0.75 : s % 2 ? 0.42 : 0.58, s % 2 ? 0.25 : -0.25);
-    // A trap roll at the end of every other bar: the hats double, and climb.
-    if (bar % 2 === 1 && rng() < 0.85)
-      for (let k = 0; k < 6; k++) hat(start + 13 * S16 + k * (S16 / 2), 0.4 + k * 0.06, 0);
-    if (bar % 2 === 0) openHat(start + 6 * S16, 0.35);
-    plucked(start + 2 * S16, PLUCKS[pattern][Math.floor(rng() * 3)]!, 0.06);
-  }
+  // ── The drop, bar after bar, starting again from "A" at each landing, until the ending.
+  anchors.forEach((anchor, section) => {
+    const until = Math.min(anchors[section + 1] ?? end, end, total);
+    const within = (at: number) => at < until - 0.001;
+    for (let bar = 0, start = anchor; start < until - 0.001; bar++, start += BAR) {
+      const pattern = ORDER[bar % 4]!;
+      CHORDS[pattern].forEach((notes, half) => {
+        const at = start + (half * BAR) / 2;
+        if (within(at)) for (const midi of notes) chords.push({ at, seconds: BAR / 2, midi, level: 0.024 });
+      });
+      for (const s of KICKS[pattern]) if (within(start + s * S16)) kick(start + s * S16, 0.75);
+      if (within(start + 8 * S16)) clap(start + 8 * S16, 0.42);
+      for (let s = 0; s < 16; s++)
+        if (within(start + s * S16))
+          hat(start + s * S16, s % 4 === 0 ? 0.75 : s % 2 ? 0.42 : 0.58, s % 2 ? 0.25 : -0.25);
+      // A trap roll at the end of every other bar: the hats double, and climb.
+      if (bar % 2 === 1 && rng() < 0.85)
+        for (let k = 0; k < 6; k++) {
+          const at = start + 13 * S16 + k * (S16 / 2);
+          if (within(at)) hat(at, 0.4 + k * 0.06, 0);
+        }
+      if (bar % 2 === 0 && within(start + 6 * S16)) openHat(start + 6 * S16, 0.35);
+      const note = PLUCKS[pattern][Math.floor(rng() * 3)]!;
+      if (within(start + 2 * S16)) plucked(start + 2 * S16, note, 0.06);
+    }
+  });
 
-  // ── Moments: after a gap the whole band lands again; the others get a crash.
+  // ── Moments: on a landing the whole band comes back in; the others get a crash on the
+  // nearest sixteenth, so it stays in time with the beat.
   for (const at of moments) {
     if (at < drop - 0.01) {
       // In the intro, a soft low thump that breathes in.
-      kit.note(at - 0.3, 0.3, 1, 0.08 * level, 0, hiss(noise, 0.8), (age) => (age / 0.3) ** 2);
+      const thump = drop + Math.round((at - drop) / S16) * S16;
+      kit.note(thump - 0.3, 0.3, 1, 0.08 * level, 0, hiss(noise, 0.8), (age) => (age / 0.3) ** 2);
       kit.note(
-        at,
+        thump,
         0.5,
         1,
         0.35 * level,
@@ -168,10 +197,11 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
       continue;
     }
     if (at >= end - 0.01) continue;
-    const landing = gaps.includes(at) || Math.abs(at - drop) < 0.01;
-    if (!kicks.some((time) => Math.abs(time - at) < 0.03)) kick(at, landing ? 0.85 : 0.6);
-    crash(at, (landing ? 0.16 : 0.09) * level);
-    if (landing) clap(at, 0.3);
+    if (anchors.includes(at)) {
+      // The section's own pattern already has a kick on its first beat.
+      crash(at, 0.16 * level);
+      if (at !== drop) clap(at, 0.3);
+    } else crash(onBeat(at), 0.09 * level);
   }
 
   // ── The ending: one last hit and a chord that rings out.
@@ -184,21 +214,13 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     kit.note(end, 2.0, 1, 0.1, 0, hiss(noise, 0.9), (age) => Math.exp(-age / 0.45));
   }
 
-  // ── Held notes, with the gaps and the ending cut out of them. A note that a gap
-  // interrupts comes back on the moment itself, as the band lands again.
+  // ── Held notes stop where a silence starts; after it, the new section brings its own.
   const cut = (notes: Held[]) =>
     notes.flatMap((note) => {
-      const parts: Held[] = [];
-      let from = note.at;
-      const until = Math.min(note.at + note.seconds, end);
-      for (const gap of gaps) {
-        const silent = gap - 2 * S16;
-        if (gap <= from || silent >= until) continue;
-        if (silent > from) parts.push({ ...note, at: from, seconds: silent - from });
-        from = Math.max(from, gap);
-      }
-      if (until > from + 0.01) parts.push({ ...note, at: from, seconds: until - from });
-      return parts;
+      if (inGap(note.at)) return [];
+      let until = Math.min(note.at + note.seconds, end);
+      for (const [from] of silences) if (from > note.at) until = Math.min(until, from);
+      return until > note.at + 0.01 ? [{ ...note, seconds: until - note.at }] : [];
     });
   for (const note of cut(chords))
     for (const [detune, pan] of [
