@@ -113,19 +113,24 @@ describe("the launch style", () => {
     expect(drop).toBeGreaterThan(intro * 2);
   });
 
-  it("goes silent for a moment just before its biggest moments, then lands on them", () => {
+  it("keeps playing through the cuts between the drop and the ending, and marks each one", () => {
     const music = render();
-    const beat = 60 / music.bpm;
-    // 8.6 s is the first moment well into the drop, so it gets the gap.
-    const gap = rms(music.left, at(8.6 - beat / 2 + 0.03), at(8.6 - 0.02));
-    const landing = rms(music.left, at(8.6), at(8.6 + beat / 2));
-    expect(gap).toBeLessThan(landing / 4);
+    for (const cut of [8.6, 12.4, 17.0, 22.0, 25.0]) {
+      expect(rms(music.left, at(cut - 0.4), at(cut - 0.05)), `before ${cut}`).toBeGreaterThan(0.05);
+      expect(rms(music.left, at(cut), at(cut + 0.3)), `after ${cut}`).toBeGreaterThan(0.05);
+    }
+  });
+
+  it("nudges its tempo so the ending lands on a bar line of the beat", () => {
+    const music = render();
+    const bars = ((28.6 - 4.4) * music.bpm) / 240;
+    expect(Math.abs(bars - Math.round(bars))).toBeLessThan(0.002);
+    expect(Math.abs(music.bpm / 78.5 - 1)).toBeLessThanOrEqual(0.04);
   });
 
   it("lands the ending on its moment after a silence, so it never falls between beats", () => {
     const music = render();
-    // 28.6 s is about a third of a beat off the drop's beat; the music stops on its own beat
-    // and is silent until the moment, then hits on it.
+    // The one break: the music stops two sixteenths before the end card, then hits on it.
     expect(rms(music.left, at(28.25), at(28.59))).toBe(0);
     expect(rms(music.left, at(28.6), at(28.7))).toBeGreaterThan(0.1);
   });

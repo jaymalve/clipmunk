@@ -2,9 +2,9 @@ import type { MusicRequest, RenderedMusic } from "./music";
 import { createTape, hiss, pluck, random, saw, sine, swell, TAU, type Tape, triangle, type Wave } from "./synth";
 
 /** The "launch" style: the sound of a short product launch video. Half-time drums over a fast
- * pulse (75 beats a minute, felt as 150), rolling
- * hi-hats, a quiet intro that drops on a key moment, a beat of silence before the biggest
- * moments, and a last hit that rings out over the end card.
+ * pulse (75 beats a minute, felt as 150), rolling hi-hats and short chords. A quiet intro
+ * drops on a key moment, one steady beat carries every cut after it with a whoosh and a
+ * crash, and a short break leads into a last hit that rings out over the end card.
  *
  * Unlike the other styles it is arranged around the clip's moments rather than repeated bar
  * after bar, so it is built separately from them.
@@ -35,7 +35,7 @@ const ORDER: (keyof typeof CHORDS)[] = ["A", "B", "A", "B2"];
 /** The top note of the short pluck that answers each bar, per pattern. */
 const PLUCKS: Record<keyof typeof CHORDS, number[]> = { A: [79, 74, 82], B: [82, 79, 77], B2: [82, 81, 79] };
 
-/** A held note on its own layer, kept as data until the gaps have been cut out of it. */
+/** A held note on its own layer, kept as data until the break before the ending is cut out of it. */
 type Held = { at: number; seconds: number; midi: number; level: number; cutoff?: number };
 
 export function renderLaunch(request: MusicRequest): RenderedMusic {
@@ -46,9 +46,7 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   const keys = createTape(length, sampleRate); // chords and plucks: ducked under the kick
   const rng = random(request.seed + 3000);
   const noise = random(request.seed * 7 + 13);
-  const bpm = request.bpm ?? LAUNCH_BPM;
-  const BAR = (60 / bpm) * 4,
-    S16 = BAR / 16;
+  let BAR = (60 / (request.bpm ?? LAUNCH_BPM)) * 4;
   const level = Math.max(0, Math.min(1, request.accentLevel ?? 1));
   // Each piece sits a few semitones either side of G minor.
   const shift = [-2, -1, 0, 1, 2, 3][Math.floor(rng() * 6)]!;
@@ -64,29 +62,25 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   let end = Number.POSITIVE_INFINITY;
   if (late !== undefined) end = late;
   else if (total >= 10) for (let at = drop + BAR; at <= total - 2.4; at += BAR) end = at;
-  // The biggest moments, no closer than two bars apart, and the ending are landings: the
-  // music stops on its own beat, is silent for a moment, and lands on the moment itself.
-  // From each landing the beat is counted afresh, so a moment that falls between the
-  // music's beats still sounds on time. The silence takes up the difference.
-  const gaps: number[] = [];
-  for (const at of moments)
-    if (at > drop + BAR / 2 && at < end - 0.01 && at - (gaps.at(-1) ?? Number.NEGATIVE_INFINITY) >= BAR * 2)
-      gaps.push(at);
-  const anchors = [drop, ...gaps];
-  const sectionOf = (at: number) => anchors.filter((anchor) => anchor <= at + 0.001).at(-1) ?? drop;
-  /** The nearest sixteenth to `at` on the beat counted from the last landing. */
-  const onBeat = (at: number) => {
-    const anchor = sectionOf(at);
-    return anchor + Math.round((at - anchor) / S16) * S16;
-  };
-  // Each silence starts on the last sixteenth at least two before its landing.
-  const silences: [from: number, to: number][] = [];
-  for (const landing of Number.isFinite(end) && end < total ? [...gaps, end] : gaps) {
-    const anchor = anchors.filter((at) => at < landing - 0.001).at(-1) ?? drop;
-    const from = anchor + Math.floor((landing - 2 * S16 - anchor) / S16 + 0.001) * S16;
-    if (from > anchor + S16) silences.push([from, landing]);
-  }
-  const inGap = (at: number) => silences.some(([from, to]) => at >= from - 0.001 && at < to - 0.001);
+  // The music keeps one steady beat from the drop to the end, so it flows across every cut.
+  // The tempo is nudged, by at most 4%, so that the ending lands exactly on the beat: on a
+  // bar line if one is close enough, or else on a beat or a sixteenth.
+  if (Number.isFinite(end))
+    for (const parts of [1, 4, 16]) {
+      const count = Math.max(1, Math.round(((end - drop) / BAR) * parts));
+      const scale = (end - drop) / ((count / parts) * BAR);
+      if (Math.abs(scale - 1) <= 0.04) {
+        BAR *= scale;
+        break;
+      }
+    }
+  const S16 = BAR / 16;
+  const bpm = Math.round((240 / BAR) * 100) / 100;
+  /** The nearest sixteenth to `at` on the music's beat. */
+  const onBeat = (at: number) => drop + Math.round((at - drop) / S16) * S16;
+  // The one break: silent for two sixteenths before the ending, which then lands on its moment.
+  const silence = Number.isFinite(end) && end < total ? end - 2 * S16 : Number.POSITIVE_INFINITY;
+  const inGap = (at: number) => at >= silence - 0.001 && at < end - 0.001;
 
   // ── Instruments
   const kicks: number[] = [];
@@ -151,39 +145,36 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     keys.note(drop - BAR / 2, BAR / 2 - 0.25, 1, 0.22, 0, riser, (age, seconds) => (age / seconds) ** 2);
   }
 
-  // ── The drop, bar after bar, starting again from "A" at each landing, until the ending.
-  anchors.forEach((anchor, section) => {
-    const until = Math.min(anchors[section + 1] ?? end, end, total);
-    const within = (at: number) => at < until - 0.001;
-    for (let bar = 0, start = anchor; start < until - 0.001; bar++, start += BAR) {
-      const pattern = ORDER[bar % 4]!;
-      CHORDS[pattern].forEach((notes, half) => {
-        const at = start + (half * BAR) / 2;
-        if (within(at)) for (const midi of notes) chords.push({ at, seconds: BAR / 2, midi, level: 0.024 });
-      });
-      for (const s of KICKS[pattern]) if (within(start + s * S16)) kick(start + s * S16, 0.75);
-      if (within(start + 8 * S16)) clap(start + 8 * S16, 0.42);
-      for (let s = 0; s < 16; s++)
-        if (within(start + s * S16))
-          hat(start + s * S16, s % 4 === 0 ? 0.75 : s % 2 ? 0.42 : 0.58, s % 2 ? 0.25 : -0.25);
-      // A trap roll at the end of every other bar: the hats double, and climb.
-      if (bar % 2 === 1 && rng() < 0.85)
-        for (let k = 0; k < 6; k++) {
-          const at = start + 13 * S16 + k * (S16 / 2);
-          if (within(at)) hat(at, 0.4 + k * 0.06, 0);
-        }
-      if (bar % 2 === 0 && within(start + 6 * S16)) openHat(start + 6 * S16, 0.35);
-      const note = PLUCKS[pattern][Math.floor(rng() * 3)]!;
-      if (within(start + 2 * S16)) plucked(start + 2 * S16, note, 0.06);
-    }
-  });
+  // ── The drop, bar after bar on one steady beat, until the ending.
+  const until = Math.min(end, total);
+  const within = (at: number) => at < until - 0.001;
+  for (let bar = 0, start = drop; within(start); bar++, start += BAR) {
+    const pattern = ORDER[bar % 4]!;
+    CHORDS[pattern].forEach((notes, half) => {
+      const at = start + (half * BAR) / 2;
+      if (within(at)) for (const midi of notes) chords.push({ at, seconds: BAR / 2, midi, level: 0.024 });
+    });
+    for (const s of KICKS[pattern]) if (within(start + s * S16)) kick(start + s * S16, 0.75);
+    if (within(start + 8 * S16)) clap(start + 8 * S16, 0.42);
+    for (let s = 0; s < 16; s++)
+      if (within(start + s * S16)) hat(start + s * S16, s % 4 === 0 ? 0.75 : s % 2 ? 0.42 : 0.58, s % 2 ? 0.25 : -0.25);
+    // A trap roll at the end of every other bar: the hats double, and climb.
+    if (bar % 2 === 1 && rng() < 0.85)
+      for (let k = 0; k < 6; k++) {
+        const at = start + 13 * S16 + k * (S16 / 2);
+        if (within(at)) hat(at, 0.4 + k * 0.06, 0);
+      }
+    if (bar % 2 === 0 && within(start + 6 * S16)) openHat(start + 6 * S16, 0.35);
+    const note = PLUCKS[pattern][Math.floor(rng() * 3)]!;
+    if (within(start + 2 * S16)) plucked(start + 2 * S16, note, 0.06);
+  }
 
-  // ── Moments: on a landing the whole band comes back in; the others get a crash on the
-  // nearest sixteenth, so it stays in time with the beat.
+  // ── Moments. The drop opens with a crash; every other cut is carried by a soft whoosh
+  // into a crash close to it on the beat, so the music marks it without breaking stride.
   for (const at of moments) {
     if (at < drop - 0.01) {
       // In the intro, a soft low thump that breathes in.
-      const thump = drop + Math.round((at - drop) / S16) * S16;
+      const thump = onBeat(at);
       kit.note(thump - 0.3, 0.3, 1, 0.08 * level, 0, hiss(noise, 0.8), (age) => (age / 0.3) ** 2);
       kit.note(
         thump,
@@ -197,11 +188,16 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
       continue;
     }
     if (at >= end - 0.01) continue;
-    if (anchors.includes(at)) {
-      // The section's own pattern already has a kick on its first beat.
-      crash(at, 0.16 * level);
-      if (at !== drop) clap(at, 0.3);
-    } else crash(onBeat(at), 0.09 * level);
+    if (Math.abs(at - drop) < 0.01) {
+      crash(drop, 0.16 * level);
+      continue;
+    }
+    // A crash is a wash, not part of the groove, so the nearest half sixteenth is close enough to the beat.
+    const hit = drop + Math.round((at - drop) / (S16 / 2)) * (S16 / 2);
+    if (!within(hit) || inGap(hit)) continue;
+    const rise = 4 * S16;
+    kit.note(hit - rise, rise, 1, 0.07 * level, 0.1, hiss(noise, 0.9), (age) => (age / rise) ** 3);
+    crash(hit, 0.1 * level);
   }
 
   // ── The ending: one last hit and a chord that rings out.
@@ -214,13 +210,12 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     kit.note(end, 2.0, 1, 0.1, 0, hiss(noise, 0.9), (age) => Math.exp(-age / 0.45));
   }
 
-  // ── Held notes stop where a silence starts; after it, the new section brings its own.
+  // ── Held notes stop where the break before the ending starts.
   const cut = (notes: Held[]) =>
     notes.flatMap((note) => {
       if (inGap(note.at)) return [];
-      let until = Math.min(note.at + note.seconds, end);
-      for (const [from] of silences) if (from > note.at) until = Math.min(until, from);
-      return until > note.at + 0.01 ? [{ ...note, seconds: until - note.at }] : [];
+      const stop = Math.min(note.at + note.seconds, end, note.at < silence ? silence : end);
+      return stop > note.at + 0.01 ? [{ ...note, seconds: stop - note.at }] : [];
     });
   for (const note of cut(chords))
     for (const [detune, pan] of [
