@@ -42,5 +42,14 @@
       "durationMs": 3600,
       "tracks": []
     }
-  }
+  },
+  "sounds": [
+    {
+      "kind": "typing",
+      "atMs": 200,
+      "chars": 37,
+      "perSecond": 40,
+      "enter": true
+    }
+  ]
 }

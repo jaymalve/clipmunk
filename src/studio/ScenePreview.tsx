@@ -16,6 +16,7 @@ import {
   type Music,
   motionDuration,
   type SceneDefinition,
+  type Sound,
   sceneMoments,
   validateDefinition,
 } from "../core";
@@ -23,7 +24,7 @@ import { createClock, Scene } from "../react";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
 import { IssueList } from "./IssueList";
-import { MusicControls, useMusicPreview } from "./music";
+import { MusicControls, useMusicPreview, useSoundsPreview } from "./music";
 import { useNarration } from "./narration";
 import { useClipSession } from "./session";
 
@@ -44,6 +45,8 @@ export type ScenePreviewProps = {
   audio?: AudioClip[];
   /** The recipe's generated music. */
   music?: Music;
+  /** The recipe's generated sound effects. */
+  sounds?: readonly Sound[];
   children?: ReactNode;
 };
 
@@ -57,6 +60,7 @@ export function ScenePreview({
   daemon,
   audio,
   music: recipeMusic,
+  sounds,
   children,
 }: ScenePreviewProps) {
   const result = useMemo(() => validateDefinition(definition), [definition]);
@@ -96,6 +100,13 @@ export function ScenePreview({
   useMusicPreview({
     music,
     clip: { key: `scene:${sceneId ?? ""}`, durationMs, momentsMs: moments },
+    clock,
+    playing: session.playing,
+  });
+  useSoundsPreview({
+    sounds,
+    speed: current?.motion?.speed,
+    clip: { key: `scene:${sceneId ?? ""}`, durationMs },
     clock,
     playing: session.playing,
   });

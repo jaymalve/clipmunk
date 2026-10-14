@@ -7,14 +7,15 @@ import {
   type Issue,
   ok,
   planSequence,
+  type RenderedSounds,
   type Result,
   type Sequence,
   zodIssues,
 } from "../core";
-import { exists, Fault, readSequence, resolveInside, toIssues } from "../project";
+import { discoverScenes, exists, Fault, readSequence, resolveInside, toIssues } from "../project";
 import { joinClips, type PlacedAudio } from "./ffmpeg";
-import { writeMusic } from "./music";
-import { type ExportContext, exportScene } from "./operations";
+import { writeMusic, writeSounds } from "./music";
+import { type ExportContext, exportScene, sceneSounds } from "./operations";
 import {
   CANCELLED,
   type Cancellation,
@@ -58,7 +59,8 @@ async function renderClips(
       context.onProgress?.(Math.round(((index + done / total) / unique.length) * 1000), 1000);
     const result =
       clip.kind === "scene"
-        ? await exportScene({ ...shared, sceneId: clip.id }, { ...context, onProgress })
+        ? // A scene's sound effects are laid over the whole sequence instead, so they never lower its music.
+          await exportScene({ ...shared, sceneId: clip.id, sounds: false }, { ...context, onProgress })
         : await exportTake({ ...shared, takeId: clip.id }, { ...context, onProgress });
     if (!result.ok)
       return fail(
@@ -71,6 +73,33 @@ async function renderClips(
     });
   }
   return ok(rendered);
+}
+
+/** Every scene's sound effects, each placed where its clip starts, on one track as long as
+ * the sequence. Returns nothing when no scene has any.
+ */
+async function sequenceSounds(
+  sequence: Sequence,
+  plan: { startsMs: number[]; totalMs: number },
+  clips: RenderedClip[],
+  context: ExportContext,
+): Promise<RenderedSounds | undefined> {
+  const { scenes } = await discoverScenes(context);
+  const byId = new Map(scenes.map((scene) => [scene.id, scene]));
+  let mixed: RenderedSounds | undefined;
+  sequence.items.forEach((item, index) => {
+    const scene = item.clip.kind === "scene" ? byId.get(item.clip.id) : undefined;
+    if (!scene?.sounds?.length) return;
+    const own = sceneSounds(scene, clips[index]!.durationMs);
+    const total = Math.round((plan.totalMs / 1000) * own.sampleRate);
+    mixed ??= { sampleRate: own.sampleRate, left: new Float32Array(total), right: new Float32Array(total) };
+    const offset = Math.round((plan.startsMs[index]! / 1000) * own.sampleRate);
+    for (let i = 0; i < own.left.length && offset + i < total; i++) {
+      mixed.left[offset + i]! += own.left[i]!;
+      mixed.right[offset + i]! += own.right[i]!;
+    }
+  });
+  return mixed;
 }
 
 /** Sound files laid over the whole sequence. Unlike a scene, a missing one is an error: it was asked for by name. */
@@ -120,6 +149,8 @@ export async function exportSequence(input: unknown, context: ExportContext): Pr
         momentsMs: joins,
         accentLevel: 1,
       }));
+    const sounds = await sequenceSounds(sequence, plan, clips, context);
+    const effects = sounds && (await writeSounds(directory, sounds));
 
     const joined = path.join(directory, "sequence.mp4");
     const { audio } = await joinClips({
@@ -130,6 +161,7 @@ export async function exportSequence(input: unknown, context: ExportContext): Pr
       height: sequence.height,
       overlay,
       music,
+      effects,
       totalMs: plan.totalMs,
       output: joined,
       cwd: root,

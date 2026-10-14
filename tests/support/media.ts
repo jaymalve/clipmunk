@@ -31,8 +31,10 @@ export const near = (actual: number[], expected: readonly number[], tolerance = 
   expected.every((channel, index) => Math.abs(actual[index]! - channel) <= tolerance);
 
 /** Mean loudness of a file's sound in decibels, from FFmpeg's own measurement. */
-export function loudness(file: string): number {
-  const report = spawnSync(FFMPEG, ["-hide_banner", "-i", file, "-af", "volumedetect", "-f", "null", "-"], {
+/** Mean loudness in dB, of the whole file or of `seconds` of it from `from`. Silence is -91 dB. */
+export function loudness(file: string, from?: number, seconds?: number): number {
+  const window = from === undefined ? [] : ["-ss", String(from), "-t", String(seconds ?? 1)];
+  const report = spawnSync(FFMPEG, ["-hide_banner", ...window, "-i", file, "-af", "volumedetect", "-f", "null", "-"], {
     encoding: "utf8",
   }).stderr;
   return Number(/mean_volume: (-?[\d.]+) dB/.exec(report)?.[1] ?? Number.NaN);

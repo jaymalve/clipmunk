@@ -124,6 +124,7 @@ function OpenScene({
       daemon={daemon}
       audio={scene.audio}
       music={scene.music}
+      sounds={scene.sounds}
     >
       <state.Component />
     </ScenePreview>

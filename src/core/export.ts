@@ -34,6 +34,8 @@ export const ExportSceneSchema = z.strictObject({
   workers: z.number().int().min(1).max(8).optional(),
   /** Include the scene's generated music. A sequence with its own music turns this off for its clips. */
   music: z.boolean().default(true),
+  /** Include the scene's generated sound effects. A sequence lays them over the whole video itself. */
+  sounds: z.boolean().default(true),
 });
 export type ExportSceneInput = z.input<typeof ExportSceneSchema>;
 export type ExportSceneResult = {
