@@ -1,8 +1,8 @@
 import type { MusicRequest, RenderedMusic } from "./music";
-import { createTape, hiss, pluck, random, saw, sine, swell, TAU, type Tape, triangle, type Wave } from "./synth";
+import { createTape, hiss, pluck, random, saw, sine, TAU, type Tape, triangle, type Wave } from "./synth";
 
 /** The "launch" style: the sound of a short product launch video. Half-time drums over a fast
- * pulse (75 beats a minute, felt as 150), rolling hi-hats and short chords. A quiet intro
+ * pulse (75 beats a minute, felt as 150), rolling hi-hats and short plucks. A quiet intro
  * drops on a key moment, one steady beat carries every cut after it with a whoosh and a
  * crash, and a short break leads into a last hit that rings out over the end card.
  *
@@ -13,37 +13,19 @@ export const LAUNCH_BPM = 75;
 
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 
-/** Chords per half bar, as MIDI notes around middle C in G minor: A is Ebmaj7 to F, B is
- * Gm to A7 over C#, and B2 answers with Gm to F. A piece moves them all to its own key.
- */
-const CHORDS = {
-  A: [
-    [63, 67, 70, 74],
-    [65, 69, 72, 77],
-  ],
-  B: [
-    [67, 70, 74, 79],
-    [64, 67, 69, 73],
-  ],
-  B2: [
-    [67, 70, 74, 79],
-    [65, 69, 72, 77],
-  ],
-};
-const KICKS: Record<keyof typeof CHORDS, number[]> = { A: [0, 5, 7, 10], B: [0, 2, 7, 9, 12], B2: [0, 2, 7, 9, 12] };
-const ORDER: (keyof typeof CHORDS)[] = ["A", "B", "A", "B2"];
+/** The bar patterns, in turn A, B, A, B2: where the kicks fall, and the pluck that answers each bar. */
+type Pattern = "A" | "B" | "B2";
+const KICKS: Record<Pattern, number[]> = { A: [0, 5, 7, 10], B: [0, 2, 7, 9, 12], B2: [0, 2, 7, 9, 12] };
+const ORDER: Pattern[] = ["A", "B", "A", "B2"];
 /** The top note of the short pluck that answers each bar, per pattern. */
-const PLUCKS: Record<keyof typeof CHORDS, number[]> = { A: [79, 74, 82], B: [82, 79, 77], B2: [82, 81, 79] };
-
-/** A held note on its own layer, kept as data until the break before the ending is cut out of it. */
-type Held = { at: number; seconds: number; midi: number; level: number; cutoff?: number };
+const PLUCKS: Record<Pattern, number[]> = { A: [79, 74, 82], B: [82, 79, 77], B2: [82, 81, 79] };
 
 export function renderLaunch(request: MusicRequest): RenderedMusic {
   const sampleRate = request.sampleRate ?? 44100;
   const total = request.durationMs / 1000;
   const length = Math.max(1, Math.round(total * sampleRate));
   const kit = createTape(length, sampleRate); // drums: never ducked
-  const keys = createTape(length, sampleRate); // chords and plucks: ducked under the kick
+  const keys = createTape(length, sampleRate); // plucks, risers and the last chord: ducked under the kick
   const rng = random(request.seed + 3000);
   const noise = random(request.seed * 7 + 13);
   let BAR = (60 / (request.bpm ?? LAUNCH_BPM)) * 4;
@@ -118,21 +100,15 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   const crash = (at: number, gain: number) =>
     kit.note(at, 1.4, 1, gain, -0.15, hiss(noise, 0.97), (age) => Math.min(1, age / 0.002) * Math.exp(-age / 0.45));
 
-  const chords: Held[] = [];
   const plucked = (at: number, midi: number, gain: number) => {
     if (inGap(at) || at >= end) return;
     keys.note(at, 0.4, hz(midi + shift), gain, 0.2, triangle, pluck(0.16));
     keys.note(at + S16 * 3, 0.4, hz(midi + shift), gain * 0.4, -0.3, triangle, pluck(0.16));
   };
 
-  // ── Intro: chords, sparse hats, a build and a riser into the drop.
+  // ── Intro: sparse hats, a build and a riser into the drop.
   const introStart = drop - Math.ceil(drop / BAR - 0.001) * BAR;
-  for (let bar = 0, start = introStart; start < drop - 0.001; bar++, start += BAR) {
-    const pattern = bar % 2 ? "B" : "A";
-    CHORDS[pattern].forEach((notes, half) => {
-      for (const midi of notes)
-        chords.push({ at: start + (half * BAR) / 2, seconds: BAR / 2, midi, level: 0.034, cutoff: 2000 });
-    });
+  for (let start = introStart; start < drop - 0.001; start += BAR) {
     for (let s = 2; s < 16; s += 4) hat(start + s * S16, 0.3, s % 8 ? 0.3 : -0.3);
   }
   if (drop > BAR / 2) {
@@ -150,10 +126,6 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   const within = (at: number) => at < until - 0.001;
   for (let bar = 0, start = drop; within(start); bar++, start += BAR) {
     const pattern = ORDER[bar % 4]!;
-    CHORDS[pattern].forEach((notes, half) => {
-      const at = start + (half * BAR) / 2;
-      if (within(at)) for (const midi of notes) chords.push({ at, seconds: BAR / 2, midi, level: 0.024 });
-    });
     for (const s of KICKS[pattern]) if (within(start + s * S16)) kick(start + s * S16, 0.75);
     if (within(start + 8 * S16)) clap(start + 8 * S16, 0.42);
     for (let s = 0; s < 16; s++)
@@ -210,29 +182,6 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     kit.note(end, 2.0, 1, 0.1, 0, hiss(noise, 0.9), (age) => Math.exp(-age / 0.45));
   }
 
-  // ── Held notes stop where the break before the ending starts.
-  const cut = (notes: Held[]) =>
-    notes.flatMap((note) => {
-      if (inGap(note.at)) return [];
-      const stop = Math.min(note.at + note.seconds, end, note.at < silence ? silence : end);
-      return stop > note.at + 0.01 ? [{ ...note, seconds: stop - note.at }] : [];
-    });
-  for (const note of cut(chords))
-    for (const [detune, pan] of [
-      [0.996, -0.5],
-      [1.004, 0.5],
-    ] as const)
-      keys.note(
-        note.at,
-        note.seconds,
-        hz(note.midi + shift) * detune,
-        note.level,
-        pan,
-        saw,
-        swell(0.03, 0.12),
-        note.cutoff ?? 2300,
-      );
-
   duck(
     keys,
     kicks.sort((a, b) => a - b),
@@ -240,7 +189,7 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   return { sampleRate, ...master(kit, keys, total), bpm };
 }
 
-/** Lower the chords for a moment under each kick, so the kick punches through. */
+/** Lower the plucks and the last chord for a moment under each kick, so the kick punches through. */
 function duck(tape: Tape, kicks: number[]) {
   let next = 0;
   for (let i = 0; i < tape.length; i++) {

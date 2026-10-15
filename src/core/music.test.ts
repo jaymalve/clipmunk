@@ -116,8 +116,8 @@ describe("the launch style", () => {
   it("keeps playing through the cuts between the drop and the ending, and marks each one", () => {
     const music = render();
     for (const cut of [8.6, 12.4, 17.0, 22.0, 25.0]) {
-      expect(rms(music.left, at(cut - 0.4), at(cut - 0.05)), `before ${cut}`).toBeGreaterThan(0.05);
-      expect(rms(music.left, at(cut), at(cut + 0.3)), `after ${cut}`).toBeGreaterThan(0.05);
+      expect(rms(music.left, at(cut - 0.4), at(cut - 0.05)), `before ${cut}`).toBeGreaterThan(0.02);
+      expect(rms(music.left, at(cut), at(cut + 0.3)), `after ${cut}`).toBeGreaterThan(0.02);
     }
   });
 
