@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import ChipMark from "@/components/chip/ChipMark";
-import { isMuted, setMuted, subscribeMute } from "@/components/chip/sound";
 import { SITE } from "@/lib/site";
 import { GitHubLogo } from "./Logos";
 
@@ -15,7 +14,6 @@ const LINKS = [
 ];
 
 export default function Nav() {
-  const muted = useSyncExternalStore(subscribeMute, isMuted, () => false);
   const [open, setOpen] = useState(false);
 
   return (
@@ -33,16 +31,6 @@ export default function Nav() {
           ))}
         </nav>
         <div className="nav__right">
-          <button
-            type="button"
-            className="nav__mute"
-            onClick={() => setMuted(!muted)}
-            aria-pressed={!muted}
-            title={muted ? "Sound is off" : "Sound is on"}
-          >
-            <span className={`nav__led ${muted ? "" : "is-on"}`} />
-            {muted ? "Sound off" : "Sound on"}
-          </button>
           <a href={SITE.github} className="nav__plain nav__github" aria-label="Clipmunk on GitHub">
             <GitHubLogo />
           </a>
