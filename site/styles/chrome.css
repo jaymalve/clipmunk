@@ -74,31 +74,6 @@
   width: 20px;
 }
 
-.nav__mute {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--display);
-  font-size: 11px;
-  color: var(--fg-3);
-  white-space: nowrap;
-}
-
-.nav__mute:hover {
-  color: var(--fg-2);
-}
-
-.nav__led {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--fg-3);
-}
-
-.nav__led.is-on {
-  background: var(--munk);
-}
-
 .nav__burger {
   display: none;
   width: 34px;
@@ -142,7 +117,6 @@
   .nav__burger {
     display: flex;
   }
-  .nav__mute,
   .nav__plain {
     display: none;
   }
