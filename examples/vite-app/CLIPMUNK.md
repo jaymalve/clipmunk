@@ -15,4 +15,4 @@ This app has [Clipmunk](https://www.npmjs.com/package/clipmunk) installed. Clipm
 
 ## Example prompt
 
-> Read CLIPMUNK.md and run `npx clipmunk guide`. Inspect this app's dashboard page and create a cinematic Clipmunk scene from its existing components. Choose a close perspective, camera travel and depth of field on purpose. Verify it in the studio, save a snapshot, and give me the scene URL.
+> Read CLIPMUNK.md and run `npx clipmunk guide`. Then make a 20 to 30 second launch video of this product: a title, 3 or 4 features each shown by a real page of this app under a short caption, and an end card, as 1920x1080 scenes joined in a sequence with the launch music. Check every scene in the studio, then export the sequence and tell me where the MP4 is.

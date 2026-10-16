@@ -9,7 +9,7 @@ export default function Steps() {
         <div className="shead">
           <ChipTile prop="acorn" />
           <h2>Your first product video is a prompt away</h2>
-          <p>About five minutes. Most of it spent deciding which feature to show off first.</p>
+          <p>Paste one prompt. Your agent spends about half an hour on it, and you get a launch video of your own product.</p>
         </div>
 
         <InView className="steps" threshold={0.2}>
