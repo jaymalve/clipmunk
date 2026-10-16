@@ -49,7 +49,7 @@ const concepts: GuideConcept[] = [
     idea: "Parallax is near and far content moving differently as the viewpoint changes. Separating meaningful sections in z and letting them settle into place shows how the page is built.",
     how: "Wrap meaningful existing subtrees in their own Surface, nested inside a parent Surface. Children inherit the parent's transform and start where CSS laid them out. Animate each child's z (and opacity if wanted) to its resting value of 0 with staggered keyframes. A Surface that contains other Surfaces is a group: put its own background in the `content` prop.",
     avoid:
-      "Splitting every element, or separating layers so far that the page stops reading as one thing. Loose text or media directly inside a group cannot be blurred and is reported.",
+      "Splitting every element, or separating layers so far that the page stops reading as one thing. Loose text or media directly inside a group cannot be blurred and is reported. A group's content (its background) is a plane at the group's own z: a child behind it, at negative z, is hidden by it, so start entrances in front (positive z) and settle back to 0. A child tilted by rotateX or rotateY swings half of itself behind that plane unless its z clears the tilt: at least half its width (or height) times the sine of the angle.",
     check:
       "At several times the layers visibly change their relative positions, then resolve into the original layout.",
   },
@@ -299,6 +299,6 @@ This app has [Clipmunk](https://www.npmjs.com/package/${PACKAGE_NAME}) installed
 
 ## Example prompt
 
-> Read CLIPMUNK.md and run \`npx clipmunk guide\`. Inspect this app's dashboard page and create a cinematic Clipmunk scene from its existing components. Choose a close perspective, camera travel and depth of field on purpose. Verify it in the studio, save a snapshot, and give me the scene URL.
+> Read CLIPMUNK.md and run \`npx clipmunk guide\`. Then make a 20 to 30 second launch video of this product: a title, 3 or 4 features each shown by a real page of this app under a short caption, and an end card, as 1920x1080 scenes joined in a sequence with the launch music. Check every scene in the studio, then export the sequence and tell me where the MP4 is.
 `;
 }
