@@ -329,12 +329,15 @@ export function SceneBeat() {
 /* ── 4. A recorded take ────────────────────────────────────── */
 
 type Waypoint = [timeMs: number, x: number, y: number];
+/** The pointer holds still on each button through its click (CLICKS), then moves on. */
 const PATH: Waypoint[] = [
   [0, 1150, 720],
   [700, 395, 197],
+  [1000, 395, 197],
   [1500, 600, 420],
   [2300, 1004, 564],
   [2900, 969, 564],
+  [3450, 969, 564],
   [4300, 1180, 730],
 ];
 const CLICKS = [900, 2500, 3300];
@@ -367,11 +370,14 @@ function Recording() {
 function Pointer() {
   const time = useSceneTime();
   const [, x, y] = cursorAt(time);
-  const ripple = CLICKS.map((at) => (time - at) / 650).find((age) => age >= 0 && age < 1);
+  // A ripple stays where the click happened, even as the pointer moves on.
+  const click = CLICKS.find((at) => time >= at && time < at + 650);
+  const ripple = click === undefined ? undefined : (time - click) / 650;
+  const [, clickX, clickY] = cursorAt(click ?? time);
   return (
     <div className="lv-cursor" style={{ transform: "scale(0.8489)", transformOrigin: "0 0" }}>
       {ripple !== undefined && (
-        <b style={{ left: x, top: y, opacity: 1 - ripple, transform: `scale(${0.4 + ripple * 1.1})` }} />
+        <b style={{ left: clickX, top: clickY, opacity: 1 - ripple, transform: `scale(${0.4 + ripple * 1.1})` }} />
       )}
       <svg viewBox="0 0 20 22" style={{ left: x, top: y }} aria-hidden="true">
         <path d="M2 1.5v16l4.4-3.9 2.9 6.6 2.7-1.2-2.9-6.5h6.1z" />
