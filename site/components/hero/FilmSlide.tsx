@@ -1,12 +1,28 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SlideProps } from "./slide";
 import { prefersStillness } from "./useFit";
 
-/** Clipmunk's launch video, made with Clipmunk: nine scenes joined into one sequence. It plays silently here. */
-export default function FilmSlide({ onProgress, onDone }: SlideProps) {
+/** Clipmunk's launch video, made with Clipmunk: nine scenes joined into one sequence, with
+ * Clipmunk's own music and key clicks. It starts silent, as browsers require; the speaker in
+ * the corner turns the sound on.
+ */
+export default function FilmSlide({ onProgress, onDone, onTouch }: SlideProps) {
   const video = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+
+  function toggleSound() {
+    const player = video.current;
+    if (!player) return;
+    player.muted = !muted;
+    setMuted(!muted);
+    if (muted) {
+      // Someone listening wants this video to keep playing, not move on to the next tab.
+      onTouch();
+      if (player.paused) player.play().catch(() => {});
+    }
+  }
 
   // The latest callback, so the loop below can start once and keep running.
   const report = useRef(onProgress);
@@ -34,6 +50,7 @@ export default function FilmSlide({ onProgress, onDone }: SlideProps) {
         src="/hero/film.mp4"
         poster="/hero/film.jpg"
         playsInline
+        disableRemotePlayback
         muted
         preload="auto"
         onEnded={(event) => {
@@ -48,6 +65,34 @@ export default function FilmSlide({ onProgress, onDone }: SlideProps) {
         }}
       />
       <p className="slide__note display">Shot and scored by Clipmunk. No editing.</p>
+      <button
+        type="button"
+        className="slide__sound"
+        onClick={toggleSound}
+        aria-pressed={!muted}
+        aria-label={muted ? "Turn sound on" : "Turn sound off"}
+        title={muted ? "Turn sound on" : "Turn sound off"}
+      >
+        <SpeakerIcon muted={muted} />
+      </button>
     </div>
+  );
+}
+
+function SpeakerIcon({ muted }: { muted: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+      <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" fill="currentColor" />
+      {muted ? (
+        <path d="m16 9.5 5 5m0-5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      ) : (
+        <path
+          d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
   );
 }

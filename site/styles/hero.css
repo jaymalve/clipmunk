@@ -232,11 +232,31 @@
   overflow: hidden;
 }
 
+.slide__sound {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--fg-2);
+  transition: color 0.15s ease;
+}
+
+.slide__sound:hover,
+.slide__sound[aria-pressed="true"] {
+  color: var(--munk);
+}
+
 .slide__note {
   position: absolute;
   left: 10px;
   bottom: 10px;
-  max-width: calc(100% - 20px);
+  max-width: calc(100% - 62px);
   padding: 5px 9px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
