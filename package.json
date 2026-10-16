@@ -1,6 +1,6 @@
 {
   "name": "clipmunk",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Cinematic 3D scenes and polished screen recordings from your live web app.",
   "type": "module",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "node": ">=22.12.0"
   },
   "bin": {
-    "clipmunk": "./dist/cli.js"
+    "clipmunk": "dist/cli.js"
   },
   "exports": {
     ".": {
