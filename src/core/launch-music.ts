@@ -1,10 +1,10 @@
 import type { MusicRequest, RenderedMusic } from "./music";
-import { createTape, hiss, pluck, random, saw, sine, swell, TAU, type Tape, triangle, type Wave } from "./synth";
+import { createTape, hiss, pluck, random, saw, sine, TAU, type Tape, triangle, type Wave } from "./synth";
 
 /** The "launch" style: the sound of a short product launch video. Half-time drums over a fast
- * pulse (75 beats a minute, felt as 150), rolling
- * hi-hats, a quiet intro that drops on a key moment, a beat of silence before the biggest
- * moments, and a last hit that rings out over the end card.
+ * pulse (75 beats a minute, felt as 150), rolling hi-hats and short plucks. A quiet intro
+ * drops on a key moment, one steady beat carries every cut after it with a whoosh and a
+ * crash, and a short break leads into a last hit that rings out over the end card.
  *
  * Unlike the other styles it is arranged around the clip's moments rather than repeated bar
  * after bar, so it is built separately from them.
@@ -13,42 +13,22 @@ export const LAUNCH_BPM = 75;
 
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 
-/** Chords per half bar, as MIDI notes around middle C in G minor: A is Ebmaj7 to F, B is
- * Gm to A7 over C#, and B2 answers with Gm to F. A piece moves them all to its own key.
- */
-const CHORDS = {
-  A: [
-    [63, 67, 70, 74],
-    [65, 69, 72, 77],
-  ],
-  B: [
-    [67, 70, 74, 79],
-    [64, 67, 69, 73],
-  ],
-  B2: [
-    [67, 70, 74, 79],
-    [65, 69, 72, 77],
-  ],
-};
-const KICKS: Record<keyof typeof CHORDS, number[]> = { A: [0, 5, 7, 10], B: [0, 2, 7, 9, 12], B2: [0, 2, 7, 9, 12] };
-const ORDER: (keyof typeof CHORDS)[] = ["A", "B", "A", "B2"];
+/** The bar patterns, in turn A, B, A, B2: where the kicks fall, and the pluck that answers each bar. */
+type Pattern = "A" | "B" | "B2";
+const KICKS: Record<Pattern, number[]> = { A: [0, 5, 7, 10], B: [0, 2, 7, 9, 12], B2: [0, 2, 7, 9, 12] };
+const ORDER: Pattern[] = ["A", "B", "A", "B2"];
 /** The top note of the short pluck that answers each bar, per pattern. */
-const PLUCKS: Record<keyof typeof CHORDS, number[]> = { A: [79, 74, 82], B: [82, 79, 77], B2: [82, 81, 79] };
-
-/** A held note on its own layer, kept as data until the gaps have been cut out of it. */
-type Held = { at: number; seconds: number; midi: number; level: number; cutoff?: number };
+const PLUCKS: Record<Pattern, number[]> = { A: [79, 74, 82], B: [82, 79, 77], B2: [82, 81, 79] };
 
 export function renderLaunch(request: MusicRequest): RenderedMusic {
   const sampleRate = request.sampleRate ?? 44100;
   const total = request.durationMs / 1000;
   const length = Math.max(1, Math.round(total * sampleRate));
   const kit = createTape(length, sampleRate); // drums: never ducked
-  const keys = createTape(length, sampleRate); // chords and plucks: ducked under the kick
+  const keys = createTape(length, sampleRate); // plucks, risers and the last chord: ducked under the kick
   const rng = random(request.seed + 3000);
   const noise = random(request.seed * 7 + 13);
-  const bpm = request.bpm ?? LAUNCH_BPM;
-  const BAR = (60 / bpm) * 4,
-    S16 = BAR / 16;
+  let BAR = (60 / (request.bpm ?? LAUNCH_BPM)) * 4;
   const level = Math.max(0, Math.min(1, request.accentLevel ?? 1));
   // Each piece sits a few semitones either side of G minor.
   const shift = [-2, -1, 0, 1, 2, 3][Math.floor(rng() * 6)]!;
@@ -64,13 +44,25 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   let end = Number.POSITIVE_INFINITY;
   if (late !== undefined) end = late;
   else if (total >= 10) for (let at = drop + BAR; at <= total - 2.4; at += BAR) end = at;
-  // Silence for two sixteenths before the biggest moments, no closer than two bars apart.
-  const gaps: number[] = [];
-  for (const at of moments)
-    if (at > drop + BAR / 2 && at < end - 0.01 && at - (gaps.at(-1) ?? Number.NEGATIVE_INFINITY) >= BAR * 2)
-      gaps.push(at);
-  const gapOf = (at: number) => gaps.find((gap) => at >= gap - 2 * S16 - 0.001 && at < gap - 0.001);
-  const inGap = (at: number) => gapOf(at) !== undefined;
+  // The music keeps one steady beat from the drop to the end, so it flows across every cut.
+  // The tempo is nudged, by at most 4%, so that the ending lands exactly on the beat: on a
+  // bar line if one is close enough, or else on a beat or a sixteenth.
+  if (Number.isFinite(end))
+    for (const parts of [1, 4, 16]) {
+      const count = Math.max(1, Math.round(((end - drop) / BAR) * parts));
+      const scale = (end - drop) / ((count / parts) * BAR);
+      if (Math.abs(scale - 1) <= 0.04) {
+        BAR *= scale;
+        break;
+      }
+    }
+  const S16 = BAR / 16;
+  const bpm = Math.round((240 / BAR) * 100) / 100;
+  /** The nearest sixteenth to `at` on the music's beat. */
+  const onBeat = (at: number) => drop + Math.round((at - drop) / S16) * S16;
+  // The one break: silent for two sixteenths before the ending, which then lands on its moment.
+  const silence = Number.isFinite(end) && end < total ? end - 2 * S16 : Number.POSITIVE_INFINITY;
+  const inGap = (at: number) => at >= silence - 0.001 && at < end - 0.001;
 
   // ── Instruments
   const kicks: number[] = [];
@@ -108,21 +100,15 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   const crash = (at: number, gain: number) =>
     kit.note(at, 1.4, 1, gain, -0.15, hiss(noise, 0.97), (age) => Math.min(1, age / 0.002) * Math.exp(-age / 0.45));
 
-  const chords: Held[] = [];
   const plucked = (at: number, midi: number, gain: number) => {
     if (inGap(at) || at >= end) return;
     keys.note(at, 0.4, hz(midi + shift), gain, 0.2, triangle, pluck(0.16));
     keys.note(at + S16 * 3, 0.4, hz(midi + shift), gain * 0.4, -0.3, triangle, pluck(0.16));
   };
 
-  // ── Intro: chords, sparse hats, a build and a riser into the drop.
+  // ── Intro: sparse hats, a build and a riser into the drop.
   const introStart = drop - Math.ceil(drop / BAR - 0.001) * BAR;
-  for (let bar = 0, start = introStart; start < drop - 0.001; bar++, start += BAR) {
-    const pattern = bar % 2 ? "B" : "A";
-    CHORDS[pattern].forEach((notes, half) => {
-      for (const midi of notes)
-        chords.push({ at: start + (half * BAR) / 2, seconds: BAR / 2, midi, level: 0.034, cutoff: 2000 });
-    });
+  for (let start = introStart; start < drop - 0.001; start += BAR) {
     for (let s = 2; s < 16; s += 4) hat(start + s * S16, 0.3, s % 8 ? 0.3 : -0.3);
   }
   if (drop > BAR / 2) {
@@ -135,29 +121,35 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     keys.note(drop - BAR / 2, BAR / 2 - 0.25, 1, 0.22, 0, riser, (age, seconds) => (age / seconds) ** 2);
   }
 
-  // ── The drop, bar after bar until the ending.
-  for (let bar = 0, start = drop; start < Math.min(end, total); bar++, start += BAR) {
+  // ── The drop, bar after bar on one steady beat, until the ending.
+  const until = Math.min(end, total);
+  const within = (at: number) => at < until - 0.001;
+  for (let bar = 0, start = drop; within(start); bar++, start += BAR) {
     const pattern = ORDER[bar % 4]!;
-    CHORDS[pattern].forEach((notes, half) => {
-      for (const midi of notes) chords.push({ at: start + (half * BAR) / 2, seconds: BAR / 2, midi, level: 0.024 });
-    });
-    for (const s of KICKS[pattern]) kick(start + s * S16, 0.75);
-    clap(start + 8 * S16, 0.42);
-    for (let s = 0; s < 16; s++) hat(start + s * S16, s % 4 === 0 ? 0.75 : s % 2 ? 0.42 : 0.58, s % 2 ? 0.25 : -0.25);
+    for (const s of KICKS[pattern]) if (within(start + s * S16)) kick(start + s * S16, 0.75);
+    if (within(start + 8 * S16)) clap(start + 8 * S16, 0.42);
+    for (let s = 0; s < 16; s++)
+      if (within(start + s * S16)) hat(start + s * S16, s % 4 === 0 ? 0.75 : s % 2 ? 0.42 : 0.58, s % 2 ? 0.25 : -0.25);
     // A trap roll at the end of every other bar: the hats double, and climb.
     if (bar % 2 === 1 && rng() < 0.85)
-      for (let k = 0; k < 6; k++) hat(start + 13 * S16 + k * (S16 / 2), 0.4 + k * 0.06, 0);
-    if (bar % 2 === 0) openHat(start + 6 * S16, 0.35);
-    plucked(start + 2 * S16, PLUCKS[pattern][Math.floor(rng() * 3)]!, 0.06);
+      for (let k = 0; k < 6; k++) {
+        const at = start + 13 * S16 + k * (S16 / 2);
+        if (within(at)) hat(at, 0.4 + k * 0.06, 0);
+      }
+    if (bar % 2 === 0 && within(start + 6 * S16)) openHat(start + 6 * S16, 0.35);
+    const note = PLUCKS[pattern][Math.floor(rng() * 3)]!;
+    if (within(start + 2 * S16)) plucked(start + 2 * S16, note, 0.06);
   }
 
-  // ── Moments: after a gap the whole band lands again; the others get a crash.
+  // ── Moments. The drop opens with a crash; every other cut is carried by a soft whoosh
+  // into a crash close to it on the beat, so the music marks it without breaking stride.
   for (const at of moments) {
     if (at < drop - 0.01) {
       // In the intro, a soft low thump that breathes in.
-      kit.note(at - 0.3, 0.3, 1, 0.08 * level, 0, hiss(noise, 0.8), (age) => (age / 0.3) ** 2);
+      const thump = onBeat(at);
+      kit.note(thump - 0.3, 0.3, 1, 0.08 * level, 0, hiss(noise, 0.8), (age) => (age / 0.3) ** 2);
       kit.note(
-        at,
+        thump,
         0.5,
         1,
         0.35 * level,
@@ -168,10 +160,16 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
       continue;
     }
     if (at >= end - 0.01) continue;
-    const landing = gaps.includes(at) || Math.abs(at - drop) < 0.01;
-    if (!kicks.some((time) => Math.abs(time - at) < 0.03)) kick(at, landing ? 0.85 : 0.6);
-    crash(at, (landing ? 0.16 : 0.09) * level);
-    if (landing) clap(at, 0.3);
+    if (Math.abs(at - drop) < 0.01) {
+      crash(drop, 0.16 * level);
+      continue;
+    }
+    // A crash is a wash, not part of the groove, so the nearest half sixteenth is close enough to the beat.
+    const hit = drop + Math.round((at - drop) / (S16 / 2)) * (S16 / 2);
+    if (!within(hit) || inGap(hit)) continue;
+    const rise = 4 * S16;
+    kit.note(hit - rise, rise, 1, 0.07 * level, 0.1, hiss(noise, 0.9), (age) => (age / rise) ** 3);
+    crash(hit, 0.1 * level);
   }
 
   // ── The ending: one last hit and a chord that rings out.
@@ -184,38 +182,6 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
     kit.note(end, 2.0, 1, 0.1, 0, hiss(noise, 0.9), (age) => Math.exp(-age / 0.45));
   }
 
-  // ── Held notes, with the gaps and the ending cut out of them. A note that a gap
-  // interrupts comes back on the moment itself, as the band lands again.
-  const cut = (notes: Held[]) =>
-    notes.flatMap((note) => {
-      const parts: Held[] = [];
-      let from = note.at;
-      const until = Math.min(note.at + note.seconds, end);
-      for (const gap of gaps) {
-        const silent = gap - 2 * S16;
-        if (gap <= from || silent >= until) continue;
-        if (silent > from) parts.push({ ...note, at: from, seconds: silent - from });
-        from = Math.max(from, gap);
-      }
-      if (until > from + 0.01) parts.push({ ...note, at: from, seconds: until - from });
-      return parts;
-    });
-  for (const note of cut(chords))
-    for (const [detune, pan] of [
-      [0.996, -0.5],
-      [1.004, 0.5],
-    ] as const)
-      keys.note(
-        note.at,
-        note.seconds,
-        hz(note.midi + shift) * detune,
-        note.level,
-        pan,
-        saw,
-        swell(0.03, 0.12),
-        note.cutoff ?? 2300,
-      );
-
   duck(
     keys,
     kicks.sort((a, b) => a - b),
@@ -223,7 +189,7 @@ export function renderLaunch(request: MusicRequest): RenderedMusic {
   return { sampleRate, ...master(kit, keys, total), bpm };
 }
 
-/** Lower the chords for a moment under each kick, so the kick punches through. */
+/** Lower the plucks and the last chord for a moment under each kick, so the kick punches through. */
 function duck(tape: Tape, kicks: number[]) {
   let next = 0;
   for (let i = 0; i < tape.length; i++) {

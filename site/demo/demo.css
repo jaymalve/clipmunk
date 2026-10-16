@@ -700,6 +700,20 @@
   font-size: 15px;
 }
 
+/* Both labels share one cell, so the button is as wide as the longer one whichever shows. */
+.pr-merge {
+  display: inline-grid;
+  place-items: center;
+}
+
+.pr-merge > span {
+  grid-area: 1 / 1;
+}
+
+.pr-merge > .is-hidden {
+  visibility: hidden;
+}
+
 .pr-aside {
   display: grid;
   align-content: start;

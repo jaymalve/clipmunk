@@ -115,12 +115,13 @@ export function PullRequest({ tab, approved, merged }: PullRequestState) {
                       Approve
                     </span>
                   )}
-                  {approved && !merged && (
-                    <span className="dm-btn dm-btn--munk" data-take="merge">
-                      Merge pull request
+                  {approved && (
+                    // Once merged, the same button just says so: it keeps its size and colour.
+                    <span className="dm-btn dm-btn--munk pr-merge" data-take="merge">
+                      <span className={merged ? "is-hidden" : undefined}>Merge pull request</span>
+                      <span className={merged ? undefined : "is-hidden"}>✓ Merged</span>
                     </span>
                   )}
-                  {merged && <span className="dm-pill dm-pill--dark">✓ Merged</span>}
                 </section>
               </>
             )}
