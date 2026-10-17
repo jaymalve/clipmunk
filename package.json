@@ -1,6 +1,6 @@
 {
   "name": "clipmunk",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Cinematic 3D scenes and polished screen recordings from your live web app.",
   "type": "module",
   "license": "MIT",
