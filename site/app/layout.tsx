@@ -32,10 +32,12 @@ const inter = Inter({
 const title = `${SITE.name}: ${SITE.headline}`;
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  // Link previews need absolute image URLs, so the live address is the default.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://clipmunk.dev"),
   title,
   description: SITE.description,
-  openGraph: { title, description: SITE.description, type: "website" },
+  openGraph: { title, description: SITE.description, type: "website", url: "/", siteName: SITE.name },
+  twitter: { card: "summary_large_image", title, description: SITE.description },
 };
 
 export const viewport: Viewport = {

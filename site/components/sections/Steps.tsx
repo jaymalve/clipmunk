@@ -32,10 +32,10 @@ export default function Steps() {
 
           <article className="card step">
             <span className="step__num display">02</span>
-            <h3>Ask, or press record</h3>
+            <h3>Paste the prompt, or press record</h3>
             <p>
-              Ask your agent for a scene in one sentence. Or press the shortcut and click through the feature yourself.
-              Or both.
+              Paste the agent prompt and your agent plans a launch video from your real pages, then writes the scenes.
+              Or press the shortcut and click through a feature yourself. Or both.
             </p>
             <p className="step__keys">
               <kbd>Alt</kbd>
@@ -54,10 +54,11 @@ export default function Steps() {
             <span className="step__num display">03</span>
             <h3>Export and post it</h3>
             <p>
-              Clipmunk renders an MP4 on your machine. Paste it into the PR, the changelog or the docs, and go outside.
+              Clipmunk renders the MP4 on your machine, music and all. Post it, paste it into the PR or the changelog,
+              and go outside.
             </p>
             <code className="step__cmd mono">
-              <span className="munk">$</span> npx clipmunk export --scene plans-reveal
+              <span className="munk">$</span> npx clipmunk export --sequence launch
             </code>
             <ul className="step__tags">
               <li>MP4</li>
