@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "id": "take-20261005-144126",
+  "title": "Take 2026-10-05 14:41",
+  "createdAt": "2026-10-05T14:41:26.990Z",
+  "source": {
+    "width": 1512,
+    "height": 750,
+    "dpr": 2,
+    "durationMs": 7796,
+    "background": "rgb(238, 241, 246)",
+    "screen": {
+      "file": "screen.webm",
+      "offsetMs": 0,
+      "latencyMs": 9,
+      "width": 3024,
+      "height": 1484
+    },
+    "mic": {
+      "file": "mic.webm",
+      "offsetMs": -12
+    },
+    "audio": {
+      "file": "audio.wav",
+      "offsetMs": -12
+    },
+    "events": {
+      "file": "events.jsonl",
+      "count": 189
+    }
+  },
+  "edit": {
+    "trim": {
+      "startMs": 0,
+      "endMs": 7796
+    },
+    "canvas": {
+      "width": 1920,
+      "height": 1080,
+      "background": "#0b0b0f",
+      "padding": 0.06,
+      "radius": 16,
+      "shadow": 0.5
+    },
+    "zoom": {
+      "mode": "auto",
+      "params": {
+        "minScale": 1.25,
+        "maxScale": 2.2,
+        "mergeGapMs": 2500,
+        "leadMs": 300,
+        "holdMs": 1500,
+        "easeMs": 700
+      }
+    },
+    "cursor": {
+      "visible": true,
+      "size": 1.4,
+      "smoothing": 0.6,
+      "clickEffect": "ripple"
+    },
+    "cam": {
+      "visible": true,
+      "shape": "circle",
+      "corner": "br",
+      "size": 0.18,
+      "mirror": true
+    },
+    "audio": {
+      "muted": false,
+      "gain": 1,
+      "normalize": true
+    }
+  }
+}

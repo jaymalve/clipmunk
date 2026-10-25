@@ -1,8 +1,10 @@
 import type { TakeEvent } from "../core";
+import { comboOf, INTERACTIVE, identify } from "./identity";
 
 /** Logs what the pointer and keyboard do during a recording, on the take clock.
- * The log drives the synthetic cursor and auto-zoom later. It records where things
- * happened, never what was typed or what any element contains.
+ * The log drives the synthetic cursor, auto-zoom and captions later. It records where
+ * things happened and which control was used (its selector, role and label), never what
+ * was typed, what a field holds, or anything about an element that is being redacted.
  */
 export type EventLogOptions = {
   /** Milliseconds on the take clock. */
@@ -13,19 +15,34 @@ export type EventLogOptions = {
   cursorOf: (element: Element) => string;
   /** Elements inside this host (the HUD) are not part of the recording. */
   ignore: (event: Event) => boolean;
+  /** CSS selectors from the project config whose elements are hidden in the video. Their boxes
+   * are logged every frame they move; they are never named.
+   */
+  redact?: readonly string[];
+  /** Told about a redaction selector the page cannot run. */
+  onIssue?: (message: string) => void;
 };
 
 const EDITABLE =
   'input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), textarea, [contenteditable=""], [contenteditable="true"]';
-const INTERACTIVE =
-  'button, a[href], input, textarea, select, label, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="checkbox"], [role="switch"], [contenteditable]';
 const round = (value: number) => Math.round(value * 10) / 10;
 const rectOf = (element: Element): [number, number, number, number] => {
   const box = element.getBoundingClientRect();
   return [round(box.left), round(box.top), round(box.width), round(box.height)];
 };
 
+const isPassword = (target: EventTarget | null) => target instanceof HTMLInputElement && target.type === "password";
+
 export function createEventLog(options: EventLogOptions) {
+  const redact = (options.redact ?? []).filter((selector) => {
+    try {
+      document.querySelector(selector);
+      return true;
+    } catch {
+      options.onIssue?.(`redaction selector ${JSON.stringify(selector)} is not valid here and was skipped`);
+      return false;
+    }
+  });
   let buffer: string[] = [];
   let pendingMove: { x: number; y: number } | undefined;
   let pendingScroll = false;
@@ -92,6 +109,7 @@ export function createEventLog(options: EventLogOptions) {
           y: round(event.clientY),
           button: event.button,
           rect: rectOf(target),
+          ...(target instanceof Element && target !== document.body ? { el: identify(target, redact) } : {}),
         });
       },
     ],
@@ -111,13 +129,22 @@ export function createEventLog(options: EventLogOptions) {
       "focusin",
       (event: FocusEvent) => {
         if (event.target instanceof Element)
-          push({ t: now(), k: "focus", rect: rectOf(event.target), editable: event.target.matches(EDITABLE) });
+          push({
+            t: now(),
+            k: "focus",
+            rect: rectOf(event.target),
+            editable: event.target.matches(EDITABLE),
+            el: identify(event.target, redact),
+          });
       },
     ],
     [
       "keydown",
       (event: KeyboardEvent) => {
-        // Only that typing happened and where. The key itself is deliberately not read.
+        // A shortcut such as ⌘K is shown later as a key pill; never anything in a password field.
+        const combo = isPassword(event.target) ? undefined : comboOf(event);
+        if (combo) push({ t: now(), k: "combo", keys: combo });
+        // Otherwise only that typing happened and where. The key itself is deliberately not read.
         if (
           event.target instanceof Element &&
           event.target.matches(EDITABLE) &&
@@ -134,14 +161,38 @@ export function createEventLog(options: EventLogOptions) {
     ([type, handler]) => [type, (event: Event) => !options.ignore(event) && handler(event)] as const,
   );
 
+  // Once a frame: the route, and where each redacted element is. Both are logged only on change.
+  let route = "";
+  const boxes = new Map<string, string>();
+  let watching = 0;
+  const watch = () => {
+    if (location.pathname !== route) {
+      route = location.pathname;
+      push({ t: now(), k: "route", path: route });
+    }
+    for (const selector of redact) {
+      const rects = [...document.querySelectorAll(selector)]
+        .map(rectOf)
+        .filter(([, , width, height]) => width > 0 && height > 0)
+        .slice(0, 200);
+      const key = JSON.stringify(rects);
+      if (boxes.get(selector) === key) continue;
+      boxes.set(selector, key);
+      push({ t: now(), k: "redact", sel: selector, rects });
+    }
+    watching = requestAnimationFrame(watch);
+  };
+
   return {
     start() {
       push({ t: 0, k: "resize", width: innerWidth, height: innerHeight });
+      watch();
       for (const [type, listener] of listeners) addEventListener(type, listener, { capture: true, passive: true });
       timer = setInterval(flush, 1000);
     },
     stop() {
       for (const [type, listener] of listeners) removeEventListener(type, listener, { capture: true });
+      cancelAnimationFrame(watching);
       flushPending();
       clearInterval(timer);
       flush();

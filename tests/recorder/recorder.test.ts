@@ -166,6 +166,60 @@ describe("recorder", () => {
     expect(existsSync(path.join(dir, "screen.raw.webm"))).toBe(false);
   }, 120_000);
 
+  it("logs which control was used, the route, shortcuts and redacted boxes, and nothing typed", async () => {
+    const configFile = path.join(root, "clipmunk.config.json");
+    const config = await readFile(configFile, "utf8");
+    await writeFile(configFile, JSON.stringify({ ...JSON.parse(config), redact: [".zz-hidden"] }));
+    try {
+      // A card number to hide, and a password field, added to the page for this test.
+      await page.evaluate(() => {
+        const box = document.createElement("div");
+        box.id = "zz-fixture";
+        box.style.cssText = "position:fixed;left:40px;top:200px;z-index:5;background:#fff;padding:8px";
+        box.innerHTML = `<div class="zz-hidden"><button id="zz-reveal">Card 4242 4242</button></div>
+          <label>Password <input id="zz-pass" type="password"></label>`;
+        document.body.append(box);
+      });
+      const { events, dir } = await record({ camera: false, microphone: false }, async () => {
+        await page.getByRole("button", { name: "New report" }).click();
+        await page.getByRole("searchbox").click();
+        await page.keyboard.press("Meta+K");
+        await page.locator("#zz-pass").click();
+        await page.keyboard.type("hunter2", { delay: 30 });
+        await page.keyboard.press("Control+A");
+        await page.locator("#zz-reveal").click();
+        await page.evaluate(() => {
+          document.getElementById("zz-fixture")!.style.top = "260px";
+        });
+        await page.waitForTimeout(400);
+      });
+      const text = await readFile(path.join(dir, "events.jsonl"), "utf8");
+      expect(events[1]).toMatchObject({ k: "route", path: "/" });
+      const downs = events.filter((event) => event.k === "down");
+      expect(downs[0]).toMatchObject({ el: { role: "button", name: "New report" } });
+      const focusOnSearch = events.find((event) => event.k === "focus" && event.el?.role === "searchbox");
+      expect(focusOnSearch).toBeDefined();
+      // The shortcut in the search box is logged; the one in the password field is not.
+      expect(events.filter((event) => event.k === "combo").map((event) => event.k === "combo" && event.keys)).toEqual([
+        ["Meta", "K"],
+      ]);
+      const reveal = downs.find((event) => event.el?.sel.includes("zz-reveal"))!;
+      expect(reveal.el).toEqual({ sel: "#zz-reveal", role: "button" }); // inside the redaction: no name
+      const boxes = events.filter((event) => event.k === "redact");
+      expect(boxes.length).toBeGreaterThanOrEqual(2);
+      const first = boxes[0]!,
+        last = boxes.at(-1)!;
+      if (first.k === "redact" && last.k === "redact") {
+        expect(first.sel).toBe(".zz-hidden");
+        expect(last.rects[0]![1] - first.rects[0]![1]).toBeCloseTo(60, 0);
+      }
+      expect(text).not.toMatch(/4242|hunter2|Card/);
+    } finally {
+      await writeFile(configFile, config);
+      await page.evaluate(() => document.getElementById("zz-fixture")?.remove());
+    }
+  }, 120_000);
+
   it("records camera and microphone together and extracts the voice track", async () => {
     const { take, dir } = await record({ camera: true, microphone: true }, async () => {
       await hud().locator("video.cam").waitFor({ state: "visible" });

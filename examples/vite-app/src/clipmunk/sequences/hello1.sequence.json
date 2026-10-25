@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "hello1",
+  "title": "hello1",
+  "width": 3840,
+  "height": 2160,
+  "fps": 60,
+  "items": [
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "page-survey"
+      },
+      "transition": {
+        "kind": "cut",
+        "ms": 500
+      }
+    },
+    {
+      "clip": {
+        "kind": "scene",
+        "id": "plating"
+      },
+      "transition": {
+        "kind": "fade",
+        "ms": 500
+      }
+    }
+  ]
+}
