@@ -20,3 +20,4 @@ export * from "./sequence";
 export * from "./sounds";
 export * from "./spatial";
 export * from "./take";
+export * from "./timemap";

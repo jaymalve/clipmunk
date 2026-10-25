@@ -70,6 +70,7 @@ a { color: inherit; }
 .timeline:focus-visible { outline: 2px solid #a1a1aa; outline-offset: 2px; }
 .timeline .kept { position: absolute; top: 0; bottom: 0; background: #3f3f46; }
 .timeline .zoom { position: absolute; top: 9px; bottom: 9px; border-radius: 5px; background: #818cf8; opacity: .85; pointer-events: none; }
+.timeline .fast { position: absolute; top: 4px; bottom: 4px; background: repeating-linear-gradient(135deg, rgba(250,204,21,.35) 0 4px, transparent 4px 8px); pointer-events: none; }
 .timeline .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fafafa; pointer-events: none; }
 .take header .title { flex: 1; min-width: 0; font: 600 18px system-ui, sans-serif; color: #fafafa; background: none; border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; }
 .take header .title:hover, .take header .title:focus { border-color: #3f3f46; outline: none; }

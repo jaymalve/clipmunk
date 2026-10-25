@@ -11,6 +11,7 @@ import { composeTake, defaultEdit, type Take, type TakeEditFile, type TakeEvent,
  * up from SECRET.from to SECRET.to between 1.0 and 1.5 s, and the log has its `redact` boxes.
  * "redacted" also gives the edit a blur entry for it; both turn zoom off so it stays in view.
  * With `named`, the click is on a button named "Go" and ⌘K is pressed at 3000 ms.
+ * With `paced`, idle time and typing play fast; otherwise pacing is off, as for takes recorded before it.
  */
 export const FFMPEG = path.resolve("node_modules/ffmpeg-static/ffmpeg");
 export const CLICK = { t: 2000, x: 480, y: 270, rect: [450, 255, 60, 30] as [number, number, number, number] };
@@ -23,7 +24,13 @@ export const QUADRANTS = { red: [255, 0, 0], green: [0, 128, 0], blue: [0, 0, 25
 export async function makeTake(
   root: string,
   id: string,
-  options: { durationMs?: number; cam?: boolean; secret?: "redacted" | "visible"; named?: boolean } = {},
+  options: {
+    durationMs?: number;
+    cam?: boolean;
+    secret?: "redacted" | "visible";
+    named?: boolean;
+    paced?: boolean;
+  } = {},
 ): Promise<Take> {
   const durationMs = options.durationMs ?? 4000;
   const dir = path.join(root, ".clipmunk/takes", id);
@@ -131,6 +138,11 @@ export async function makeTake(
   });
   const edit: TakeEditFile = { version: 1, edit: defaultEdit(durationMs) };
   if (options.secret) edit.edit.zoom = { mode: "off" };
+  if (options.paced)
+    edit.edit.pace = {
+      deadAir: { ...edit.edit.pace.deadAir, on: true },
+      typing: { ...edit.edit.pace.typing, on: true },
+    };
   if (options.secret === "redacted") edit.edit.redact = [{ sel: SECRET.sel, mode: "blur" }];
   await writeFile(path.join(dir, "edit.json"), `${JSON.stringify(edit, null, 2)}\n`);
   await writeFile(path.join(dir, "take.json"), `${JSON.stringify(record, null, 2)}\n`);

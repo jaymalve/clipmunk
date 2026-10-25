@@ -1,5 +1,6 @@
 import { CanvasSource, getFirstEncodableVideoCodec, Mp4OutputFormat, Output, StreamTarget } from "mediabunny";
 import {
+  buildTimeMap,
   type Caption,
   type CursorPath,
   captionAt,
@@ -11,8 +12,10 @@ import {
   redactionTrack,
   resolveCaptions,
   resolveZoomTracks,
+  type Span,
   type Take,
   type TakeEvent,
+  type TimeMap,
   type ZoomTrack,
   zoomAt,
 } from "../core";
@@ -20,12 +23,15 @@ import { type Context2D, drawTake } from "./draw";
 import { type FrameSource, openFrameSource } from "./frames";
 
 /** Renders a take to a canvas at any clip time, and encodes it to a video file.
- * Clip time runs from 0 at the trim start. Preview and export call the same `renderAt`.
+ * Clip time runs from 0 at the trim start, through the take's time map (trim and pacing).
+ * Preview and export call the same `renderAt`.
  */
 export type EncodeJob = { fps: number; width: number; height: number };
 export type EncodeResult = { codec: string; frames: number; width: number; height: number; durationMs: number };
 export type TakeRenderer = {
   readonly durationMs: number;
+  /** Clip time to take time, after trim and pacing. */
+  readonly timeMap: TimeMap;
   readonly zoomTracks: readonly ZoomTrack[];
   /** Apply an edited take. Media is kept; zoom, cursor, redaction, captions and layout are derived again. */
   update(take: Take): void;
@@ -47,6 +53,8 @@ export async function createTakeRenderer(options: {
   events: readonly TakeEvent[];
   fileUrl: (name: string) => string;
   canvas: HTMLCanvasElement;
+  /** Where the voice track has speech, on the take clock; pacing never speeds it up. */
+  speech?: readonly Span[];
 }): Promise<TakeRenderer> {
   const { events, canvas } = options;
   let take = options.take;
@@ -60,7 +68,9 @@ export async function createTakeRenderer(options: {
   let redaction: RedactionTrack = redactionTrack([], []);
   let captions: Caption[] = [];
   const pills: KeyPill[] = keyPills(events);
+  let timeMap: TimeMap = buildTimeMap(take.edit, events, options.speech);
   const derive = () => {
+    timeMap = buildTimeMap(take.edit, events, options.speech);
     zoomTracks = resolveZoomTracks(take.edit, events, take.source);
     redaction = redactionTrack(events, take.edit.redact);
     captions = resolveCaptions(take.edit, events);
@@ -75,7 +85,7 @@ export async function createTakeRenderer(options: {
 
   /** One frame, fully drawn, on any 2D context of any size. */
   async function draw(ctx: Context2D, width: number, height: number, clipMs: number) {
-    const timeMs = take.edit.trim.startMs + clipMs;
+    const timeMs = timeMap.toTake(clipMs);
     const [screenFrame, camFrame] = await Promise.all([
       screen.frameAt((timeMs - take.source.screen.offsetMs) / 1000),
       cam && take.source.cam && take.edit.cam.visible ? cam.frameAt((timeMs - take.source.cam.offsetMs) / 1000) : null,
@@ -103,7 +113,10 @@ export async function createTakeRenderer(options: {
 
   return {
     get durationMs() {
-      return Math.max(0, take.edit.trim.endMs - take.edit.trim.startMs);
+      return timeMap.durationMs;
+    },
+    get timeMap() {
+      return timeMap;
     },
     get zoomTracks() {
       return zoomTracks;
@@ -148,7 +161,7 @@ export async function createTakeRenderer(options: {
       const video = new CanvasSource(surface, { codec, bitrate, keyFrameInterval: 2 });
       output.addVideoTrack(video, { frameRate: job.fps });
       await output.start();
-      const durationMs = Math.max(0, take.edit.trim.endMs - take.edit.trim.startMs);
+      const { durationMs } = timeMap;
       const frames = Math.max(1, Math.ceil((durationMs * job.fps) / 1000));
       for (let index = 0; index < frames; index++) {
         await draw(ctx, job.width, job.height, (index * 1000) / job.fps);

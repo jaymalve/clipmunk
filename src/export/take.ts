@@ -1,6 +1,7 @@
 import { open } from "node:fs/promises";
 import path from "node:path";
 import {
+  buildTimeMap,
   DAEMON_HASH,
   type ExportTakeResult,
   ExportTakeSchema,
@@ -15,7 +16,7 @@ import {
   takeMoments,
   zodIssues,
 } from "../core";
-import { Fault, loadTake, readText, resolveInside, resolveStudio, toIssues } from "../project";
+import { Fault, loadTake, readSpeech, readText, resolveInside, resolveStudio, toIssues } from "../project";
 import { launchBrowser } from "./browser";
 import { finishTake } from "./ffmpeg";
 import { writeMusic } from "./music";
@@ -120,17 +121,20 @@ async function takeSound(root: string, take: Take, request: TakeRequest, directo
     (await readText(root, `${TAKES_DIR}/${take.id}/${source.events.file}`)) ?? "",
     TakeEventSchema,
   );
+  // The same map the page rendered with, so sound and picture stay together through pacing.
+  const map = buildTimeMap(edit, events, await readSpeech(root, take).catch(() => []));
   const music =
     request.music && edit.music
       ? await writeMusic(directory, edit.music, {
           key: `take:${take.id}`,
           durationMs,
-          momentsMs: takeMoments(edit.trim, events),
+          momentsMs: takeMoments(map, events),
         })
       : undefined;
   const audio = voice && {
     file: await resolveInside(root, `${TAKES_DIR}/${take.id}/${voice.file}`),
-    startMs: edit.trim.startMs - voice.offsetMs,
+    offsetMs: voice.offsetMs,
+    segments: map.segments,
     gain: edit.audio.gain,
     normalize: edit.audio.normalize,
   };

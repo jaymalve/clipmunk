@@ -16,6 +16,7 @@ import {
   TakeEditSchema,
   type TakeEvent,
   takeMoments,
+  trimMap,
   validateRecipe,
 } from "./index";
 
@@ -320,7 +321,7 @@ describe("syncing music to the picture", () => {
       { t: 6100, k: "move", x: 1, y: 1 },
       click(9500),
     ];
-    expect(takeMoments(defaultEdit(10_000).trim, events)).toEqual([500, 2000, 6000, 9500]);
-    expect(takeMoments({ startMs: 1000, endMs: 7000 }, events)).toEqual([1000, 5000]);
+    expect(takeMoments(trimMap(defaultEdit(10_000).trim), events)).toEqual([500, 2000, 6000, 9500]);
+    expect(takeMoments(trimMap({ startMs: 1000, endMs: 7000 }), events)).toEqual([1000, 5000]);
   });
 });

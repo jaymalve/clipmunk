@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useState } from "react";
 import { installBridge, PROGRESS_BINDING, WRITE_BINDING } from "../bridge";
 import { createTakeRenderer, type TakeRenderer } from "../compositor";
-import type { Take, TakeEvent } from "../core";
+import type { Span, Take, TakeEvent, TimeMap } from "../core";
 import type { Clock } from "../react";
 
 /** The moving parts behind the take editor, one concern per hook. */
@@ -12,6 +12,7 @@ export function useTakeRenderer(
   take: Take,
   events: readonly TakeEvent[],
   fileUrl: (name: string) => string,
+  speech: readonly Span[] = [],
 ) {
   const [renderer, setRenderer] = useState<TakeRenderer>();
   const [failure, setFailure] = useState<string>();
@@ -20,7 +21,7 @@ export function useTakeRenderer(
     if (!canvas) return;
     let current = true;
     let opened: TakeRenderer | undefined;
-    createTakeRenderer({ take, events, fileUrl, canvas }).then(
+    createTakeRenderer({ take, events, fileUrl, canvas, speech }).then(
       (value) => {
         if (!current) return value.close();
         opened = value;
@@ -46,20 +47,38 @@ export function usePreview(renderer: TakeRenderer | undefined, take: Take, clock
   }, [renderer, take, clock]);
 }
 
-/** Play the voice track alongside the clock. Export mixes the same file with FFmpeg. */
-export function useVoice(element: RefObject<HTMLAudioElement | null>, take: Take, clock: Clock, playing: boolean) {
+/** Play the voice track alongside the clock, through the take's time map. Sped-up stretches are
+ * silent, as in the export; the player is moved back into step whenever it drifts.
+ */
+export function useVoice(
+  element: RefObject<HTMLAudioElement | null>,
+  take: Take,
+  timeMap: TimeMap,
+  clock: Clock,
+  playing: boolean,
+) {
   const voice = take.source.audio;
   const { gain, muted } = take.edit.audio;
-  const trimStart = take.edit.trim.startMs;
   useEffect(() => {
     const player = element.current;
     if (!player || !voice) return;
     player.volume = Math.min(1, gain);
-    player.muted = muted;
-    if (!playing) return player.pause();
-    player.currentTime = Math.max(0, (trimStart + clock.get() - voice.offsetMs) / 1000);
+    if (!playing) {
+      player.pause();
+      return;
+    }
+    const follow = () => {
+      const clipMs = clock.get();
+      const fast = timeMap.speedAt(clipMs) !== 1;
+      player.muted = muted || fast;
+      if (fast) return;
+      const target = Math.max(0, (timeMap.toTake(clipMs) - voice.offsetMs) / 1000);
+      if (Math.abs(player.currentTime - target) > 0.12) player.currentTime = target;
+    };
+    follow();
     void player.play().catch(() => {});
-  }, [element, playing, voice, gain, muted, trimStart, clock]);
+    return clock.subscribe(follow);
+  }, [element, playing, voice, gain, muted, timeMap, clock]);
 }
 
 const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
@@ -75,11 +94,11 @@ function toBase64(data: Uint8Array): string {
 export function useTakeBridge(
   renderer: TakeRenderer | undefined,
   take: Take,
+  durationMs: number,
   clock: Clock,
   seek: (timeMs: number) => void,
 ) {
   const { width, height } = take.edit.canvas;
-  const durationMs = Math.max(0, take.edit.trim.endMs - take.edit.trim.startMs);
   useEffect(() => {
     if (!renderer) return;
     return installBridge({

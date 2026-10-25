@@ -199,6 +199,7 @@ type Take = {
            | { rect: [x, y, w, h]; fromMs: number; toMs: number; mode: "blur" | "block" })[];  // a hand-drawn box
     captions: { auto: boolean; items: { atMs: number; durMs: number; text: string; source: "auto" | "manual" }[] };
     keys:   { visible: boolean };                // shortcut pills from the log's combo events
+    pace:   { deadAir: { on: boolean; maxGapMs: number; speed: number }; typing: { on: boolean; speed: number } };
   };
 };
 ```
@@ -430,13 +431,13 @@ Take ids read as a timestamp (`take-20261005-142233`), so listings sort by time.
 
 ### 8.5 Ingest (daemon)
 
-Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit with the project's brand and redaction applied (the edit first, so a listed take always has one). `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
+Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit with the project's brand and redaction applied and pacing on (the edit first, so a listed take always has one). It then finds where the voice track has speech (9.8) and caches it in `speech.json` beside the take. `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
 
 ---
 
 ## 9. Take compositor (`compositor`, `core/autozoom`, `core/cursor`)
 
-`drawTake(ctx, width, height, take, frame)` draws one frame and is a pure function of its arguments. `createTakeRenderer` wraps it with media and derived data, and exposes `renderAt(clipMs)` for the preview and `encode(job, write, progress)` for export; both draw through the same function. Clip time starts at zero at the trim start.
+`drawTake(ctx, width, height, take, frame)` draws one frame and is a pure function of its arguments. `createTakeRenderer` wraps it with media and derived data, and exposes `renderAt(clipMs)` for the preview and `encode(job, write, progress)` for export; both draw through the same function. Clip time starts at zero at the trim start and reaches take time through the take's time map (9.8); everything derived from the log (zoom, cursor, redaction, captions, keys) works on take time.
 
 ### 9.1 Frame sources
 
@@ -472,7 +473,7 @@ The view is clamped so it never shows anything outside the recording; a property
 
 ### 9.5 Audio
 
-The preview plays the extracted voice track alongside the clock. Export never handles audio in the page: FFmpeg receives the voice file with its offset, the trim, the gain and the loudness flag, and writes AAC into the final MP4.
+The preview plays the extracted voice track alongside the clock, through the time map: it is muted in sped-up stretches and moved back into step when it drifts. Export never handles audio in the page: FFmpeg receives the voice file with its offset, the time map's segments, the gain and the loudness flag, keeps the normal-speed segments, puts silence of the new length in place of the sped-up ones, and writes AAC into the final MP4. The voice is never time-stretched, so it is never pitch-shifted.
 
 ### 9.6 Redaction
 
@@ -497,6 +498,17 @@ The preview plays the extracted voice track alongside the clock. Export never ha
 `keyPills(events)` in `core/keys.ts` turns `combo` events into pills such as "⌘ K", each shown for 900 ms, at most three at once. The recorder logs a combo only when Meta, Control or Alt is held and never in a password field, so plain typing never makes a pill.
 
 `drawTake` draws the caption centred along the bottom of the recording, and the pills in a row above it (or in its place when no caption shows). Both use the edit's backdrop colour, which the brand sets, at 88% opacity, with black or white text, whichever reads better; long text shrinks to fit the recording's width.
+
+### 9.8 Pacing and the time map
+
+`buildTimeMap(edit, events, speech)` in `core/timemap.ts` is the one place that maps between clip time (what plays) and take time (the recording). It is piecewise linear: a list of segments of take time, each with a speed, that tile the trim. With pacing off it is one segment, the trim, at normal speed.
+
+- **Dead air.** A gap between two inputs (pointer, keys, scroll, focus; a box moving on the page is not input) longer than `maxGapMs` (600) plays at `speed` (4x), keeping half of `maxGapMs` at normal speed at each end so actions never start abruptly. The time before the first input and after the last counts as a gap.
+- **Typing.** A run of at least three keystrokes no more than a second apart plays at `typing.speed` (2x).
+- **Speech.** Nothing with speech in it is sped up, with 200 ms of room either side. `detectSpeech` finds speech in 20 ms frames by loudness, with a threshold 10 dB over the recording's noise floor kept between -50 and -35 dBFS; `project/speech.ts` runs it on `audio.wav` and caches the spans, on the take clock, in `speech.json` beside the take. It is a cache, not part of the recording: it stays out of git and is rebuilt when missing. The daemon serves the spans with the take, so the editor and the exporter's page build the same map.
+- **Who uses it.** The compositor (frames and every overlay), music moments (`takeMoments`), the timeline (which stripes the fast parts), the trim buttons, the preview's voice, the export's duration, frame count and audio.
+
+Pacing is off in the schema, so takes recorded before it play as they always did; ingest turns it on for new takes, and the take editor has a checkbox for each kind.
 
 ## 10. Studio (`studio`)
 

@@ -23,7 +23,7 @@ import {
   deleteTake,
   finalizeTake,
   listTakes,
-  readTake,
+  readTakeForEditor,
   takeFile,
   updateTakeEdit,
 } from "./takes";
@@ -101,7 +101,7 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
     return false;
   }
   if (!action) {
-    if (method === "GET") return handled(reply(response, await readTake(id, context)));
+    if (method === "GET") return handled(reply(response, await readTakeForEditor(id, context)));
     if (method === "PATCH") {
       const body = (await readJson(request)) as Record<string, unknown>;
       return handled(reply(response, await updateTakeEdit(id, body, context)));

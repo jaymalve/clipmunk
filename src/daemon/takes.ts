@@ -12,11 +12,13 @@ import {
   ok,
   parseEvents,
   type Result,
+  type Span,
   summarizeTake,
   TAKE_FILE,
   TAKE_TRACKS,
   TAKES_DIR,
   type Take,
+  type TakeEdit,
   type TakeEditFile,
   type TakeEvent,
   TakeEventSchema,
@@ -32,6 +34,7 @@ import {
   Fault,
   loadTake,
   readConfig,
+  readSpeech,
   readText,
   resolveInside,
   saveTakeEdit,
@@ -221,20 +224,39 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
     });
     const edit: TakeEditFile = {
       version: 1,
-      edit: applyRedaction(applyBrand(defaultEdit(durationMs), settings?.brand), settings, logged),
+      edit: withPacing(applyRedaction(applyBrand(defaultEdit(durationMs), settings?.brand), settings, logged)),
     };
     // The edit first: a take is listed once take.json exists, and must then have its edit.
     await writeText(root, `${dir}/${EDIT_FILE}`, `${JSON.stringify(edit, null, 2)}\n`);
     await writeText(root, `${dir}/${TAKE_FILE}`, `${JSON.stringify(take, null, 2)}\n`);
     await rm(path.join(absolute, PENDING), { force: true });
     for (const track of TAKE_TRACKS) expected.delete(`${id}/${track}`);
+    // Find the speech now, so the first open of the take does not wait for it.
+    await readSpeech(root, { ...take, edit: edit.edit }).catch(() => {});
     return ok({ ...take, edit: edit.edit });
   } catch (error) {
     return fail(toIssues(error, "ingest-failed"));
   }
 }
 
+/** New takes play idle gaps and typing faster; takes recorded before pacing keep it off. */
+const withPacing = (edit: TakeEdit): TakeEdit => ({
+  ...edit,
+  pace: { deadAir: { ...edit.pace.deadAir, on: true }, typing: { ...edit.pace.typing, on: true } },
+});
+
 export const readTake = (id: string, context: Context) => loadTake(context.root, id);
+
+/** A take for the editor and the exporter's page: the take, its revision, and where its voice has speech. */
+export async function readTakeForEditor(
+  id: string,
+  context: Context,
+): Promise<Result<{ take: Take; revision: string; speech: Span[] }>> {
+  const loaded = await loadTake(context.root, id);
+  if (!loaded.ok) return loaded;
+  const speech = await readSpeech(context.root, loaded.data.take).catch(() => []);
+  return ok({ ...loaded.data, speech });
+}
 
 export async function listTakes(context: Context): Promise<Result<{ takes: TakeSummary[]; issues: Issue[] }>> {
   try {
