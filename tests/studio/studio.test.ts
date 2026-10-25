@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { buildStudioApp } from "../../scripts/studio-app.mjs";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeVideo } from "../../src/export";
+import { recordExport } from "../../src/project";
 import { FFMPEG, makeTake } from "../support/take";
 
 /** The standalone Studio, served by the daemon, against the example app. */
@@ -449,6 +450,45 @@ describe("the chat with the agent", () => {
     expect(message.context).toEqual([{ kind: "clip", clip: { kind: "take", id: CHAT_TAKE } }]);
     await page.getByRole("dialog", { name: "Chat with your agent" }).waitFor();
   }, 120_000);
+});
+
+describe("out-of-date clips", () => {
+  it("flags the scene whose component changed, and nothing else, until it is exported again", async () => {
+    const themeFile = path.join(root, "src/components/theme.tsx");
+    const theme = await readFile(themeFile, "utf8");
+    try {
+      // As if both scenes had been exported with the sources as they are.
+      await recordExport(root, { kind: "scene", id: "themed-card" }, [".clipmunk/exports/zz-themed.mp4"]);
+      await recordExport(root, { kind: "scene", id: "rack-focus" }, [".clipmunk/exports/zz-rack.mp4"]);
+      const page = await openStudio();
+      const card = (id: string) => page.locator(`article.card[data-clip="${id}"]`);
+      await card("themed-card").waitFor();
+      expect(await page.locator(".stale-banner").count()).toBe(0);
+
+      // themed-card renders PlanCard from components/theme.tsx; rack-focus does not import it.
+      await writeFile(themeFile, `${theme}\n// zz: a change to the plan card\n`);
+      const banner = page.locator(".stale-banner");
+      await banner.waitFor({ timeout: 15_000 });
+      expect(await banner.textContent()).toBe("1 clip is out of date. src/components/theme.tsx changed.");
+      await card("themed-card").getByText("Out of date").waitFor();
+      expect(await card("rack-focus").getByText("Out of date").count()).toBe(0);
+      const listed = await fetch(`${daemon.origin}/v1/scenes`, {
+        headers: { authorization: `Bearer ${daemon.token}` },
+      }).then((response) => response.json());
+      const stale = listed.data.scenes.filter((scene: any) => scene.freshness?.stale).map((scene: any) => scene.id);
+      expect(stale).toEqual(["themed-card"]);
+
+      // Re-export renders it again from the changed source, which brings it up to date.
+      await card("themed-card").getByRole("button", { name: "Re-export" }).click();
+      await banner.waitFor({ state: "detached", timeout: 150_000 });
+      const manifest = JSON.parse(await readFile(path.join(root, ".clipmunk/manifest.json"), "utf8"));
+      made.push(...manifest.clips["scene:themed-card"].outputs);
+      expect(manifest.clips["scene:themed-card"].outputs).not.toEqual([".clipmunk/exports/zz-themed.mp4"]);
+      expect(await card("themed-card").getByText("Out of date").count()).toBe(0);
+    } finally {
+      await writeFile(themeFile, theme);
+    }
+  }, 240_000);
 });
 
 describe("the Studio's flows", () => {

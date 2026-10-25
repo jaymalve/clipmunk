@@ -2,13 +2,15 @@ import type { JobEvent } from "./jobs";
 
 /** What the Studio hears on `GET /v1/events`, one server-sent event each: a take was recorded,
  * a clip's edit changed (from the Studio, the CLI through the daemon, or an agent), the config
- * file changed on disk, a job made progress, or the chat with the agent changed. Later features add their own kinds.
+ * file changed on disk, a job made progress, the chat with the agent changed, or a clip became
+ * out of date (or up to date) with its sources.
  */
 export type StudioEvent =
   | { type: "take"; id: string }
   | { type: "edit"; kind: "take" | "scene" | "sequence"; id: string }
   | { type: "config" }
   | { type: "chat" }
+  | { type: "stale" }
   | { type: "job"; job: string; kind: string; event: JobEvent; [key: string]: unknown };
 
 export function createEvents() {

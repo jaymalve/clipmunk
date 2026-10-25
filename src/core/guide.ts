@@ -258,6 +258,8 @@ export function getGuide() {
       [`clipmunk export --scene <id> [--url <origin>] [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]`]:
         "Render an MP4. Needs FFmpeg and Playwright's Chromium. Never overwrites a file.",
       "clipmunk takes": "List recorded takes.",
+      "clipmunk stale [--base <git ref>]":
+        "List exported clips whose source files changed since their export (or since the ref), with the files. Re-export stale scenes; record stale takes again.",
       "clipmunk preset list | apply <name> --take <id> | --scene <id> | save <name> --take <id> --fields <parts>":
         "List, apply or save the presets in clipmunk.config.json.",
       "clipmunk mcp":

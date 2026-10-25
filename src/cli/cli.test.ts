@@ -88,6 +88,8 @@ describe("clipmunk cli", () => {
     const cwd = await host(VITE);
     expect((await clipmunk(cwd, "dev", "--port", "70000")).err).toContain("--port must be a port number");
     expect((await clipmunk(cwd, "takes")).out).toContain("No takes yet");
+    expect((await clipmunk(cwd, "stale")).out).toContain("Nothing exported yet");
+    expect(JSON.parse((await clipmunk(cwd, "stale", "--json")).out)).toMatchObject({ ok: true, data: { clips: [] } });
     const controller = new AbortController();
     const out: string[] = [];
     const running = run(["dev", "--port", "0", "--json"], {

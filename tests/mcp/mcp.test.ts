@@ -6,6 +6,7 @@ import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { clipmunkTools, MCP_INSTRUCTIONS, serveMcp } from "../../src/mcp";
+import { recordExport } from "../../src/project";
 import { FFMPEG, makeTake } from "../support/take";
 
 /** `clipmunk mcp` driven by an in-process client, the way an agent's MCP client talks to it. */
@@ -293,6 +294,21 @@ describe("clipmunk mcp", () => {
     expect(again.map((message: any) => message.text)).toEqual(chat.map((message: any) => message.text));
     expect(again.at(-1).proposal.status).toBe("undone");
   }, 60_000);
+
+  it("says which exported clips are out of date", async () => {
+    await recordExport(root, { kind: "scene", id: "rack-focus" }, [".clipmunk/exports/zz-mcp-rack.mp4"]);
+    const mcp = session(root);
+    expect(mcp.textOf(await mcp.call("list_clips"))).not.toContain("out of date");
+    // The recipe as it was exported differs from the one on disk now.
+    const file = path.join(root, ".clipmunk/manifest.json");
+    const manifest = JSON.parse(await readFile(file, "utf8"));
+    manifest.clips["scene:rack-focus"].files["src/clipmunk/scenes/rack-focus.scene.json"] = "0".repeat(64);
+    await writeFile(file, JSON.stringify(manifest));
+    expect(mcp.textOf(await mcp.call("list_clips"))).toContain(
+      "scene rack-focus: Rack focus (1.5 s) - out of date: src/clipmunk/scenes/rack-focus.scene.json changed since its export (export it again)",
+    );
+    mcp.close();
+  });
 
   it("says how to start the daemon when none is running", async () => {
     const empty = await mkdtemp(path.join(os.tmpdir(), "clipmunk-mcp-"));

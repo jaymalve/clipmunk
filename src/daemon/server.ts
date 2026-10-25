@@ -8,6 +8,7 @@ import { CONFIG_FILE, DAEMON_FILE, type DaemonFile, DEFAULT_DAEMON_PORT } from "
 import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
 import { createChat } from "./chat";
 import { createEvents } from "./events";
+import { createFreshness } from "./freshness";
 import { admit } from "./guard";
 import { deny, STATUS, send } from "./http";
 import { createJobs } from "./jobs";
@@ -73,6 +74,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     events.emit({ ...job.meta, type: "job", job: job.id, kind: job.kind, event }),
   );
   const chat = createChat({ root }, () => events.emit({ type: "chat" }));
+  const freshness = createFreshness(root, () => events.emit({ type: "stale" }));
   const studioDir = options.studioDir ?? process.env.CLIPMUNK_STUDIO_DIR ?? packagedStudio();
   let port = 0;
 
@@ -100,6 +102,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
       jobs,
       events,
       chat,
+      freshness,
       self: { origin: `http://127.0.0.1:${port}`, port, token },
       version: options.version ?? "dev",
       log: (line) => options.log?.(line),
@@ -144,6 +147,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     async close() {
       jobs.cancelAll();
       chat.close();
+      freshness.close();
       watcher?.close();
       clearTimeout(settle);
       server.closeAllConnections();

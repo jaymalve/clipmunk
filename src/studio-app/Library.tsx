@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { type CatalogScene, type Issue, motionDuration, RATIOS, type Sequence, type TakeSummary } from "../core";
-import type { DaemonClient } from "../recorder";
+import {
+  type CatalogScene,
+  type ClipFreshness,
+  DAEMON_HASH,
+  type Issue,
+  motionDuration,
+  RATIOS,
+  type Sequence,
+  sourceLabel,
+  type TakeSummary,
+} from "../core";
+import { type DaemonClient, RECORD_PARAM } from "../recorder";
 import { Chrome } from "../studio/Chrome";
 import type { DaemonConnection } from "../studio/daemon";
 import { onStudioEvent } from "../studio/events";
@@ -70,6 +80,31 @@ function useRendering(client: DaemonClient) {
   return rendering;
 }
 
+/** Which exported clips are out of date with their sources, kept current by the daemon's events. */
+function useStale(client: DaemonClient) {
+  const [stale, setStale] = useState<{ clips: ClipFreshness[]; summary: string | null }>({ clips: [], summary: null });
+  useEffect(() => {
+    const load = () =>
+      void client
+        .get<{ clips: ClipFreshness[]; summary: string | null }>("/v1/stale")
+        .then((result) => result.ok && setStale(result.data));
+    load();
+    return onStudioEvent(client, (event) => {
+      const job = event as { type: string; event?: { type: string } };
+      if (event.type === "stale" || (job.type === "job" && job.event?.type === "done")) load();
+    });
+  }, [client]);
+  return stale;
+}
+
+/** The formats a clip was last exported in, to export it again the same way. */
+const formatsOf = (outputs: string[]) => {
+  const formats = new Set(
+    outputs.map((output) => (output.endsWith(".gif") ? "gif" : output.endsWith(".png") ? "poster" : "mp4")),
+  );
+  return [...formats];
+};
+
 export function ClipLibrary({
   daemon,
   scenes,
@@ -89,6 +124,19 @@ export function ClipLibrary({
   const [exporting, setExporting] = useState<Clip>();
   const [newScene, setNewScene] = useState(false);
   const rendering = useRendering(client);
+  const stale = useStale(client);
+  const freshnessOf = (clip: Clip) =>
+    stale.clips.find((item) => item.stale && item.clip.kind === clip.kind && item.clip.id === clip.id);
+  const reexport = (clip: Clip, freshness: ClipFreshness) =>
+    void client.post("/v1/exports", {
+      clip: { kind: clip.kind, id: clip.id },
+      formats: formatsOf(freshness.outputs),
+      ...(clip.kind === "scene" && daemon.status.devUrl ? { url: daemon.status.devUrl } : {}),
+    });
+  // A stale take is a recording of the old UI: it is recorded again in the app, with the recorder open.
+  const recordAgain = daemon.status.devUrl
+    ? `${new URL(`/?${RECORD_PARAM}=1`, daemon.status.devUrl)}#${DAEMON_HASH}=${client.link.port}.${client.link.token}`
+    : undefined;
 
   useEffect(() => {
     const load = () => {
@@ -195,6 +243,11 @@ export function ClipLibrary({
             style={{ marginBottom: 16 }}
           />
         )}
+        {stale.summary && (
+          <div className="stale-banner" role="status">
+            {stale.summary}
+          </div>
+        )}
         {!clips.length && (
           <p className="note">
             Nothing here yet. Press Alt+Shift+R in your app to record a take, or ask your coding agent for a scene.
@@ -208,7 +261,10 @@ export function ClipLibrary({
               client={client}
               themes={clip.kind === "scene" ? themes : []}
               rendering={rendering[`${clip.kind}:${clip.id}`]}
+              freshness={freshnessOf(clip)}
               onExport={() => setExporting(clip)}
+              onReexport={(freshness) => reexport(clip, freshness)}
+              recordAgain={recordAgain}
             />
           ))}
         </div>
@@ -235,9 +291,13 @@ function ClipCard(props: {
   client: DaemonClient;
   themes: string[];
   rendering?: { done: number; total: number };
+  /** Set when the clip was exported and a source file changed since. */
+  freshness?: ClipFreshness;
   onExport: () => void;
+  onReexport: (freshness: ClipFreshness) => void;
+  recordAgain?: string;
 }) {
-  const { clip, rendering } = props;
+  const { clip, rendering, freshness } = props;
   const href =
     clip.kind === "scene"
       ? studioHref({ scene: clip.id })
@@ -254,7 +314,7 @@ function ClipCard(props: {
       : []),
   ];
   return (
-    <article className="card" data-kind={clip.kind}>
+    <article className="card" data-kind={clip.kind} data-clip={clip.id}>
       <a href={href} className="thumb">
         <Thumb clip={clip} client={props.client} />
         <span className="kind">{clip.kind}</span>
@@ -263,16 +323,41 @@ function ClipCard(props: {
             Rendering {rendering.total ? `${Math.round((rendering.done / rendering.total) * 100)}%` : "…"}
           </span>
         )}
+        {freshness && !rendering && (
+          <span
+            className="badge stale"
+            title={freshness.changes.map((change) => `${change.file} ${change.change}`).join("\n")}
+          >
+            Out of date
+          </span>
+        )}
       </a>
       <div className="meta">
         <a href={href}>
           <b>{clip.title}</b>
         </a>
         <span>{details.join(" · ")}</span>
+        {freshness && (
+          <span className="changed">
+            {[...new Set(freshness.changes.map((change) => sourceLabel(change.file)))].join(", ")} changed
+          </span>
+        )}
       </div>
-      <button type="button" onClick={props.onExport}>
-        Export
-      </button>
+      <div className="actions">
+        <button type="button" onClick={props.onExport}>
+          Export
+        </button>
+        {freshness && clip.kind !== "take" && (
+          <button type="button" className="primary" onClick={() => props.onReexport(freshness)} disabled={!!rendering}>
+            Re-export
+          </button>
+        )}
+        {freshness && clip.kind === "take" && props.recordAgain && (
+          <a className="button primary" href={props.recordAgain} target="_blank" rel="noreferrer">
+            Record again
+          </a>
+        )}
+      </div>
     </article>
   );
 }
@@ -319,7 +404,12 @@ export const STYLES = `
 .badge { position: absolute; right: 8px; top: 8px; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
 .badge.rendering { background: #4f46e5; color: #fff; }
 .card .meta { padding: 10px 12px 4px; display: grid; gap: 2px; } .card .meta a { color: inherit; text-decoration: none; }
-.card .meta span { color: #a1a1aa; font-size: 13px; } .card > button { margin: 8px 12px 12px; align-self: flex-start; }
+.card .meta span { color: #a1a1aa; font-size: 13px; } .card .meta .changed { color: #fcd34d; }
+.card .actions { display: flex; gap: 8px; margin: 8px 12px 12px; align-items: center; }
+.clips .primary { background: #f4f4f5; color: #09090b; border-color: #f4f4f5; }
+.clips a.button { font: inherit; border: 1px solid #27272a; border-radius: 8px; padding: 6px 12px; text-decoration: none; }
+.badge.stale { background: #f59e0b; color: #1c1917; }
+.stale-banner { background: #1c1917; border: 1px solid #78350f; color: #fde68a; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
 .dialog, .queue { position: fixed; right: 24px; bottom: 24px; width: 380px; background: #111114; border: 1px solid #27272a; border-radius: 14px; padding: 16px 18px; font: 14px/1.45 system-ui, sans-serif; color: #e4e4e7; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 .dialog h2, .queue h2 { margin: 0 0 8px; font-size: 16px; } .dialog textarea { width: 100%; box-sizing: border-box; font: 13px ui-monospace, monospace; background: #09090b; color: #e4e4e7; border: 1px solid #27272a; border-radius: 8px; padding: 8px; }
 .dialog .row, .queue .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }

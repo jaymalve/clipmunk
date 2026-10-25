@@ -18,7 +18,17 @@ import type { Tool, ToolResult } from "./server";
  * formats the answer; the logic stays in the daemon, so the Studio, the CLI and the agent agree.
  */
 type Reply<T> = { ok: true; data: T } | { ok: false; issues: Issue[] };
-type Clip = { kind: "take" | "scene" | "sequence"; id: string; title: string; durationMs?: number };
+type Freshness = { freshness?: { stale: boolean; changes: { file: string; change: string }[] } };
+type Clip = {
+  kind: "take" | "scene" | "sequence";
+  id: string;
+  title: string;
+  durationMs?: number;
+  /** The changed source files, when the clip was exported and is out of date. */
+  stale?: string[];
+};
+const staleOf = (item: Freshness) =>
+  item.freshness?.stale ? { stale: item.freshness.changes.map((change) => change.file) } : {};
 
 export function daemonClient(root: string) {
   async function link() {
@@ -82,21 +92,28 @@ const idArg = { id: string("The clip's id, as list_clips shows it.") };
 
 async function listClips(client: Client): Promise<Clip[]> {
   const takes = unwrap(
-    await client.get<{ takes: { id: string; title: string; durationMs: number }[] }>("/v1/takes"),
+    await client.get<{ takes: ({ id: string; title: string; durationMs: number } & Freshness)[] }>("/v1/takes"),
   ).takes;
   const scenes = unwrap(
-    await client.get<{ scenes: { id: string; title: string; definition: { motion?: never } }[] }>(
+    await client.get<{ scenes: ({ id: string; title: string; definition: { motion?: never } } & Freshness)[] }>(
       "/v1/scenes?detail=1",
     ),
   ).scenes;
   const sequences = unwrap(await client.get<{ sequences: { id: string; title: string }[] }>("/v1/sequences")).sequences;
   return [
-    ...takes.map((take) => ({ kind: "take" as const, id: take.id, title: take.title, durationMs: take.durationMs })),
+    ...takes.map((take) => ({
+      kind: "take" as const,
+      id: take.id,
+      title: take.title,
+      durationMs: take.durationMs,
+      ...staleOf(take),
+    })),
     ...scenes.map((scene) => ({
       kind: "scene" as const,
       id: scene.id,
       title: scene.title,
       durationMs: scene.definition.motion ? motionDuration(scene.definition.motion) : 0,
+      ...staleOf(scene),
     })),
     ...sequences.map((sequence) => ({ kind: "sequence" as const, id: sequence.id, title: sequence.title })),
   ];
@@ -172,7 +189,8 @@ export function clipmunkTools(root: string): Tool[] {
   return [
     {
       name: "list_clips",
-      description: "List every take (recording), scene and sequence in the project, with its id and length.",
+      description:
+        "List every take (recording), scene and sequence in the project, with its id and length, and which exported ones are out of date because a source file changed since their export.",
       inputSchema: { type: "object", properties: {} },
       async call() {
         const clips = await listClips(client);
@@ -181,7 +199,11 @@ export function clipmunkTools(root: string): Tool[] {
           clips
             .map(
               (clip) =>
-                `${clip.kind} ${clip.id}: ${clip.title}${clip.durationMs !== undefined ? ` (${(clip.durationMs / 1000).toFixed(1)} s)` : ""}`,
+                `${clip.kind} ${clip.id}: ${clip.title}${clip.durationMs !== undefined ? ` (${(clip.durationMs / 1000).toFixed(1)} s)` : ""}${
+                  clip.stale
+                    ? ` - out of date: ${clip.stale.join(", ")} changed since its export (${clip.kind === "take" ? "record it again" : "export it again"})`
+                    : ""
+                }`,
             )
             .join("\n"),
         );

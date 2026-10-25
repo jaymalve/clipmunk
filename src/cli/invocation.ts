@@ -41,6 +41,7 @@ export const OPTIONS = {
   fields: { type: "string" },
   replace: { type: "boolean" },
   title: { type: "string" },
+  base: { type: "string" },
 } as const;
 
 type Parsed = ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;

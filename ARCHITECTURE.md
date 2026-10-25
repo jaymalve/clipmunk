@@ -642,6 +642,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `GET /v1/jobs/:id/events` | Server-sent progress events |
 | `DELETE /v1/jobs/:id` | Cancel a job |
 | `GET /v1/takes/:id/frame?at=ms` | A still of the recording itself (the raw screen, on the recording's clock) as a PNG, cached in `.clipmunk/cache/frames` |
+| `GET /v1/stale` | Every exported clip's staleness (`{ clip, stale, changes, exportedAt, outputs }`) and the banner's sentence; `GET /v1/scenes` and `GET /v1/takes` carry the same as `freshness` per clip |
 | `GET /v1/chat` | The chat with the agent, and whether an agent is listening |
 | `POST /v1/chat` | A developer's message, with its context chips |
 | `GET /v1/chat/next?timeoutMs=&agent=` | Long poll: the next undelivered message (the agent's `wait_for_chat`) |
@@ -659,7 +660,7 @@ The daemon is a thin adapter: each route validates input with a `core` schema an
 
 | Tool | Daemon route | Returns |
 |---|---|---|
-| `list_clips` | `/v1/takes`, `/v1/scenes`, `/v1/sequences` | ids, kinds, titles and lengths |
+| `list_clips` | `/v1/takes`, `/v1/scenes`, `/v1/sequences` | ids, kinds, titles and lengths, and for an out-of-date clip the changed files |
 | `get_take(id)` | `/v1/takes/:id` and its log | the edit, its revision, and the log as readable lines (`summarizeEvents`: pages, clicks with role, name and selector, typing, shortcuts) |
 | `get_scene(id)` | `/v1/scenes?detail=1` | the recipe and its component file |
 | `edit_take(id, patch, note, revision?)` | `PATCH /v1/takes/:id` | a JSON merge patch over the edit (`mergePatch`; an object that switches its `mode` is replaced), validated and saved against the revision through the history; the changes (`diffJson`) |
@@ -761,6 +762,12 @@ Every export records which source files the clip was made from, so a later check
 - **Takes:** the take's `edit.json`, plus the import graph of every file its log names as an element's `src`. In development `clipmunk/vite` (a `serve`-only, `enforce: "post"` plugin) and `clipmunk/next` (a webpack `enforce: "post"` loader, dev only) run `tagSources` (`core/source.ts`) on each compiled project module: every `jsxDEV("tag", {…})`, `jsx`/`jsxs` or `createElement` call for a lowercase host tag gets `"data-clipmunk-src": "<file>"`, so components and production builds are untouched. The recorder's `identify` reads the nearest mark into `el.src`. Next 16's default dev server, Turbopack, is not covered (use `next dev --webpack`); a take recorded without marks has only its edit in the manifest.
 - **Sequences:** the sequence file and its clips' files.
 
+### 12.7 Stale clips
+
+A clip is out of date when a file its last export recorded hashes differently now, or is gone (`compareSources` in `core/manifest.ts`, `clipFreshness` in `project/stale.ts`). Each change names the last commit that touched the file, unless the change is not committed yet. `clipmunk stale` lists them; with `--base <ref>` each recorded file is compared with that ref's copy (`git show <ref>:./<file>`) instead, so CI can ask what a pull request changed whatever the age of the manifest, and the commits are those since the ref. `describeStale` writes the one sentence the Studio and the PR comment use: "2 clips are out of date. `<PlanCards />` and `<UsageChart />` changed in a3f9c1." (a PascalCase component file is shown as its component).
+
+The daemon keeps the answer current (`daemon/freshness.ts`): once a second it stats the manifest and every file it lists, recomputes when one moved and emits a `stale` event when a clip's staleness changed. Polling a few dozen files is cheaper than a recursive watch of the project (which would include `node_modules`) and survives editors that replace files. The Studio library shows the sentence as a banner, an "Out of date" badge and the changed files on each stale card, "Re-export" for a stale scene or sequence (a job in the formats it was last exported in) and "Record again" for a stale take, which opens the app with the recorder ready. `list_clips` tells the agent the same.
+
 ---
 
 ## 13. Project setup (`project`)
@@ -793,6 +800,7 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | `clipmunk guide [--json]` | Print the agent authoring guide |
 | `clipmunk scenes [--json]` | List validated scenes |
 | `clipmunk takes [--json]` | List takes |
+| `clipmunk stale [--base <ref>] [--json]` | List exported clips whose sources changed since their export, or since a git ref (12.7) |
 | `clipmunk sync` | Regenerate the static scene catalog |
 | `clipmunk open [--scene id \| --take id] --url <origin>` | Open the studio in the browser |
 | `clipmunk snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |
