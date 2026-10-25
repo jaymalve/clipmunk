@@ -200,6 +200,7 @@ type Take = {
     captions: { auto: boolean; items: { atMs: number; durMs: number; text: string; source: "auto" | "manual" }[] };
     keys:   { visible: boolean };                // shortcut pills from the log's combo events
     pace:   { deadAir: { on: boolean; maxGapMs: number; speed: number }; typing: { on: boolean; speed: number } };
+    frame?: { ratio: "16:9" | "9:16" | "1:1" | "4:5" };  // reframe; absent, the whole recording is fitted
   };
 };
 ```
@@ -446,7 +447,7 @@ Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c
 ### 9.2 Layers, bottom to top
 
 1. Canvas background (`edit.canvas.background`).
-2. The screen frame over `source.background`, inset by `padding`, with rounded corners and a shadow, moved by the zoom at that time.
+2. The screen frame over `source.background`, inset by `padding`, with rounded corners and a shadow, moved by the zoom at that time. With reframing, only the crop window (9.9) is laid out, so it fills the frame.
 3. Redacted areas (9.6), drawn on the screen frame so they move and zoom with it.
 4. Click ripples, in screen space.
 5. The synthetic cursor, in screen space, so it grows with the zoom. Arrow, hand and text-beam shapes are vector paths.
@@ -509,6 +510,14 @@ The preview plays the extracted voice track alongside the clock, through the tim
 - **Who uses it.** The compositor (frames and every overlay), music moments (`takeMoments`), the timeline (which stripes the fast parts), the trim buttons, the preview's voice, the export's duration, frame count and audio.
 
 Pacing is off in the schema, so takes recorded before it play as they always did; ingest turns it on for new takes, and the take editor has a checkbox for each kind.
+
+### 9.9 Reframing
+
+`edit.frame.ratio` reframes a take to 16:9, 9:16, 1:1 or 4:5. The canvas takes the ratio (1080 pixels on the short side, `ratioCanvas`), and the export's size scales it. Without `frame`, the whole recording is fitted into the canvas as before.
+
+`reframePath(events, source, aspect)` in `core/reframe.ts` is pure. For a shape narrower than the recording it gives a crop window as tall as the recording and as wide as the canvas's inner shape allows, whose left edge follows the clicked elements: it starts on the first click, and moves to each later one with auto-zoom's easing and lead (it arrives 300 ms early, over at most 700 ms), never leaving before the previous press is released. It centres on the clicked box, kept inside the recording, or on the pointer for a click on the page background. So every clicked box that fits is inside the window from its press to its release; a randomized unit test and the recorder suite check this. A shape as wide as the recording or wider crops nothing.
+
+The renderer lays out the window in place of the recording and keeps the zoom's view inside it, centred on it when not zoomed. The take editor's Shape select sets the ratio; 4:3 fits the whole recording.
 
 ## 10. Studio (`studio`)
 

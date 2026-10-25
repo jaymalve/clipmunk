@@ -15,6 +15,7 @@ const root = path.resolve("examples/vite-app");
 const IDS = ["zz-test-edit", "zz-test-export", "zz-test-zoom"];
 const SECRETS = { "zz-test-redact": "redacted", "zz-test-plain": "visible" } as const;
 const NAMED = "zz-test-captions";
+const REFRAMED = "zz-test-reframe";
 const PACED = { "zz-test-paced": false, "zz-test-paced-voice": true } as const;
 const made: string[] = [];
 let server: ViteDevServer, daemon: Daemon, browser: Browser, page: Page, origin: string, projectFile: string;
@@ -44,6 +45,7 @@ beforeAll(async () => {
   for (const [id, secret] of Object.entries(SECRETS)) await makeTake(root, id, { secret, cam: false });
   await makeTake(root, NAMED, { named: true, cam: false });
   for (const [id, cam] of Object.entries(PACED)) await makeTake(root, id, { paced: true, cam });
+  await makeTake(root, REFRAMED, { cam: false });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -58,7 +60,7 @@ afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED, ...Object.keys(PACED)])
+  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED, ...Object.keys(PACED), REFRAMED])
     await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
   await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
@@ -388,6 +390,54 @@ describe("pacing", () => {
           timeout: 10_000,
         })
         .toBe(false);
+    } finally {
+      await tab.close();
+    }
+  }, 120_000);
+});
+
+describe("reframing", () => {
+  it("crops a 9:16 frame to the clicked element, with the click inside it", async () => {
+    const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await tab.goto(`${origin}/?clipmunk=1&clipmunk-take=${REFRAMED}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+      await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+      const pixelAt = async (ms: number, x: number, y: number) => {
+        await tab.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
+        return tab.evaluate(
+          ([px, py]) => {
+            const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
+            return [...canvas.getContext("2d")!.getImageData(px!, py!, 1, 1).data.slice(0, 3)];
+          },
+          [x, y],
+        );
+      };
+      await tab.getByLabel("Shape").selectOption("9:16");
+      await expect
+        .poll(async () => JSON.parse(await readFile(editFile(REFRAMED), "utf8")).edit, { timeout: 10_000 })
+        .toMatchObject({ frame: { ratio: "9:16" }, canvas: { width: 1080, height: 1920 } });
+      // 1080x1920 with 6% padding: a 950.4x1790.4 box, so a 191-pixel-wide crop of the 640x360 recording,
+      // centred on the button clicked at x = 480. Before any zoom, the crop shows only green over yellow.
+      const scale = 1790.4 / 360,
+        top = 64.8;
+      const left = 480 - (360 * (950.4 / 1790.4)) / 2;
+      const at = (x: number, y: number) =>
+        [Math.round(64.8 + (x - left) * scale), Math.round(top + y * scale)] as const;
+      await expect
+        .poll(() => pixelAt(300, ...at(left + 5, 90)).then((value) => near(value, QUADRANTS.green)))
+        .toBe(true);
+      expect(near(await pixelAt(300, ...at(left + 186, 90)), QUADRANTS.green)).toBe(true);
+      expect(near(await pixelAt(300, ...at(left + 5, 270)), QUADRANTS.yellow)).toBe(true);
+      expect(near(await pixelAt(300, ...at(480, 270)), QUADRANTS.yellow)).toBe(true);
+      // Red and blue are cropped out entirely.
+      for (const [x, y] of [at(left + 5, 90), at(left + 5, 270)])
+        for (const colour of [QUADRANTS.red, QUADRANTS.blue])
+          expect(near(await pixelAt(300, x, y), colour)).toBe(false);
+      // Back to fitting the whole recording.
+      await tab.getByLabel("Shape").selectOption("4:3");
+      await expect
+        .poll(async () => JSON.parse(await readFile(editFile(REFRAMED), "utf8")).edit.frame, { timeout: 10_000 })
+        .toBeUndefined();
     } finally {
       await tab.close();
     }

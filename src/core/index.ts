@@ -14,6 +14,7 @@ export * from "./presets";
 export * from "./project";
 export * from "./recipe";
 export * from "./redact";
+export * from "./reframe";
 export * from "./result";
 export * from "./scene";
 export * from "./sequence";

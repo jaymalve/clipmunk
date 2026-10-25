@@ -1,15 +1,11 @@
-import type { Caption, RedactEntry, Take, TakeEdit } from "../core";
+import { type Caption, RATIOS, type Ratio, type RedactEntry, ratioCanvas, type Take, type TakeEdit } from "../core";
 import { Check, Group, percent, Select, Slider, times } from "./fields";
 import { MusicControls } from "./music";
 
 /** The take editor's side panel: one group per part of `take.edit`. */
 const AUTO_ZOOM = { minScale: 1.25, maxScale: 2.2, mergeGapMs: 2500, leadMs: 300, holdMs: 1500, easeMs: 700 };
-const CANVASES = [
-  { label: "16:9", width: 1920, height: 1080 },
-  { label: "4:3", width: 1440, height: 1080 },
-  { label: "1:1", width: 1080, height: 1080 },
-  { label: "9:16", width: 1080, height: 1920 },
-];
+/** Shapes that reframe (a crop that follows the action), and 4:3, which fits the whole recording. */
+const SHAPES = [...RATIOS, "4:3"] as const;
 const CORNERS = { br: "Bottom right", bl: "Bottom left", tr: "Top right", tl: "Top left" };
 
 type Change = (change: (edit: TakeEdit) => TakeEdit) => void;
@@ -145,18 +141,31 @@ function CameraControls({ edit, change }: Section) {
 function FrameControls({ edit, change }: Section) {
   const update = set(change, "canvas");
   const { canvas } = edit;
-  const preset = CANVASES.find((size) => size.width === canvas.width && size.height === canvas.height);
+  // Without a frame the whole recording is fitted, which for 16:9 is what reframing to it does too.
+  const fitted = (width: number, height: number) => canvas.width === width && canvas.height === height;
+  const shape = edit.frame?.ratio ?? (fitted(1920, 1080) ? "16:9" : fitted(1440, 1080) ? "4:3" : undefined);
+  const setShape = (value: (typeof SHAPES)[number] | "custom") => {
+    if (value === "custom") return;
+    change((current) => {
+      if (value === "4:3") {
+        const { frame: _frame, ...rest } = current;
+        return { ...rest, canvas: { ...current.canvas, width: 1440, height: 1080 } };
+      }
+      return {
+        ...current,
+        frame: { ratio: value as Ratio },
+        canvas: { ...current.canvas, ...ratioCanvas(value as Ratio) },
+      };
+    });
+  };
   const background = /^#[0-9a-f]{6}$/i.test(canvas.background) ? canvas.background : "#0b0b0f";
   return (
     <Group title="Frame">
       <Select
         label="Shape"
-        value={preset?.label ?? "custom"}
-        options={[...CANVASES.map((size) => size.label), ...(preset ? [] : ["custom"])]}
-        onChange={(label) => {
-          const size = CANVASES.find((candidate) => candidate.label === label);
-          if (size) update({ width: size.width, height: size.height });
-        }}
+        value={shape ?? "custom"}
+        options={[...SHAPES, ...(shape ? [] : (["custom"] as const))]}
+        onChange={setShape}
       />
       <label className="field">
         <span>Background</span>

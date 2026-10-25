@@ -26,7 +26,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 5 | Redaction | Engine | 🔵 [#22](https://github.com/jaymalve/clipmunk/pull/22) |
 | 6 | Captions and the keystroke overlay | Engine | 🔵 [#23](https://github.com/jaymalve/clipmunk/pull/23) |
 | 7 | Dead air and steady typing | Engine | 🔵 [#24](https://github.com/jaymalve/clipmunk/pull/24) |
-| 8 | Reframing takes to other aspect ratios | Engine | ⬜ |
+| 8 | Reframing takes to other aspect ratios | Engine | 🔵 [#25](https://github.com/jaymalve/clipmunk/pull/25) |
 | 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | ⬜ |
 | 10 | Scene variants: theme, locale, ratio | Engine | ⬜ |
 | 11 | The frame page in the host | Studio | ⬜ |
@@ -179,15 +179,17 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** a gap at 4x shortens by three quarters of its fast part, so 2.4 s of idle time beyond the kept 600 ms exports 1.8 s shorter; raise `speed` for more. Pacing is not part of presets yet.
 
 ### PR 8 · Reframing takes to other aspect ratios
-**Status:** ⬜ · **Branch:** `studio/08-reframe` · **Base:** `studio/07-dead-air`
+**Status:** 🔵 [#25](https://github.com/jaymalve/clipmunk/pull/25) · **Branch:** `studio/08-reframe` · **Base:** `studio/07-dead-air`
 
-- Edit: `frame: { ratio: "16:9" | "9:16" | "1:1" | "4:5" }`. It replaces the free canvas size for the shape, and the size then comes from the export.
-- `core/reframe.ts`: for a ratio narrower than the source, a crop window that follows the active zoom target, or the last clicked element when no zoom is active, with the same easing as zoom. It is constrained to keep the clicked element's box inside the window. Pure and unit-tested, including the guarantee.
-- Compositor: applies the window before padding and backdrop.
-- Minimal control: a ratio select in the current take editor.
+- Edit: `frame: { ratio: "16:9" | "9:16" | "1:1" | "4:5" }`. It replaces the free canvas size for the shape (`ratioCanvas`: 1080 on the short side), and the size then comes from the export. Without it the whole recording is fitted, as before.
+- `core/reframe.ts`: for a ratio narrower than the source, a crop window that follows the clicked elements with the same easing and lead as zoom, starting on the first click and leaving only after the previous press is released. It is constrained to keep the clicked element's box inside the window from press to release. Pure and unit-tested, including the guarantee.
+- Compositor: lays out the window in place of the recording, before padding and backdrop, and keeps the zoom's view inside it.
+- Minimal control: the take editor's Shape select now sets the ratio (and 4:3 fits the whole recording).
 
-**Tests:** a guarantee test over a real take's events (no clicked box is ever outside the window); 9:16 composite pixels on the synthetic take.
+**Tests:** a randomized guarantee test, and the same check over a real take's events in `test:recorder` (no clicked box is ever outside the window while pressed); 9:16 composite pixels on the synthetic take.
 **Done when:** the clicked element is never cropped out of the frame.
+
+**Notes:** the window follows clicked elements rather than the zoom's own target, because the zoom's follow logic can keep a click inside a view wider than a narrow crop and still crop it out; the zoom then magnifies inside the window. `RATIOS` moved from `core/presets.ts` to `core/take.ts`.
 
 ### PR 9 · Export jobs with several outputs: GIF, poster, ratios
 **Status:** ⬜ · **Branch:** `studio/09-outputs` · **Base:** `studio/08-reframe`
@@ -395,6 +397,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 5 opened as #22, stacked on #21: redaction. For PR 6: captions and the keystroke overlay are drawn in `drawTake`, which now takes `redact` boxes in `TakeFrame`; draw overlays above the redaction layer so captions and keys stay readable. For PR 9: GIF and poster must render through `drawTake` to inherit redaction.
 - 2026-10-25 · PR 6 opened as #23, stacked on #22: captions and key pills. For PR 7: captions and pills are on the take clock (`atMs`), so cutting dead air must shift or drop them through the same time map as the picture; `resolveCaptions` and `keyPills` are the places to apply it.
 - 2026-10-25 · PR 7 opened as #24, stacked on #23: pacing and the time map. For PR 8: reframing crops follow the action on take time; build the crop path from the log and look it up at `timeMap.toTake(clipMs)` like every other overlay. For PR 9: GIF and poster frame times are clip times; use the renderer's `timeMap`, never `trim.startMs + t`.
+- 2026-10-25 · PR 8 opened as #25, stacked on #24: reframing. For PR 9: rendering a take "in a ratio" means setting `edit.frame.ratio` (and the canvas from `ratioCanvas`) on a copy of the take for that output; the renderer does the rest.
 
 ## Environment notes for whoever picks this up
 

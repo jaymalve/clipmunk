@@ -21,6 +21,8 @@ export type TakeFrame = {
   /** Areas to hide, in source CSS pixels. */
   redact: RedactBox[];
   caption?: { text: string; opacity: number };
+  /** With reframing, the part of the recording in view: its left edge and width in source CSS pixels. */
+  crop?: { x: number; width: number };
   keys: (KeyPill & { opacity: number })[];
 };
 
@@ -47,10 +49,17 @@ const glyph = (style: CursorStyle) => {
   return { path: paths.get(path)!, hotspot };
 };
 
-/** Where the recording sits on the canvas, and the factor from source CSS pixels to canvas pixels. */
-export function layoutTake(width: number, height: number, take: Take) {
+/** Where the recording sits on the canvas, and the factor from source CSS pixels to canvas pixels.
+ * `visible` is the part of the recording that is laid out: all of it, or a reframing crop.
+ */
+export function layoutTake(
+  width: number,
+  height: number,
+  take: Take,
+  visible: { width: number; height: number } = take.source,
+) {
   const { canvas } = take.edit,
-    { source } = take;
+    source = visible;
   // Pixel-valued settings are authored against the edit's canvas; scale them for other output sizes.
   const unit = Math.min(width / canvas.width, height / canvas.height);
   const pad = canvas.padding * Math.min(width, height);
@@ -68,7 +77,12 @@ export function layoutTake(width: number, height: number, take: Take) {
 
 export function drawTake(ctx: Context2D, width: number, height: number, take: Take, frame: TakeFrame): void {
   const { edit, source } = take;
-  const { unit, pad, scale, box, radius } = layoutTake(width, height, take);
+  const { unit, pad, scale, box, radius } = layoutTake(
+    width,
+    height,
+    take,
+    frame.crop ? { width: frame.crop.width, height: source.height } : source,
+  );
   const zoom = frame.view.scale;
   const centerX = box.x + box.width / 2,
     centerY = box.y + box.height / 2;
