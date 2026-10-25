@@ -30,7 +30,9 @@ const pixel = (x: number, y: number) =>
     [x, y],
   );
 const seek = (ms: number) => page.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
-const takeFile = (id: string) => path.join(root, ".clipmunk/takes", id, "take.json");
+// Every change is saved to edit.json; take.json is the recording and must never change.
+const editFile = (id: string) => path.join(root, ".clipmunk/takes", id, "edit.json");
+const recordFile = (id: string) => path.join(root, ".clipmunk/takes", id, "take.json");
 
 beforeAll(async () => {
   process.env.CLIPMUNK_FFMPEG ??= FFMPEG;
@@ -97,10 +99,11 @@ describe("take editor", () => {
   const toggle = (label: string) => page.getByLabel(label, { exact: true }).click();
   const saved = async (read: (edit: any) => unknown, expected: unknown) =>
     expect
-      .poll(async () => read(JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit), { timeout: 10_000 })
+      .poll(async () => read(JSON.parse(await readFile(editFile("zz-test-edit"), "utf8")).edit), { timeout: 10_000 })
       .toEqual(expected);
 
-  it("applies edits to the preview at once and saves them to take.json", async () => {
+  it("applies edits to the preview at once and saves them to edit.json", async () => {
+    const record = await readFile(recordFile("zz-test-edit"), "utf8");
     await seek(2000);
     await toggle("Show cursor");
     await expect.poll(() => pixel(960, 560).then((value) => near(value, QUADRANTS.yellow))).toBe(true);
@@ -121,6 +124,7 @@ describe("take editor", () => {
     expect(await page.locator(".timeline .zoom").count()).toBe(0);
     await page.getByLabel("Mode").selectOption("auto");
     await expect.poll(() => page.locator(".timeline .zoom").count()).toBe(1);
+    expect(await readFile(recordFile("zz-test-edit"), "utf8")).toBe(record);
   }, 60_000);
 
   it("adds generated music, picks a new tune, and plays it with the preview", async () => {
@@ -132,7 +136,7 @@ describe("take editor", () => {
     expect(await page.getByLabel(/Sync the beat to 1 moment/).isChecked()).toBe(true); // the take has one click
     await page.getByRole("button", { name: "New tune" }).click();
     await expect
-      .poll(async () => typeof JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit.music.seed, {
+      .poll(async () => typeof JSON.parse(await readFile(editFile("zz-test-edit"), "utf8")).edit.music.seed, {
         timeout: 10_000,
       })
       .toBe("number");
@@ -149,7 +153,7 @@ describe("take editor", () => {
       .locator("select")
       .selectOption("off");
     await expect
-      .poll(async () => "music" in JSON.parse(await readFile(takeFile("zz-test-edit"), "utf8")).edit, {
+      .poll(async () => "music" in JSON.parse(await readFile(editFile("zz-test-edit"), "utf8")).edit, {
         timeout: 10_000,
       })
       .toBe(false);
@@ -226,7 +230,7 @@ describe("take export", () => {
   }, 240_000);
 
   it("puts generated music under the voice", async () => {
-    const file = takeFile("zz-test-export");
+    const file = editFile("zz-test-export");
     const take = JSON.parse(await readFile(file, "utf8"));
     await writeFile(
       file,
@@ -271,7 +275,7 @@ describe("take export", () => {
   }, 400_000);
 
   it("honours trim and mute, and explains what it cannot do", async () => {
-    const file = takeFile("zz-test-export");
+    const file = editFile("zz-test-export");
     const take = JSON.parse(await readFile(file, "utf8"));
     take.edit.trim = { startMs: 1500, endMs: 2500 };
     take.edit.audio.muted = true;
@@ -312,7 +316,7 @@ describe("clipmunk zoom", () => {
     expect(shown.data.segments).toEqual([{ startMs: 1000, endMs: 4000, scale: 2.2 }]);
     expect((await clipmunk("zoom", "zz-test-zoom")).out).toContain("1.00s to 4.00s  at 2.20x");
     expect((await clipmunk("zoom", "zz-test-zoom", "--write")).out).toContain("Stored 1 zoom as manual keyframes");
-    const edit = JSON.parse(await readFile(takeFile("zz-test-zoom"), "utf8")).edit;
+    const edit = JSON.parse(await readFile(editFile("zz-test-zoom"), "utf8")).edit;
     expect(edit.zoom.mode).toBe("manual");
     expect(edit.zoom.tracks.map((track: { property: string }) => track.property)).toEqual(["x", "y", "scale"]);
     expect(JSON.parse((await clipmunk("zoom", "zz-test-zoom", "--json")).out).data.mode).toBe("manual");

@@ -12,11 +12,10 @@ import {
   TAKES_DIR,
   type Take,
   TakeEventSchema,
-  TakeSchema,
   takeMoments,
   zodIssues,
 } from "../core";
-import { Fault, readText, resolveInside, resolveStudio, toIssues } from "../project";
+import { Fault, loadTake, readText, resolveInside, resolveStudio, toIssues } from "../project";
 import { launchBrowser } from "./browser";
 import { finishTake } from "./ffmpeg";
 import { writeMusic } from "./music";
@@ -41,13 +40,8 @@ type TakeRequest = ReturnType<typeof ExportTakeSchema.parse>;
 type Encoded = { codec: string; frames: number; width: number; height: number; durationMs: number };
 
 async function readTake(root: string, takeId: string): Promise<Result<Take>> {
-  const source = `${TAKES_DIR}/${takeId}/take.json`;
-  const text = await readText(root, source);
-  if (text === undefined)
-    throw new Fault("unknown-take", `No take named "${takeId}". Run clipmunk takes to list them.`);
-  const take = TakeSchema.safeParse(JSON.parse(text));
-  if (take.success) return ok(take.data);
-  return fail(zodIssues(take.error, "invalid-take").map((issue) => ({ ...issue, path: `${source}: ${issue.path}` })));
+  const loaded = await loadTake(root, takeId);
+  return loaded.ok ? ok(loaded.data.take) : loaded;
 }
 
 /** Open the take editor in a private page and have it render and encode the take into `video`. */

@@ -103,7 +103,8 @@ src/clipmunk/scenes/<id>.tsx             Scene component, default export (commit
 src/clipmunk/sequences/<id>.sequence.json  Sequence (committed).
 .clipmunk/project.json                   Project identity and the ownership record of generated files.
 .clipmunk/.gitignore                     Ignores media, caches, exports and daemon state.
-.clipmunk/takes/<id>/take.json           Take manifest and edit (committed).
+.clipmunk/takes/<id>/take.json           The recording: what was captured, written once at ingest (committed).
+.clipmunk/takes/<id>/edit.json           Every change made to the take since (committed).
 .clipmunk/takes/<id>/screen.webm         Screen recording (ignored).
 .clipmunk/takes/<id>/cam.webm            Camera + microphone (ignored).
 .clipmunk/takes/<id>/audio.wav           Voice track extracted at ingest (ignored).
@@ -198,6 +199,13 @@ type Take = {
 ```
 
 All `source` times are milliseconds on the take clock, which starts when the screen recorder starts. `offsetMs` shifts a media file onto that clock.
+
+A take is stored as two files, and `Take` above is their merged view, which is all the compositor and the exporters see:
+
+- `take.json` holds `version`, `id`, `title`, `createdAt` and `source`. It is written once at ingest and never again, so the recording is never rewritten.
+- `edit.json` holds `{ version: 1, title?, edit }`. Every save writes only this file. `title` is present only when the take has been renamed.
+
+`composeTake` in `core/take.ts` merges them. The edit comes from `edit.json`; failing that, from an `edit` inside `take.json`, which is where takes recorded before `edit.json` existed keep theirs (their first save writes `edit.json`, and `take.json` stays as it is); failing that, from the defaults. `project/takes.ts` reads and saves takes for the daemon, the CLI and the exporter. The revision a save is checked against is a hash of both files.
 
 ### 5.4 Event log
 
@@ -365,7 +373,7 @@ Take ids read as a timestamp (`take-20261005-142233`), so listings sort by time.
 
 ### 8.5 Ingest (daemon)
 
-Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` with a default `edit`. `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
+Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit (the edit first, so a listed take always has one). `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
 
 ---
 
@@ -397,7 +405,7 @@ Pixel-valued settings (corner radius, cursor size, margins) are authored against
 4. **Follow.** Inside a segment the view stays put while the action remains in the inner 62% of the view, and pans when it leaves.
 5. **Timing.** Ease in over `easeMs` (default 700), arriving `leadMs` (default 300) before the first activity. Hold `holdMs` (default 1500) after the last, then ease out. A segment that starts before the previous one has finished easing out pans straight to it.
 
-The view is clamped so it never shows anything outside the recording; a property test checks this at every 50 ms. The output is three ordinary tracks (`x`, `y`, `scale`) on `{ kind: "zoom" }`. With `edit.zoom.mode = "auto"` they are regenerated from `params`; `clipmunk zoom <take> --write` stores them as `manual` tracks in `take.json` for hand editing.
+The view is clamped so it never shows anything outside the recording; a property test checks this at every 50 ms. The output is three ordinary tracks (`x`, `y`, `scale`) on `{ kind: "zoom" }`. With `edit.zoom.mode = "auto"` they are regenerated from `params`; `clipmunk zoom <take> --write` stores them as `manual` tracks in the take's `edit.json` for hand editing.
 
 ### 9.4 Cursor
 
@@ -435,7 +443,7 @@ The studio runs inside the host app's dev server, in the host's React tree, so s
 |---|---|
 | **Library** | Grid of scenes (cached snapshot thumbnails) and takes. Shows validation issues per item. |
 | **Scene player** | The authored frame fitted inside the viewport and clipped to its edges, so the preview shows exactly what export renders. Play, scrub, replay and export. Shows diagnostics and hot-reload status. |
-| **Take editor** | The composited preview on a canvas; play and scrub; a timeline showing the kept range, zoom segments and playhead; trim from the playhead; controls for zoom, cursor, camera, frame and voice. Edits apply to the preview at once and are saved to `take.json` through the daemon half a second later, against a revision hash. |
+| **Take editor** | The composited preview on a canvas; play and scrub; a timeline showing the kept range, zoom segments and playhead; trim from the playhead; controls for zoom, cursor, camera, frame and voice. Edits apply to the preview at once and are saved to `edit.json` through the daemon half a second later, against a revision hash. |
 | **Recorder HUD** | Record, stop, camera and microphone toggles, elapsed time, viewport size, a stand-in cursor and a live camera preview. A plain-DOM custom element on `<html>`; opened by `Alt+Shift+R` or `?clipmunk-record=1` on any app route. There is no pause. |
 | **Sequence builder** | Create a sequence by name, add scenes and takes, reorder and remove them, choose a cut or a fade and its length, and set the shape and frame rate. Saved to the sequence file through the daemon. There is no live preview of a whole sequence; it is seen by exporting. |
 | **Export panel** | Resolution (the clip's own size, 720p, 1080p, 1440p or 4K, always in the clip's own shape and never over 3840 pixels a side) and frame rate where the clip allows a choice; runs a daemon job and shows progress. Without a daemon it shows the equivalent CLI command, including the chosen size. A sequence's resolution is set in its builder, because it is stored in the sequence file. |
@@ -468,7 +476,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `PUT /v1/takes/:id/media/:track?seq=n` | Append an uploaded chunk |
 | `PUT /v1/takes/:id/log` | Append a recorder breadcrumb to `recorder.log` |
 | `POST /v1/takes/:id/finalize` | Start ingest |
-| `PATCH /v1/takes/:id` | Save `edit`; requires the revision hash it was read at |
+| `PATCH /v1/takes/:id` | Save `edit` and `title` to `edit.json`; requires the revision hash it was read at |
 | `DELETE /v1/takes/:id` | Delete a take and its media |
 | `GET /v1/takes/:id/files/:name` | Serve media with range requests |
 | `GET /v1/scenes` | List validated scenes |
@@ -684,7 +692,7 @@ Project-wide settings live in `clipmunk.config.json` at the project root, valida
 
 ### 19.4 Edits live beside the recording
 
-A take's edit moves out of `take.json` into `edit.json` in the same folder. `take.json` is written once at ingest and never again. Older takes, whose `take.json` still holds an edit, are read as before; their first save writes `edit.json`, which then takes precedence.
+Done: section 5.3 describes the two files.
 
 ### 19.5 The event log learns what was touched
 

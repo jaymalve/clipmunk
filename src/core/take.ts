@@ -2,13 +2,15 @@ import { z } from "zod";
 import { KeyframeSchema } from "./motion";
 import { MusicSchema } from "./music";
 import { ClipIdSchema } from "./recipe";
-import { fail, ok, type Result, zodIssues } from "./result";
+import { fail, type Issue, ok, type Result, zodIssues } from "./result";
 
 /** A take is one recording session: screen video, optional camera and microphone,
- * and a log of what the pointer and keyboard did. `source` is written once at ingest;
- * `edit` is everything a person or agent changes afterwards.
+ * and a log of what the pointer and keyboard did. `take.json` holds the recording and is
+ * written once at ingest; `edit.json` beside it holds everything a person or agent changes.
  */
 export const TAKES_DIR = ".clipmunk/takes";
+export const TAKE_FILE = "take.json";
+export const EDIT_FILE = "edit.json";
 export const TAKE_PARAM = "clipmunk-take";
 export const TAKE_TRACKS = ["screen", "cam", "mic", "events"] as const;
 export type TakeTrack = (typeof TAKE_TRACKS)[number];
@@ -149,11 +151,35 @@ export const TakeEditSchema = z.strictObject({
 });
 export type TakeEdit = z.output<typeof TakeEditSchema>;
 
+const TitleSchema = z.string().trim().min(1);
+
+/** `take.json`. Takes recorded before edits moved to `edit.json` still carry their edit here;
+ * it is read until the first save writes `edit.json`, and never rewritten.
+ */
+export const TakeFileSchema = z.strictObject({
+  version: z.literal(1),
+  id: ClipIdSchema,
+  title: TitleSchema,
+  createdAt: z.iso.datetime(),
+  source: TakeSourceSchema,
+  edit: TakeEditSchema.optional(),
+});
+export type TakeFile = z.output<typeof TakeFileSchema>;
+
+/** `edit.json`. A `title` here renames the take without touching `take.json`. */
+export const TakeEditFileSchema = z.strictObject({
+  version: z.literal(1),
+  title: TitleSchema.optional(),
+  edit: TakeEditSchema,
+});
+export type TakeEditFile = z.output<typeof TakeEditFileSchema>;
+
+/** The merged view every renderer and exporter consumes. */
 export const TakeSchema = z
   .strictObject({
     version: z.literal(1),
     id: ClipIdSchema,
-    title: z.string().trim().min(1),
+    title: TitleSchema,
     createdAt: z.iso.datetime(),
     source: TakeSourceSchema,
     edit: TakeEditSchema,
@@ -178,6 +204,35 @@ export function validateTake(input: unknown): Result<Take> {
 /** The edit a new take starts with: untrimmed, a 16:9 canvas, auto-zoom on. */
 export const defaultEdit = (durationMs: number): TakeEdit =>
   TakeEditSchema.parse({ trim: { startMs: 0, endMs: durationMs } });
+
+/** Merge the two files of a take. The edit comes from `edit.json` when there is one, then from
+ * an older `take.json` that still holds its edit, then from the defaults. Both inputs are
+ * parsed JSON; issues name the file they belong to.
+ */
+export function composeTake(file: unknown, editFile?: unknown): Result<Take> {
+  const take = TakeFileSchema.safeParse(file);
+  if (!take.success) return fail(inFile(zodIssues(take.error, "invalid-take"), TAKE_FILE));
+  const sidecar = editFile === undefined ? undefined : TakeEditFileSchema.safeParse(editFile);
+  if (sidecar && !sidecar.success) return fail(inFile(zodIssues(sidecar.error, "invalid-take"), EDIT_FILE));
+  const merged = TakeSchema.safeParse({
+    ...take.data,
+    title: sidecar?.data.title ?? take.data.title,
+    edit: sidecar?.data.edit ?? take.data.edit ?? defaultEdit(take.data.source.durationMs),
+  });
+  if (!merged.success) return fail(inFile(zodIssues(merged.error, "invalid-take"), sidecar ? EDIT_FILE : TAKE_FILE));
+  return ok(merged.data);
+}
+const inFile = (issues: Issue[], file: string) =>
+  issues.map((issue) => ({ ...issue, path: issue.path ? `${file}: ${issue.path}` : file }));
+
+/** The `edit.json` that stores `take`'s edit and title. The title is written only when it
+ * differs from the recorded one, so an unrenamed take's edit file holds only its edit.
+ */
+export const editFileFor = (take: Take, recordedTitle: string): TakeEditFile => ({
+  version: 1,
+  ...(take.title !== recordedTitle ? { title: take.title } : {}),
+  edit: take.edit,
+});
 
 /** What the recorder tells the daemon when a recording starts and when it stops. */
 export const CreateTakeSchema = z.strictObject({

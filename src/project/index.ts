@@ -7,9 +7,11 @@ export {
   listScenes,
   type OpenResult,
   readProject,
+  refreshStateFiles,
   resolveStudio,
   type SyncResult,
   syncProject,
 } from "./operations";
 export { deleteSequence, listSequences, readSequence, writeSequence } from "./sequences";
 export { exists, Fault, listFiles, readText, resolveInside, sha256, toIssues, writeText } from "./services";
+export { loadTake, saveTakeEdit, takeDir } from "./takes";

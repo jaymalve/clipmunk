@@ -331,6 +331,40 @@ export async function syncProject(context: Context): Promise<Result<SyncResult>>
   }
 }
 
+/** Bring the state files Clipmunk owns up to date in a connected project, so an older
+ * project keeps working without running init again. Runs when the daemon starts. A file
+ * the developer has edited is left alone and reported, with what to change by hand.
+ */
+export async function refreshStateFiles(context: Context): Promise<Result<{ updated: string[]; issues: Issue[] }>> {
+  try {
+    const { root } = context;
+    const project = await readProject(root);
+    if (!project) return ok({ updated: [], issues: [] });
+    const record = { ...project.files };
+    const file = `${STATE_DIR}/.gitignore`;
+    try {
+      const status = await ownFile(root, record, file, templates.STATE_GITIGNORE);
+      if (status === "verified") return ok({ updated: [], issues: [] });
+      await writeText(root, PROJECT_FILE, `${JSON.stringify({ ...project, files: record }, null, 2)}\n`);
+      return ok({ updated: [file], issues: [] });
+    } catch (error) {
+      if (!(error instanceof Fault) || error.code !== "file-conflict") throw error;
+      return ok({
+        updated: [],
+        issues: [
+          {
+            code: "file-conflict",
+            path: file,
+            message: `${file} was edited, so Clipmunk left it alone. Make sure it keeps takes/*/take.json and takes/*/edit.json, or take edits will not be committed.`,
+          },
+        ],
+      });
+    }
+  } catch (error) {
+    return fail(toIssues(error, "refresh-failed"));
+  }
+}
+
 export type OpenResult = { url: string; reachable: boolean };
 
 /** Resolve the studio URL for this project, remember the dev server origin, and check it answers. */

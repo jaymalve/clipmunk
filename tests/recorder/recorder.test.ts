@@ -5,10 +5,11 @@ import path from "node:path";
 import { type Browser, type BrowserContext, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type Take, type TakeEvent, TakeEventSchema, validateTake } from "../../src/core";
+import { type Take, type TakeEvent, TakeEventSchema } from "../../src/core";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
 import { colourAt } from "../support/media";
+import { readTakeFiles } from "../support/take";
 
 /** Records the example app for real: headed Chromium capturing its own tab, the HUD,
  * the event log, chunked upload to the daemon and ingest. Needs a display (xvfb-run).
@@ -53,7 +54,7 @@ async function record(
   )!;
   takes.push(id);
   const dir = path.join(root, ".clipmunk/takes", id);
-  const take = validateTake(JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")));
+  const take = await readTakeFiles(dir);
   if (!take.ok) throw new Error(JSON.stringify(take.issues));
   const events = (await readFile(path.join(dir, "events.jsonl"), "utf8"))
     .trim()
@@ -176,7 +177,7 @@ describe("recorder", () => {
     expect(take.source.audio).toMatchObject({ file: "audio.wav" });
     expect(take.source.mic).toBeUndefined();
     expect(Math.abs(take.source.cam!.offsetMs)).toBeLessThan(1500);
-    for (const file of ["screen.webm", "cam.webm", "audio.wav", "events.jsonl", "take.json"])
+    for (const file of ["screen.webm", "cam.webm", "audio.wav", "events.jsonl", "take.json", "edit.json"])
       expect(existsSync(path.join(dir, file)), file).toBe(true);
   }, 120_000);
 
@@ -263,7 +264,7 @@ describe("recorder", () => {
     )!;
     takes.push(id);
     const dir = path.join(root, ".clipmunk/takes", id);
-    const take = validateTake(JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")));
+    const take = await readTakeFiles(dir);
     if (!take.ok) throw new Error(JSON.stringify(take.issues));
     expect(take.data.source.durationMs).toBeGreaterThan(1500);
     expect(take.data.source.events.count).toBeGreaterThan(5);

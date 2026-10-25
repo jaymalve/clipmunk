@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defaultEdit, type Take, type TakeEvent, TakeSchema } from "../../src/core";
+import { composeTake, defaultEdit, type Take, type TakeEditFile, type TakeEvent, TakeFileSchema } from "../../src/core";
 
 /** A synthetic take with known pixels, so rendering can be checked exactly.
  * Screen: four flat quadrants (red, green / blue, yellow), 640x360 CSS pixels at 2x.
@@ -69,7 +69,7 @@ export async function makeTake(
     { t: CLICK.t + 90, k: "up", x: CLICK.x, y: CLICK.y, button: 0 },
   );
   await writeFile(path.join(dir, "events.jsonl"), `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
-  const take = TakeSchema.parse({
+  const record = TakeFileSchema.parse({
     version: 1,
     id,
     title: "Synthetic take",
@@ -89,8 +89,18 @@ export async function makeTake(
         : {}),
       events: { file: "events.jsonl", count: events.length },
     },
-    edit: defaultEdit(durationMs),
   });
-  await writeFile(path.join(dir, "take.json"), `${JSON.stringify(take, null, 2)}\n`);
-  return take;
+  const edit: TakeEditFile = { version: 1, edit: defaultEdit(durationMs) };
+  await writeFile(path.join(dir, "edit.json"), `${JSON.stringify(edit, null, 2)}\n`);
+  await writeFile(path.join(dir, "take.json"), `${JSON.stringify(record, null, 2)}\n`);
+  return { ...record, edit: edit.edit };
+}
+
+/** A take as Clipmunk reads it from disk: take.json merged with its edit.json. */
+export async function readTakeFiles(dir: string) {
+  const edit = await readFile(path.join(dir, "edit.json"), "utf8").catch(() => undefined);
+  return composeTake(
+    JSON.parse(await readFile(path.join(dir, "take.json"), "utf8")),
+    edit === undefined ? undefined : JSON.parse(edit),
+  );
 }
