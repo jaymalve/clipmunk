@@ -31,6 +31,7 @@ import {
   listTakes,
   readTakeForEditor,
   takeFile,
+  takeFrame,
   takePoster,
   updateTakeEdit,
 } from "./takes";
@@ -170,6 +171,16 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
     const body = (await readJson(request)) as { revision?: unknown };
     const result = await stepTakeHistory(context.root, id, action === "undo" ? -1 : 1, body.revision);
     return handled(reply(response, announce(events, result, { type: "edit", kind: "take", id })));
+  }
+  if (action === "frame" && method === "GET") {
+    const frame = await takeFrame(id, Number(url.searchParams.get("at")), context);
+    response.writeHead(200, {
+      "content-type": "image/png",
+      "cache-control": "no-store",
+      "x-clipmunk-at": String(frame.atMs),
+    });
+    response.end(frame.png);
+    return true;
   }
   if (action === "poster" && method === "GET")
     return handled(await serveFile(request, response, await takePoster(id, context)));

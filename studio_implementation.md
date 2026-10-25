@@ -37,7 +37,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 16 | Presets in the Studio | Studio | 🔵 [#33](https://github.com/jaymalve/clipmunk/pull/33) |
 | 17 | `clipmunk mcp` | Agent | 🔵 [#34](https://github.com/jaymalve/clipmunk/pull/34) |
 | 18 | Agent chat | Agent | 🔵 [#35](https://github.com/jaymalve/clipmunk/pull/35) |
-| 19 | Take to scene | Agent | ⬜ |
+| 19 | Take to scene | Agent | 🔵 [#36](https://github.com/jaymalve/clipmunk/pull/36) |
 | 20 | Source map and export manifest | Freshness | ⬜ |
 | 21 | Stale detection | Freshness | ⬜ |
 | 22 | GitHub Action and posting to a PR | Freshness | ⬜ |
@@ -350,7 +350,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** `daemon/chat.ts` keeps the conversation in `.clipmunk/chat/messages.json` and the waiters in the daemon; `GET /v1/chat/next` is the long poll (a cancelled call puts its message back), `POST /v1/chat/reply` checks a proposal applies before the developer sees it, and Keep and Undo go through `saveTakeEditWithHistory` and `stepTakeHistory`. The MCP server passes the client's name from `initialize` to the tools, so the panel names the agent. The panel (`studio/Chat.tsx`) is in the take editor (chips: the take and the playhead; Preview applies the patch to the preview like a preset) and the scene player (chips: the scene, the time, a picked element). The shared event stream moved to `studio/events.ts` so `studio/` can use it; the preset bar now does. `wait_for_chat` waits 45 s by default (some clients time tools out at 60 s) and at most 240 s.
 
 ### PR 19 · Take to scene
-**Status:** ⬜ · **Branch:** `studio/19-take-to-scene` · **Base:** `studio/18-chat`
+**Status:** 🔵 [#36](https://github.com/jaymalve/clipmunk/pull/36) · **Branch:** `studio/19-take-to-scene` · **Base:** `studio/18-chat`
 
 - MCP: `get_take_frames(id, times)` returns still PNGs from the take's video at given times (defaults: each key moment). `check_scene(id)` validates a new scene and returns preview frames at matching moments, for side-by-side comparison.
 - Guide: a section on reproducing a take as a scene. Map the event summary to components. Derive each state from scene time. Copy the take's timing, zoom targets and pointer path into the recipe. Use fixture data. Compare against the take's frames, and say what could not be reproduced.
@@ -358,6 +358,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 
 **Tests:** guide example validity (as for the existing guide); the MCP tools against a real take.
 **Done when:** with an agent waiting, the example app's take of the dashboard becomes a scene that previews close to the take, and the take is kept.
+**Notes:** `get_take_frames` reads stills of the raw screen through a new `GET /v1/takes/:id/frame?at=` (FFmpeg's `posterFrame`, cached in `.clipmunk/cache/frames`); times are on the recording's clock, and each frame also names its scene time (minus the trim start). `check_scene` lists the scene's issues from `/v1/scenes?detail=1` and renders frames through `/v1/preview`; with no dev server it still returns the issues. The guide's `fromTake` has the steps, a take summary and a scene pair that follows it; the recipe is validated in `project.test.ts`. The "Make a scene from this take" button posts `MAKE_SCENE_PROMPT` with the take as a chip and opens the chat. The end-to-end check with a live agent is manual: the tests cover each tool against a real take and the Studio's message.
 
 ---
 
@@ -428,6 +429,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 16 opened as #33, stacked on #32: presets in the Studio. The Studio part is done. For PR 17: the MCP server proxies to the daemon (`daemon.json` gives its port and token); the edit endpoints are `PATCH /v1/takes/:id` (with the revision from `GET`), `POST /v1/takes/:id/preset`, undo and redo, and export jobs on `POST /v1/exports`.
 - 2026-10-25 · PR 17 opened as #34, stacked on #33: `clipmunk mcp`. For PR 18: add tools to `clipmunkTools` in `src/mcp/tools.ts`; a blocking `wait_for_chat` should long-poll a daemon route rather than hold state in the MCP process, which can be restarted by the agent's client at any time.
 - 2026-10-25 · PR 18 opened as #35, stacked on #34: the agent chat. For PR 19: "Make a scene from this take" can post through `POST /v1/chat` with a clip chip; new MCP tools go in `clipmunkTools`, and `formatChatMessage` is where chips become text for the agent.
+- 2026-10-25 · PR 19 opened as #36, stacked on #35: take to scene. For PR 20: scenes' sources come from scanning imports (`project/entry.ts` has the scanner style to follow); exports go through `export/job.ts`, which is where the manifest should be written once per job.
 
 ## Environment notes for whoever picks this up
 

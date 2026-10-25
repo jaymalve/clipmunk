@@ -25,7 +25,7 @@ import {
 import { createClock } from "../react";
 import type { DaemonClient } from "../recorder";
 import { SaveStatus, useAutosave } from "./autosave";
-import { type ChatContext, ChatPanel, type ChatProposal } from "./Chat";
+import { type ChatContext, ChatPanel, type ChatProposal, MAKE_SCENE_PROMPT } from "./Chat";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
 import { CaptionInspector, ZoomInspector } from "./Inspector";
@@ -320,6 +320,19 @@ function Editor(props: {
           </button>
           <button type="button" aria-pressed={chatOpen} onClick={() => setChatOpen((value) => !value)}>
             Chat
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void client
+                .post("/v1/chat", {
+                  text: MAKE_SCENE_PROMPT,
+                  context: [{ kind: "clip", clip: { kind: "take", id: take.id } }],
+                })
+                .then(() => setChatOpen(true))
+            }
+          >
+            Make a scene from this take
           </button>
           <button type="button" onClick={remove}>
             Delete

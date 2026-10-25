@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   applyBrand,
@@ -317,6 +317,24 @@ export async function takeFile(id: string, name: string, context: Context): Prom
 /** A still of the take for the Studio's library: the screen at its first click, or at a second in.
  * Made once and kept as `poster.png` beside the take, a cache that stays out of git.
  */
+/** One still of the recording at `atMs` on the recording's clock (the times in its event log),
+ * as a PNG cached in .clipmunk/cache/frames. The raw screen, before any edit.
+ */
+export async function takeFrame(id: string, atMs: number, context: Context): Promise<{ png: Buffer; atMs: number }> {
+  const loaded = await loadTake(context.root, id);
+  if (!loaded.ok) throw new Fault(loaded.issues[0]!.code, loaded.issues[0]!.message);
+  const { source } = loaded.data.take;
+  const at = Math.round(Math.max(0, Math.min(Number.isFinite(atMs) ? atMs : 0, source.durationMs - 50)));
+  const relative = `.clipmunk/cache/frames/${id}/${at}.png`;
+  const file = await resolveInside(context.root, relative);
+  if (!(await exists(context.root, relative))) {
+    await mkdir(path.dirname(file), { recursive: true });
+    const screen = await resolveInside(context.root, `${dirOf(id)}/${source.screen.file}`);
+    await posterFrame(screen, file, Math.max(0, at - source.screen.offsetMs), { cwd: context.root });
+  }
+  return { png: await readFile(file), atMs: at };
+}
+
 export async function takePoster(id: string, context: Context): Promise<string> {
   const loaded = await loadTake(context.root, id);
   if (!loaded.ok) throw new Fault(loaded.issues[0]!.code, loaded.issues[0]!.message);

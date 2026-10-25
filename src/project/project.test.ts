@@ -234,6 +234,8 @@ describe("scenes", () => {
 
   it("keeps the guide's example valid", () => {
     expect(validateRecipe(JSON.parse(JSON.stringify(guide.example.recipe))).ok).toBe(true);
+    expect(validateRecipe(JSON.parse(JSON.stringify(guide.fromTake.recipe))).ok).toBe(true);
+    expect(guide.fromTake.recipePath).toBe(`src/clipmunk/scenes/${guide.fromTake.recipe.id}.scene.json`);
     expect(guide.tracks.map((track) => track.target)).toEqual(["surface", "camera", "focus"]);
     expect(guide.tracks[0]!.properties).toContain("opacity");
   });

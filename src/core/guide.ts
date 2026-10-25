@@ -132,6 +132,62 @@ export default function PageSurvey() {
 }
 `;
 
+// Reproducing a take as a scene: the take's summary, and the scene that follows it.
+const fromTakeSummary = [
+  "0.00s page /reports",
+  '1.20s pointer to button "Export" (#export)',
+  '2.00s click button "Export" (#export)',
+  '2.40s dialog "Export report" opens',
+];
+const fromTakeExample: SceneRecipe = SceneRecipeSchema.parse({
+  version: 1,
+  id: "export-report",
+  title: "Export a report",
+  description: "From take zz-export: the camera eases in on Export as it is pressed, and the dialog opens.",
+  definition: {
+    width: 1400,
+    height: 980,
+    scene: { camera: { perspective: 1600, z: 0 }, nodes: [{ id: "page" }] },
+    motion: {
+      durationMs: 4000,
+      tracks: [
+        {
+          target: { kind: "camera" },
+          property: "z",
+          keyframes: [
+            { timeMs: 0, value: 0 },
+            { timeMs: 1200, value: 0 },
+            { timeMs: 2000, value: 260 },
+          ],
+        },
+        {
+          target: { kind: "camera" },
+          property: "x",
+          keyframes: [
+            { timeMs: 1200, value: 0 },
+            { timeMs: 2000, value: 380 },
+          ],
+        },
+      ],
+    },
+  },
+});
+const fromTakeComponent = `import { Surface, useSceneTime } from "${PACKAGE_NAME}";
+// The app's real page, with fixture data instead of a live API.
+import { ReportsPage } from "../../components/reports";
+import { reports } from "../fixtures/reports";
+
+export default function ExportReport() {
+  // Every state comes from scene time, so scrubbing and export show the same frame.
+  const t = useSceneTime();
+  return (
+    <Surface id="page" style={{ width: 1400, height: 980 }}>
+      <ReportsPage reports={reports} exportPressed={t >= 2000 && t < 2150} exportDialogOpen={t >= 2400} />
+    </Surface>
+  );
+}
+`;
+
 export function getGuide() {
   return {
     version: 1 as const,
@@ -203,7 +259,7 @@ export function getGuide() {
       "clipmunk preset list | apply <name> --take <id> | --scene <id> | save <name> --take <id> --fields <parts>":
         "List, apply or save the presets in clipmunk.config.json.",
       "clipmunk mcp":
-        "An MCP server on stdio for coding agents (claude mcp add clipmunk -- npx clipmunk mcp). Tools: list_clips; get_take (the edit, its revision and what happened: pages, clicks with element names and selectors, typing, shortcuts); get_scene; edit_take (a JSON merge patch over the edit, validated and saved against the revision, returns the diff); apply_preset; preview (a PNG of one frame, as export renders it); export (a job id) and get_job; wait_for_chat and reply_chat for the Studio's chat. The daemon must be running (clipmunk dev). Edit takes with these tools rather than by writing edit.json yourself, and check with preview before exporting. When the developer says \"Watch the Clipmunk chat\", call wait_for_chat in a loop: each message comes with what they pointed at (the clip, a moment on the recording's clock, an element); answer with reply_chat, and propose take edits there (a merge patch as for edit_take) for the developer to keep, rather than applying them with edit_take.",
+        "An MCP server on stdio for coding agents (claude mcp add clipmunk -- npx clipmunk mcp). Tools: list_clips; get_take (the edit, its revision and what happened: pages, clicks with element names and selectors, typing, shortcuts); get_scene; edit_take (a JSON merge patch over the edit, validated and saved against the revision, returns the diff); apply_preset; preview (a PNG of one frame, as export renders it); get_take_frames (stills of the recording itself) and check_scene (a scene's issues and frames), for making a scene from a take; export (a job id) and get_job; wait_for_chat and reply_chat for the Studio's chat. The daemon must be running (clipmunk dev). Edit takes with these tools rather than by writing edit.json yourself, and check with preview before exporting. When the developer says \"Watch the Clipmunk chat\", call wait_for_chat in a loop: each message comes with what they pointed at (the clip, a moment on the recording's clock, an element); answer with reply_chat, and propose take edits there (a merge patch as for edit_take) for the developer to keep, rather than applying them with edit_take.",
       "clipmunk zoom <take> [--write]":
         "Show a take's automatic zooms, or store them as editable keyframes in the take's edit.json.",
       "clipmunk export --scene|--take|--sequence <id> --format mp4,gif,poster [--ratio 16:9,9:16,1:1,4:5] [--preset <name>] [--poster-at <ms>]":
@@ -241,6 +297,23 @@ export function getGuide() {
         "A scene's recipe may carry `sounds: [{ kind: \"typing\", atMs, chars, perSecond?, enter?, gain? }]`: key clicks while text types on screen, synthesized like the music. Copy `atMs` and `perSecond` from the component that types the text (they are on the same clock as useSceneTime), and set `chars` to the text's length. `enter: true` adds a Return key after the last character, for a command that runs. Fast on-screen typing is heard as real typing, not one click per character. Sound effects play over the music without lowering it, in the scene and in any sequence that uses it.",
       narration:
         "A scene's recipe may carry `audio: [{ file, offsetMs?, gain? }]`. The studio's Narrate button records the microphone while the scene plays and fills this in.",
+    },
+    fromTake: {
+      what: "A take is a screen recording of the real app; a scene rebuilds it from the app's components, so it stays sharp at any size, follows the code, and can be restyled. When asked to make a scene from a take (the Studio's \"Make a scene from this take\" sends it in the chat), reproduce what the take shows rather than inventing a new shot.",
+      steps: [
+        "get_take: read the summary (pages, clicks with each element's role, name and selector, typing, shortcuts) and the edit (trim, zooms, captions). Times are on the recording's clock; subtract the trim start for scene time.",
+        "get_take_frames: look at the recording at its key moments (each click, by default) to see layout, data and states.",
+        "Map each page and element in the summary to the component that renders it: search the code for the selector, the accessible name or the route.",
+        "Write the scene pair. Render the real components with fixture data (no network, no auth), and derive every state the take shows (a pressed button, an open dialog, typed text) from useSceneTime, never from timers or clicks.",
+        "Copy the take's timing: the same moments at the same times. Turn its zooms into camera keyframes aimed at the same elements, and its pointer path into the motion of anything that follows the pointer.",
+        "check_scene with times matching the take's frames, and compare them side by side. Fix what differs, then say in your reply what could not be reproduced (a real user's data, a third-party widget, a video).",
+        "Keep the take: the scene is a new clip, not a replacement.",
+      ],
+      summary: fromTakeSummary,
+      recipePath: `${SCENES_DIR}/${fromTakeExample.id}.scene.json`,
+      recipe: fromTakeExample,
+      componentPath: `${SCENES_DIR}/${fromTakeExample.id}.tsx`,
+      component: fromTakeComponent,
     },
     limits: [
       "React DOM only. Scenes are client components: in Next.js do not import server-only modules into a scene.",
@@ -312,6 +385,22 @@ export function formatGuide(guide: Guide = getGuide()): string {
     guide.sequences.narration,
     guide.sequences.music,
     guide.sequences.sounds,
+  );
+  lines.push(
+    "",
+    "## From a take",
+    guide.fromTake.what,
+    ...guide.fromTake.steps.map((step, index) => `${index + 1}. ${step}`),
+    "",
+    "A take's summary:",
+    ...guide.fromTake.summary.map((line) => `  ${line}`),
+    "",
+    "The scene that follows it:",
+    guide.fromTake.recipePath,
+    JSON.stringify(guide.fromTake.recipe, null, 2),
+    "",
+    guide.fromTake.componentPath,
+    guide.fromTake.component,
   );
   lines.push("", "## Limits", ...guide.limits.map((limit) => `- ${limit}`), "");
   return lines.join("\n");

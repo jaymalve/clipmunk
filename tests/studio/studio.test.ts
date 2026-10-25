@@ -438,6 +438,17 @@ describe("the chat with the agent", () => {
     await chat.getByRole("button", { name: "Now zoom in more" }).click();
     expect((await next).data.message.text).toBe("Now zoom in more");
   }, 180_000);
+
+  it("asks the agent to make a scene from a take, with the take attached", async () => {
+    const page = await openStudio(`?clipmunk=1&clipmunk-take=${CHAT_TAKE}`);
+    await page.getByText(`Changes are saved to .clipmunk/takes/${CHAT_TAKE}/edit.json`).waitFor();
+    const next = api("/v1/chat/next?timeoutMs=60000&agent=Test%20agent");
+    await page.getByRole("button", { name: "Make a scene from this take" }).click();
+    const { message } = (await next).data;
+    expect(message.text).toContain("Make a scene from this take");
+    expect(message.context).toEqual([{ kind: "clip", clip: { kind: "take", id: CHAT_TAKE } }]);
+    await page.getByRole("dialog", { name: "Chat with your agent" }).waitFor();
+  }, 120_000);
 });
 
 describe("the Studio's flows", () => {
