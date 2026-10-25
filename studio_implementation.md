@@ -33,7 +33,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 12 | The daemon serves the Studio (parity) | Studio | 🔵 [#29](https://github.com/jaymalve/clipmunk/pull/29) |
 | 13 | Switch over to the standalone Studio | Studio | 🔵 [#30](https://github.com/jaymalve/clipmunk/pull/30) |
 | 14 | Library screen | Studio | 🔵 [#31](https://github.com/jaymalve/clipmunk/pull/31) |
-| 15 | Editor screen: timeline, inspector, undo | Studio | ⬜ |
+| 15 | Editor screen: timeline, inspector, undo | Studio | 🔵 [#32](https://github.com/jaymalve/clipmunk/pull/32) |
 | 16 | Presets in the Studio | Studio | ⬜ |
 | 17 | `clipmunk mcp` | Agent | ⬜ |
 | 18 | Agent chat | Agent | ⬜ |
@@ -286,18 +286,20 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** live scene thumbnails from a small frame page per card were left out in favour of the recipe's snapshot (one iframe per card would load the host app many times over); a scene without a snapshot says so, and `clipmunk snapshot` makes one. The Studio now shares one event stream per page, because browsers allow only a few connections to one address.
 
 ### PR 15 · Editor screen: timeline, inspector, undo
-**Status:** ⬜ · **Branch:** `studio/15-editor` · **Base:** `studio/14-library`
+**Status:** 🔵 [#32](https://github.com/jaymalve/clipmunk/pull/32) · **Branch:** `studio/15-editor` · **Base:** `studio/14-library`
 
 **Goal:** the "Studio editing a take" artboard.
 
-- A left rail of takes, scenes and sequences. A preview with "Preview as" ratio and theme. For takes the ratio comes from reframing; for scenes the frame page is resized, with a second live frame shown on request.
-- Timeline tracks: take (kept, trimmed and sped-up spans), cursor clicks, zoom segments, captions, redaction, music with its accents. Drag to trim, select a segment to inspect it.
-- Inspector for the selected thing: a zoom keyframe (target selector, scale, easing), redaction entries with "Pick an element to hide" (the frame picker for scenes, a drawn box for takes), frame (padding, corners, backdrop swatches from the brand), overlays (auto captions, keystrokes, face bubble).
-- Undo and redo: the daemon keeps a history of each clip's edit revisions in `.clipmunk/history/` (ignored by git, capped). Undo restores the previous revision through the normal revision-checked save.
+- A left rail of takes, scenes and sequences (`studio/Rail.tsx`). A preview with "Preview as" ratio (and theme, for scenes). For takes the ratio comes from reframing a copy that is not saved; for scenes the frame page changes variant, with a second live frame shown on request ("Compare").
+- Timeline tracks (`studio/Tracks.tsx`): take (kept, trimmed and sped-up spans), cursor clicks, zoom segments, captions, redaction, music with its accents. Drag the take's ends to trim; select a segment to inspect it.
+- Inspector for the selected thing (`studio/Inspector.tsx`): a zoom (target selector, scale, easing; editing stores manual keyframes), a caption's text, redaction entries with "Pick an element to hide" (the frame picker for scenes, which adds the selector to the config's redaction) and "Draw a box to hide" for takes, frame (padding, corners, backdrop swatches from the brand), overlays (auto captions, keystrokes, face bubble).
+- Undo and redo: the daemon keeps a history of each take's edit revisions in `.clipmunk/history/` (ignored by git, capped at 50; `project/history.ts`). Undo restores the previous revision through the normal revision-checked save. Buttons and Ctrl+Z / Ctrl+Shift+Z.
 - The footer says which file every change is saved to.
 
-**Tests:** `tests/studio`: editing each inspector field saves to `edit.json`; undo and redo; trim by drag; a pick in a scene frame fills a redaction selector.
+**Tests:** `tests/studio`: editing inspector fields saves to `edit.json` (zoom scale and easing, a backdrop swatch, an overlay); undo and redo; trim by drag; "Preview as" leaves the edit alone; a pick in a scene frame fills a redaction selector; compare shows a second frame in 9:16. Unit tests for the history.
 **Done when:** it matches the artboard, and every control writes an edit file through the daemon.
+
+**Notes:** history covers takes, whose edits are `edit.json`; scenes and sequences are files the developer or agent edits and git already versions. Drawing a box is off while the preview is reframed, because the box is in the recording's own pixels.
 
 ### PR 16 · Presets in the Studio
 **Status:** ⬜ · **Branch:** `studio/16-studio-presets` · **Base:** `studio/15-editor`
@@ -417,6 +419,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 12 opened as #29, stacked on #28: the standalone Studio. For PR 13: take export still opens the take editor on the host's dev server (`export/take.ts`); point it at the daemon-served Studio (`?clipmunk=1&clipmunk-take=<id>` on the daemon's origin, with `studioDir` found as in `daemon/server.ts`).
 - 2026-10-25 · PR 13 opened as #30, stacked on #29: switch-over. For PR 14: the library is `studio/Library.tsx`, used now only by `studio-app/StudioApp.tsx`; job progress for badges comes from `GET /v1/events` (`job` events), and multi-output exports go through `POST /v1/exports` with `{ clip, formats, ratios, variants }`.
 - 2026-10-25 · PR 14 opened as #31, stacked on #30: the library. For PR 15: listen with `onStudioEvent` (`studio-app/events.ts`), not a new `EventSource`; the take editor is still `studio/TakeEditor.tsx`.
+- 2026-10-25 · PR 15 opened as #32, stacked on #31: the editor. For PR 16: the preset bar sits above the preview in `studio/TakeEditor.tsx`; preview a preset by passing `applyPreset(edit, preset)` as the preview take (like "Preview as"), apply it through `change`, and listen for `config` events with `onStudioEvent`-style handling (the take editor lives in `studio/`, so give it its own `EventSource` or pass a listener in).
 
 ## Environment notes for whoever picks this up
 

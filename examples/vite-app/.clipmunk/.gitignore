@@ -2,6 +2,7 @@
 exports/
 audio/
 cache/
+history/
 daemon.json
 takes/*/*
 !takes/*/take.json

@@ -2,9 +2,11 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { exportJob, exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
 import {
+  addRedactSelector,
   applyPresetToTake,
   deleteSequence,
   discoverScenes,
+  historyState,
   listPresets,
   listSequences,
   readConfig,
@@ -12,6 +14,7 @@ import {
   readSequence,
   type SavePresetInput,
   savePreset,
+  stepTakeHistory,
   writeSequence,
 } from "../project";
 import { applyPresetToScene, audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
@@ -157,6 +160,13 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
     const result = await applyPresetToTake(context.root, id, String(body.name ?? ""));
     return handled(reply(response, announce(events, result, { type: "edit", kind: "take", id })));
   }
+  if (action === "history" && method === "GET")
+    return handled(send(response, 200, { ok: true, data: await historyState(context.root, id) }));
+  if ((action === "undo" || action === "redo") && method === "POST") {
+    const body = (await readJson(request)) as { revision?: unknown };
+    const result = await stepTakeHistory(context.root, id, action === "undo" ? -1 : 1, body.revision);
+    return handled(reply(response, announce(events, result, { type: "edit", kind: "take", id })));
+  }
   if (action === "poster" && method === "GET")
     return handled(await serveFile(request, response, await takePoster(id, context)));
   if (action === "files" && name && method === "GET") {
@@ -220,7 +230,13 @@ const jobRoutes: Handler = async ({ request, response, method, id, action, jobs 
 };
 
 /** The project's clipmunk.config.json, validated; the empty config when there is none. */
-const config: Handler = async ({ response, method, id, context }) => {
+/** Read the config, or add a redaction selector picked in the Studio (`POST /v1/config/redact { selector }`). */
+const config: Handler = async ({ request, response, method, id, context, events }) => {
+  if (id === "redact" && method === "POST") {
+    const body = (await readJson(request)) as { selector?: unknown };
+    const result = await addRedactSelector(context.root, String(body.selector ?? ""));
+    return handled(reply(response, announce(events, result, { type: "config" })));
+  }
   if (method !== "GET" || id) return false;
   const result = await readConfig(context.root);
   return handled(reply(response, result.ok ? { ok: true, data: result.data } : result));

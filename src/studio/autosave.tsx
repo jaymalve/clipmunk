@@ -35,7 +35,12 @@ export function useAutosave<T>(value: T, write: (value: T) => Promise<string | u
 
   /** Save the latest value now, for instance before an export reads the file. */
   const flush = useCallback(() => save(latest.current), [save]);
-  return { state, flush };
+  /** Take a value that is already on disk (an undo the daemon applied), so it is not saved again. */
+  const adopt = useCallback((value: T) => {
+    saved.current = value;
+    setState("saved");
+  }, []);
+  return { state, flush, adopt };
 }
 
 export function SaveStatus({ state }: { state: SaveState }) {

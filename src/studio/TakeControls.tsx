@@ -110,7 +110,6 @@ function CameraControls({ edit, change }: Section) {
   const update = set(change, "cam");
   return (
     <Group title="Camera">
-      <Check label="Show camera" value={edit.cam.visible} onChange={(visible) => update({ visible })} />
       <Select
         label="Shape"
         value={edit.cam.shape}
@@ -138,7 +137,7 @@ function CameraControls({ edit, change }: Section) {
   );
 }
 
-function FrameControls({ edit, change }: Section) {
+function FrameControls({ edit, change, swatches }: Section & { swatches: string[] }) {
   const update = set(change, "canvas");
   const { canvas } = edit;
   // Without a frame the whole recording is fitted, which for 16:9 is what reframing to it does too.
@@ -175,6 +174,20 @@ function FrameControls({ edit, change }: Section) {
           onChange={(event) => update({ background: event.currentTarget.value })}
         />
       </label>
+      <fieldset className="swatches" aria-label="Backdrop colours">
+        {swatches.map((colour) => (
+          <button
+            key={colour}
+            type="button"
+            className="swatch"
+            title={colour}
+            aria-label={`Backdrop ${colour}`}
+            aria-pressed={canvas.background.toLowerCase() === colour.toLowerCase()}
+            style={{ background: colour }}
+            onClick={() => update({ background: colour })}
+          />
+        ))}
+      </fieldset>
       <Slider
         label="Padding"
         value={canvas.padding}
@@ -213,7 +226,7 @@ const describeEntry = (entry: RedactEntry) =>
     ? entry.sel
     : `Box ${entry.rect.map(Math.round).join(", ")}, ${seconds(entry.fromMs)}–${seconds(entry.toMs)}`;
 
-function RedactionControls({ edit, change }: Section) {
+function RedactionControls({ edit, change, drawing, onDraw }: Section & { drawing?: boolean; onDraw?: () => void }) {
   const setMode = (index: number, mode: RedactEntry["mode"]) =>
     change((current) => ({
       ...current,
@@ -232,6 +245,11 @@ function RedactionControls({ edit, change }: Section) {
           onChange={(mode) => setMode(index, mode)}
         />
       ))}
+      {onDraw && (
+        <button type="button" aria-pressed={!!drawing} onClick={onDraw}>
+          {drawing ? "Drag over the preview…" : "Draw a box to hide"}
+        </button>
+      )}
       {!edit.redact.length && (
         <p className="hint">Nothing is hidden. List selectors under redact in clipmunk.config.json before recording.</p>
       )}
@@ -256,16 +274,6 @@ function CaptionControls({ edit, change, captions }: Section & { captions: Capti
     });
   return (
     <Group title="Captions">
-      <Check
-        label="Automatic captions"
-        value={edit.captions.auto}
-        onChange={(auto) => change((current) => ({ ...current, captions: { ...current.captions, auto } }))}
-      />
-      <Check
-        label="Show shortcuts"
-        value={edit.keys.visible}
-        onChange={(visible) => change((current) => ({ ...current, keys: { visible } }))}
-      />
       {captions.map((caption) => (
         <label className="field" key={caption.atMs}>
           <span>{seconds(caption.atMs)}</span>
@@ -279,6 +287,31 @@ function CaptionControls({ edit, change, captions }: Section & { captions: Capti
         </label>
       ))}
       {!captions.length && <p className="hint">No captions: clicks on named controls get one automatically.</p>}
+    </Group>
+  );
+}
+
+/** What is drawn over the recording: captions, shortcut pills and the face bubble. */
+function OverlayControls({ edit, change, hasCam }: Section & { hasCam: boolean }) {
+  return (
+    <Group title="Overlays">
+      <Check
+        label="Automatic captions"
+        value={edit.captions.auto}
+        onChange={(auto) => change((current) => ({ ...current, captions: { ...current.captions, auto } }))}
+      />
+      <Check
+        label="Show shortcuts"
+        value={edit.keys.visible}
+        onChange={(visible) => change((current) => ({ ...current, keys: { visible } }))}
+      />
+      {hasCam && (
+        <Check
+          label="Show camera"
+          value={edit.cam.visible}
+          onChange={(visible) => change((current) => ({ ...current, cam: { ...current.cam, visible } }))}
+        />
+      )}
     </Group>
   );
 }
@@ -325,29 +358,38 @@ function VoiceControls({ edit, change }: Section) {
   );
 }
 
+/** Every group of the inspector, shown when nothing on the timeline is selected. */
 export function TakeControls({
   take,
   change,
   zooms,
   moments,
   captions,
+  swatches,
+  drawing,
+  onDraw,
 }: {
   take: Take;
   change: Change;
   zooms: number;
   moments: number;
   captions: Caption[];
+  /** Backdrop colours offered as swatches: the brand's first. */
+  swatches: string[];
+  drawing?: boolean;
+  onDraw?: () => void;
 }) {
   const { edit, source } = take;
   const section = { edit, change };
   return (
-    <aside>
+    <>
       <PaceControls {...section} />
       <ZoomControls {...section} zooms={zooms} />
       <CursorControls {...section} />
+      <FrameControls {...section} swatches={swatches} />
+      <OverlayControls {...section} hasCam={!!source.cam} />
       {source.cam && <CameraControls {...section} />}
-      <FrameControls {...section} />
-      <RedactionControls {...section} />
+      <RedactionControls {...section} drawing={drawing} onDraw={onDraw} />
       <CaptionControls {...section} captions={captions} />
       <Group title="Music">
         <MusicControls
@@ -359,6 +401,8 @@ export function TakeControls({
         />
       </Group>
       {source.audio && <VoiceControls {...section} />}
-    </aside>
+    </>
   );
 }
+
+export { CaptionControls, RedactionControls };

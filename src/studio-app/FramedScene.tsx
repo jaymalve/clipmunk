@@ -13,6 +13,7 @@ import { Chrome } from "../studio/Chrome";
 import { type DaemonConnection, ExportPanel } from "../studio/daemon";
 import { studioHref } from "../studio/links";
 import { MusicControls } from "../studio/music";
+import { Rail } from "../studio/Rail";
 import { VariantSelect } from "../studio/ScenePreview";
 
 /** The scene player of the standalone Studio: the host's frame page in an iframe, driven with
@@ -39,8 +40,23 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
     return url.toString();
   });
   const frameOrigin = src ? new URL(src).origin : undefined;
+  // A second live frame, in another variant, to compare side by side; it follows the first one's time.
+  const [compare, setCompare] = useState<SceneVariant>();
+  const second = useRef<HTMLIFrameElement>(null);
+  const secondSrc = (() => {
+    if (!src || !compare) return undefined;
+    const url = new URL(src);
+    const text = formatVariant(compare);
+    if (text) url.searchParams.set(VARIANT_PARAM, text);
+    else url.searchParams.delete(VARIANT_PARAM);
+    return url.toString();
+  })();
+  const [picking, setPicking] = useState(false);
+  const [hidden, setHidden] = useState<string>();
   const [ready, setReady] = useState<{ durationMs: number; width: number; height: number }>();
   const [timeMs, setTimeMs] = useState(0);
+  const timeRef = useRef(0);
+  timeRef.current = timeMs;
   const [playing, setPlaying] = useState(false);
   const [narration, setNarration] = useState<{ phase: string; hasNarration: boolean }>();
   const [hostDown, setHostDown] = useState(false);
@@ -48,17 +64,37 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
   const seq = useRef(0);
 
   const post = useCallback(
-    (message: Record<string, unknown>) => {
-      if (frameOrigin) frame.current?.contentWindow?.postMessage({ cm: 1, ...message }, frameOrigin);
+    (message: Record<string, unknown>, target: "first" | "both" = "both") => {
+      if (!frameOrigin) return;
+      frame.current?.contentWindow?.postMessage({ cm: 1, ...message }, frameOrigin);
+      if (target === "both") second.current?.contentWindow?.postMessage({ cm: 1, ...message }, frameOrigin);
     },
     [frameOrigin],
   );
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
-      if (event.origin !== frameOrigin || event.source !== frame.current?.contentWindow) return;
+      if (event.origin !== frameOrigin) return;
       const message = event.data as FrameMessage;
       if (message?.cm !== 1) return;
+      // The compare frame only needs to be told where to be, once it is ready.
+      if (event.source === second.current?.contentWindow) {
+        if (message.type === "ready")
+          second.current?.contentWindow?.postMessage({ cm: 1, type: "seek", t: timeRef.current, seq: 0 }, frameOrigin);
+        return;
+      }
+      if (event.source !== frame.current?.contentWindow) return;
+      if (message.type === "tick" && second.current)
+        second.current.contentWindow?.postMessage({ cm: 1, type: "seek", t: Number(message.t), seq: 0 }, frameOrigin);
+      if (message.type === "picked") {
+        setPicking(false);
+        frame.current?.contentWindow?.postMessage({ cm: 1, type: "pick", on: false }, frameOrigin);
+        const selector = (message.el as { sel?: string } | undefined)?.sel;
+        if (selector)
+          void client.post<{ selectors: string[] }>("/v1/config/redact", { selector }).then((result) => {
+            setHidden(result.ok ? selector : `not added: ${result.issues[0]?.message}`);
+          });
+      }
       if (message.type === "ready") {
         setReady({
           durationMs: Number(message.durationMs),
@@ -78,7 +114,7 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
     };
     addEventListener("message", receive);
     return () => removeEventListener("message", receive);
-  }, [frameOrigin]);
+  }, [frameOrigin, client]);
 
   // No `ready` in a few seconds usually means the host's dev server is not running.
   useEffect(() => {
@@ -90,7 +126,7 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
   const chooseVariant = (next: SceneVariant) => {
     setVariant(next);
     const text = formatVariant(next);
-    post({ type: "variant", variant: text });
+    post({ type: "variant", variant: text }, "first");
     const url = new URL(location.href);
     if (text) url.searchParams.set(VARIANT_PARAM, text);
     else url.searchParams.delete(VARIANT_PARAM);
@@ -128,17 +164,39 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000" }}>
-      {src && (
-        <iframe
-          ref={frame}
-          title={scene.title}
-          src={src}
-          data-clipmunk-frame={scene.id}
-          allow="autoplay; microphone; camera"
-          style={{ position: "absolute", inset: "0 0 64px 0", width: "100%", height: "calc(100% - 64px)", border: 0 }}
-        />
-      )}
-      <Chrome style={{ position: "absolute", left: 16, right: 16, bottom: 12, zIndex: 10 }}>
+      <Chrome style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 190 }}>
+        <Rail client={client} current={{ kind: "scene", id: scene.id }} />
+      </Chrome>
+      <div style={{ position: "absolute", left: 190, right: 0, top: 0, bottom: 64, display: "flex" }}>
+        {src && (
+          <iframe
+            ref={frame}
+            title={scene.title}
+            src={src}
+            data-clipmunk-frame={scene.id}
+            allow="autoplay; microphone; camera"
+            style={{ flex: 1, height: "100%", border: 0 }}
+          />
+        )}
+        {secondSrc && (
+          <iframe
+            key={secondSrc}
+            ref={second}
+            title={`${scene.title}, compared`}
+            src={secondSrc}
+            data-clipmunk-compare={scene.id}
+            style={{ flex: 1, height: "100%", border: 0, borderLeft: "1px solid #27272a" }}
+          />
+        )}
+      </div>
+      <Chrome style={{ position: "absolute", left: 206, right: 16, bottom: 12, zIndex: 10 }}>
+        {hidden && (
+          <div className="note" role="status">
+            {hidden.startsWith("not added")
+              ? `The element was ${hidden}`
+              : `Recordings will hide ${hidden} (added to clipmunk.config.json).`}
+          </div>
+        )}
         {(!devUrl || hostDown) && (
           <div className="issues" role="alert">
             {devUrl
@@ -209,7 +267,33 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
           <button type="button" onClick={() => setPanel((value) => (value === "music" ? undefined : "music"))}>
             {music ? "Music ♪" : "Music"}
           </button>
-          <VariantSelect value={variant} options={variantOptions} onChange={chooseVariant} />
+          <span className="hint">Preview as</span>
+          <VariantSelect label="Preview as" value={variant} options={variantOptions} onChange={chooseVariant} />
+          <button
+            type="button"
+            aria-pressed={!!compare}
+            onClick={() =>
+              setCompare((value) =>
+                value ? undefined : { ...variant, ratio: variant.ratio === "9:16" ? undefined : "9:16" },
+              )
+            }
+          >
+            Compare
+          </button>
+          {compare && (
+            <VariantSelect label="Compare with" value={compare} options={variantOptions} onChange={setCompare} />
+          )}
+          <button
+            type="button"
+            aria-pressed={picking}
+            disabled={!ready}
+            onClick={() => {
+              setPicking(!picking);
+              post({ type: "pick", on: !picking }, "first");
+            }}
+          >
+            {picking ? "Click an element…" : "Pick an element to hide"}
+          </button>
           <button type="button" onClick={() => setPanel((value) => (value === "export" ? undefined : "export"))}>
             Export
           </button>

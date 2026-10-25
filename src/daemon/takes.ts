@@ -38,6 +38,7 @@ import {
   readText,
   resolveInside,
   saveTakeEdit,
+  saveTakeEditWithHistory,
   takeDir,
   toIssues,
   writeText,
@@ -280,11 +281,12 @@ export async function listTakes(context: Context): Promise<Result<{ takes: TakeS
 }
 
 /** Save an edit to edit.json. `revision` is the one the editor read; a mismatch means someone else changed the take. */
+/** Save an edit through the history, so the Studio can undo it. */
 export const updateTakeEdit = (
   id: string,
   input: { edit?: unknown; title?: unknown; revision?: unknown },
   context: Context,
-) => saveTakeEdit(context.root, id, input);
+) => saveTakeEditWithHistory(context.root, id, input);
 
 export async function deleteTake(id: string, context: Context): Promise<Result<{ id: string }>> {
   try {

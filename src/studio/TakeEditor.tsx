@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { layoutTake } from "../compositor";
 import {
   buildTimeMap,
   type Issue,
   parseEvents,
+  RATIOS,
+  type Ratio,
   resolveCaptions,
   resolveZoomTracks,
   type Span,
@@ -11,6 +14,8 @@ import {
   type TakeEvent,
   TakeEventSchema,
   takeMoments,
+  withRatio,
+  zoomAt,
   zoomSegments,
 } from "../core";
 import { createClock } from "../react";
@@ -18,11 +23,14 @@ import type { DaemonClient } from "../recorder";
 import { SaveStatus, useAutosave } from "./autosave";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
+import { CaptionInspector, ZoomInspector } from "./Inspector";
 import { IssueList } from "./IssueList";
 import { useMusicPreview } from "./music";
+import { Rail } from "./Rail";
 import { useClipSession } from "./session";
-import { TakeControls } from "./TakeControls";
-import { Time, Timeline } from "./Timeline";
+import { RedactionControls, TakeControls } from "./TakeControls";
+import { Time } from "./Timeline";
+import { type Selection, Tracks } from "./Tracks";
 import { usePreview, useTakeBridge, useTakeRenderer, useVoice } from "./take-hooks";
 
 /** The take editor: a live preview of the composited take, a timeline, and the controls
@@ -92,7 +100,13 @@ function Editor(props: {
 
   const { renderer, failure } = useTakeRenderer(canvas, props.take, events, file, speech);
   const session = useClipSession(clock, durationMs, !!renderer);
-  usePreview(renderer, take, clock);
+  // "Preview as" shows the take reframed to another shape without changing its edit.
+  const [previewRatio, setPreviewRatio] = useState<Ratio>();
+  const previewTake = useMemo(
+    () => (previewRatio ? { ...take, edit: withRatio(take.edit, previewRatio) } : take),
+    [take, previewRatio],
+  );
+  usePreview(renderer, previewTake, clock);
   useVoice(audio, take, timeMap, clock, session.playing);
   useTakeBridge(renderer, take, durationMs, clock, session.seek);
   const moments = useMemo(() => takeMoments(timeMap, events), [timeMap, events]);
@@ -116,32 +130,126 @@ function Editor(props: {
 
   // The revision detects a take that was edited elsewhere since it was read.
   const revision = useRef(props.revision);
+  const [history, setHistory] = useState<{ canUndo: boolean; canRedo: boolean }>({ canUndo: false, canRedo: false });
+  const refreshHistory = useCallback(
+    () =>
+      void client
+        .get<{ canUndo: boolean; canRedo: boolean }>(`/v1/takes/${take.id}/history`)
+        .then((result) => result.ok && setHistory(result.data)),
+    [client, take.id],
+  );
+  useEffect(refreshHistory, [refreshHistory]);
   const save = useAutosave(take, async (next) => {
     const body = { edit: next.edit, title: next.title, revision: revision.current };
     const result = await client.patch<{ take: Take; revision: string }>(`/v1/takes/${next.id}`, body);
     if (!result.ok) return result.issues[0]!.message;
     revision.current = result.data.revision;
+    refreshHistory();
     return undefined;
   });
+  /** Undo or redo through the daemon's history; the take it returns is already on disk. */
+  const step = async (direction: "undo" | "redo") => {
+    await save.flush();
+    const result = await client.post<{ take: Take; revision: string; canUndo: boolean; canRedo: boolean }>(
+      `/v1/takes/${take.id}/${direction}`,
+      { revision: revision.current },
+    );
+    if (!result.ok) return;
+    revision.current = result.data.revision;
+    save.adopt(result.data.take);
+    setTake(result.data.take);
+    setHistory({ canUndo: result.data.canUndo, canRedo: result.data.canRedo });
+  };
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
+      if (event.target instanceof HTMLInputElement && event.target.type === "text") return;
+      event.preventDefault();
+      void stepRef.current(event.shiftKey ? "redo" : "undo");
+    };
+    addEventListener("keydown", keys);
+    return () => removeEventListener("keydown", keys);
+  }, []);
 
   const change = (update: (edit: TakeEdit) => TakeEdit) =>
     setTake((current) => ({ ...current, edit: update(current.edit) }));
   const setTrim = (startMs: number, endMs: number) => {
     const start = Math.max(0, Math.min(startMs, source.durationMs - 100));
     const end = Math.max(start + 100, Math.min(endMs, source.durationMs));
-    session.seek(0);
     change((current) => ({ ...current, trim: { startMs: Math.round(start), endMs: Math.round(end) } }));
+  };
+  /** The trim buttons start playback over from the new start; dragging a handle leaves the playhead. */
+  const trimFromButton = (startMs: number, endMs: number) => {
+    session.seek(0);
+    setTrim(startMs, endMs);
   };
   const remove = () =>
     confirm("Delete this take and its media?") &&
     void client.remove(`/v1/takes/${take.id}`).then(() => location.assign(props.backHref));
   const untrimmed = edit.trim.startMs === 0 && edit.trim.endMs === source.durationMs;
 
+  const [selection, setSelection] = useState<Selection>();
+  const [drawing, setDrawing] = useState(false);
+  const [swatches, setSwatches] = useState<string[]>(DEFAULT_SWATCHES);
+  useEffect(() => {
+    void client.get<{ config: { brand?: { backdrop?: string } } }>("/v1/config").then((result) => {
+      const brand = result.ok ? result.data.config.brand?.backdrop : undefined;
+      setSwatches(brand ? [brand, ...DEFAULT_SWATCHES.filter((colour) => colour !== brand)] : DEFAULT_SWATCHES);
+    });
+  }, [client]);
+  const shownCaptions = useMemo(
+    () => captions.filter((caption) => caption.text || selection?.kind === "caption"),
+    [captions, selection],
+  );
+  const zoomSpans = useMemo(() => segments.map(({ startMs, endMs }) => ({ startMs, endMs })), [segments]);
+
+  // Drawing a box to hide: drag over the preview; the box is in the recording's own pixels.
+  const drag = useRef<{ x: number; y: number } | undefined>(undefined);
+  const toSource = (clientX: number, clientY: number) => {
+    const area = canvas!.getBoundingClientRect();
+    const x = ((clientX - area.left) / area.width) * canvas!.width,
+      y = ((clientY - area.top) / area.height) * canvas!.height;
+    const layout = layoutTake(canvas!.width, canvas!.height, take);
+    const view = zoomAt(resolveZoomTracks(edit, events, source), timeMap.toTake(clock.get()), source);
+    const centreX = layout.box.x + layout.box.width / 2,
+      centreY = layout.box.y + layout.box.height / 2;
+    return {
+      x: view.x + (x - centreX) / (layout.scale * view.scale),
+      y: view.y + (y - centreY) / (layout.scale * view.scale),
+    };
+  };
+  const drawStart = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = toSource(event.clientX, event.clientY);
+  };
+  const drawEnd = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing || !drag.current) return;
+    const from = drag.current,
+      to = toSource(event.clientX, event.clientY);
+    drag.current = undefined;
+    setDrawing(false);
+    const rect: [number, number, number, number] = [
+      Math.round(Math.max(0, Math.min(from.x, to.x))),
+      Math.round(Math.max(0, Math.min(from.y, to.y))),
+      Math.round(Math.abs(to.x - from.x)),
+      Math.round(Math.abs(to.y - from.y)),
+    ];
+    if (rect[2] < 2 || rect[3] < 2) return;
+    const at = Math.round(timeMap.toTake(clock.get()));
+    change((current) => ({
+      ...current,
+      redact: [...current.redact, { rect, fromMs: at, toMs: Math.min(source.durationMs, at + 3000), mode: "block" }],
+    }));
+  };
+
   return (
     <Chrome style={{ position: "fixed", inset: 0, background: "#000" }}>
       <div className="editor">
+        <Rail client={client} current={{ kind: "take", id: take.id }} />
         <header>
-          <a href={props.backHref}>← Library</a>
           <input
             className="title"
             aria-label="Take title"
@@ -151,7 +259,32 @@ function Editor(props: {
               setTake((current) => ({ ...current, title: title || current.title }));
             }}
           />
-          <SaveStatus state={save.state} />
+          <button type="button" onClick={() => void step("undo")} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
+            Undo
+          </button>
+          <button
+            type="button"
+            onClick={() => void step("redo")}
+            disabled={!history.canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            Redo
+          </button>
+          <label className="preview-as">
+            Preview as
+            <select
+              aria-label="Preview as"
+              value={previewRatio ?? ""}
+              onChange={(event) => setPreviewRatio((event.currentTarget.value || undefined) as Ratio | undefined)}
+            >
+              <option value="">Its own frame</option>
+              {RATIOS.map((ratio) => (
+                <option key={ratio} value={ratio}>
+                  {ratio}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" onClick={() => setExporting((value) => !value)} disabled={!renderer}>
             Export
           </button>
@@ -163,7 +296,15 @@ function Editor(props: {
           <ExportPanel clip={{ takeId: take.id }} daemon={props.daemon} before={save.flush} frame={edit.canvas} />
         )}
         <div className="stage">
-          <canvas ref={setCanvas} data-clipmunk-take={take.id} width={edit.canvas.width} height={edit.canvas.height} />
+          <canvas
+            ref={setCanvas}
+            data-clipmunk-take={take.id}
+            className={drawing ? "drawing" : undefined}
+            width={previewTake.edit.canvas.width}
+            height={previewTake.edit.canvas.height}
+            onPointerDown={drawStart}
+            onPointerUp={drawEnd}
+          />
           {failure && (
             <div className="issues" role="alert">
               <strong>This take cannot be previewed.</strong> {failure}
@@ -171,13 +312,46 @@ function Editor(props: {
           )}
           {!renderer && !failure && <p className="note">Loading the recording…</p>}
         </div>
-        <TakeControls
-          take={take}
-          change={change}
-          zooms={segments.length}
-          moments={moments.length}
-          captions={captions}
-        />
+        <aside>
+          {selection?.kind === "zoom" ? (
+            <ZoomInspector
+              take={take}
+              events={events}
+              index={selection.index}
+              change={change}
+              onDone={() => setSelection(undefined)}
+            />
+          ) : selection?.kind === "caption" ? (
+            <CaptionInspector
+              caption={captions.find((caption) => caption.atMs === selection.atMs)}
+              change={change}
+              onDone={() => setSelection(undefined)}
+            />
+          ) : selection?.kind === "redact" ? (
+            <>
+              <RedactionControls
+                edit={edit}
+                change={change}
+                drawing={drawing}
+                onDraw={previewRatio || edit.frame ? undefined : () => setDrawing((value) => !value)}
+              />
+              <button type="button" onClick={() => setSelection(undefined)}>
+                Done
+              </button>
+            </>
+          ) : (
+            <TakeControls
+              take={take}
+              change={change}
+              zooms={segments.length}
+              moments={moments.length}
+              captions={captions}
+              swatches={swatches}
+              drawing={drawing}
+              onDraw={previewRatio || edit.frame ? undefined : () => setDrawing((value) => !value)}
+            />
+          )}
+        </aside>
         <footer>
           <div className="transport">
             <button type="button" onClick={session.toggle} disabled={!renderer}>
@@ -188,23 +362,41 @@ function Editor(props: {
             <span className="hint">Trim</span>
             <button
               type="button"
-              onClick={() => setTrim(timeMap.toTake(clock.get()), edit.trim.endMs)}
+              onClick={() => trimFromButton(timeMap.toTake(clock.get()), edit.trim.endMs)}
               disabled={!renderer}
             >
               Start here
             </button>
             <button
               type="button"
-              onClick={() => setTrim(edit.trim.startMs, timeMap.toTake(clock.get()))}
+              onClick={() => trimFromButton(edit.trim.startMs, timeMap.toTake(clock.get()))}
               disabled={!renderer}
             >
               End here
             </button>
-            <button type="button" onClick={() => setTrim(0, source.durationMs)} disabled={untrimmed}>
+            <button type="button" onClick={() => trimFromButton(0, source.durationMs)} disabled={untrimmed}>
               Reset
             </button>
           </div>
-          <Timeline clock={clock} take={take} timeMap={timeMap} segments={segments} onSeek={session.seek} />
+          <Tracks
+            clock={clock}
+            take={take}
+            events={events}
+            timeMap={timeMap}
+            zooms={zoomSpans}
+            captions={shownCaptions}
+            accents={moments}
+            selection={selection}
+            onSelect={setSelection}
+            onSeek={session.seek}
+            onTrim={setTrim}
+          />
+          <div className="saved-to">
+            <SaveStatus state={save.state} />
+            <span>
+              Changes are saved to <code>.clipmunk/takes/{take.id}/edit.json</code>
+            </span>
+          </div>
         </footer>
         {/* biome-ignore lint/a11y/useMediaCaption: the speaker's own voice, played with the preview; it has no captions */}
         {source.audio && <audio ref={audio} src={file(source.audio.file)} preload="auto" />}
@@ -212,3 +404,6 @@ function Editor(props: {
     </Chrome>
   );
 }
+
+/** Backdrop swatches after the brand's own colour. */
+const DEFAULT_SWATCHES = ["#0b0b0f", "#18181b", "#1e1b4b", "#f4f4f5", "#ffffff"];
