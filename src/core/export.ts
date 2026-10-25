@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LoopbackOriginSchema } from "./project";
 import { ClipIdSchema } from "./recipe";
+import { RATIOS, type Ratio } from "./take";
 
 /** Requests for local rendering. Validated here, executed by the export module. */
 export const EXPORT_FPS = [30, 60, 120] as const;
@@ -71,6 +72,8 @@ export const ExportTakeSchema = z.strictObject({
   height: dimension.optional(),
   /** Include the take's generated music. */
   music: z.boolean().default(true),
+  /** Render reframed to this shape instead of the take's own (core/reframe.ts). */
+  ratio: z.enum(RATIOS).optional(),
 });
 export type ExportTakeResult = {
   output: string;
@@ -99,3 +102,56 @@ export type ExportSequenceResult = {
   audio: boolean;
   elapsedMs: number;
 };
+
+/** One export job with several outputs: every format in every ratio (and, for scenes, every
+ * variant), named `<clip>[.<ratio>][.<variant>].<ext>` in `.clipmunk/exports/`, never
+ * overwriting. The MP4 of each combination is rendered once; GIF and poster are made from it.
+ */
+export const EXPORT_FORMATS = ["mp4", "gif", "poster"] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+export const GIF_MAX_BYTES = 5 * 1024 * 1024;
+export const ExportJobSchema = z.strictObject({
+  clip: z.strictObject({ kind: z.enum(["scene", "take", "sequence"]), id: ClipIdSchema }),
+  url: LoopbackOriginSchema,
+  formats: z.array(z.enum(EXPORT_FORMATS)).min(1).max(3).optional(),
+  ratios: z.array(z.enum(RATIOS)).min(1).max(4).optional(),
+  variants: z.array(z.string().min(1).max(60)).min(1).max(32).optional(),
+  /** "1920x1080"; the shape follows the clip (or the ratio), so only the short side is used then. */
+  size: z
+    .string()
+    .regex(/^\d{2,4}x\d{2,4}$/, "Use a size such as 1920x1080.")
+    .optional(),
+  fps: z.union([z.literal(30), z.literal(60)]).optional(),
+  /** A preset whose export options fill in what this job leaves out. */
+  preset: ClipIdSchema.optional(),
+  /** The poster's time in clip milliseconds; by default the first click or key moment. */
+  posterAtMs: z.number().finite().nonnegative().optional(),
+  /** The GIF size limit; frame rate, then size, step down until it fits. */
+  gifMaxBytes: z
+    .number()
+    .int()
+    .min(10_000)
+    .max(100 * 1024 * 1024)
+    .default(GIF_MAX_BYTES),
+});
+export type ExportJobInput = z.input<typeof ExportJobSchema>;
+export type ExportOutput = {
+  output: string;
+  format: ExportFormat;
+  ratio?: Ratio;
+  variant?: string;
+  width: number;
+  height: number;
+  /** MP4 and GIF. */
+  durationMs?: number;
+  fps?: number;
+  /** Poster. */
+  atMs?: number;
+  bytes: number;
+  /** What a GIF settled on to fit its size limit. */
+  note?: string;
+};
+export type ExportJobResult = { outputs: ExportOutput[]; elapsedMs: number };
+
+/** A ratio as it appears in a file name: 9:16 becomes 9x16. */
+export const ratioToken = (ratio: Ratio) => ratio.replace(":", "x");

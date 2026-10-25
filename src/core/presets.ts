@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EXPORT_FPS } from "./export";
+import { EXPORT_FORMATS, EXPORT_FPS } from "./export";
 import { MusicSchema } from "./music";
 import { fail, ok, type Result, zodIssues } from "./result";
 import {
@@ -20,7 +20,6 @@ import {
  */
 export const PRESET_FIELDS = ["canvas", "zoom", "cursor", "cam", "audio", "music"] as const;
 export type PresetField = (typeof PRESET_FIELDS)[number];
-export const EXPORT_FORMATS = ["mp4", "gif", "poster"] as const;
 
 /** Every field of a section optional, and without its default, so a preset holds only what it sets. */
 function partialOf<Shape extends z.ZodRawShape>(schema: z.ZodObject<Shape>) {

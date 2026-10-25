@@ -1,4 +1,4 @@
-import { exportScene, exportSequence, exportTake, snapshotScene } from "../export";
+import { exportJob, exportScene, exportSequence, exportTake, snapshotScene } from "../export";
 import { readProject } from "../project";
 import { type Command, type Invocation, number, plural } from "./invocation";
 
@@ -41,6 +41,38 @@ export const exportClip: Command = async (invocation) => {
   if (size === null) return usage("--size must look like 1920x1080.");
   const url = await devUrl(invocation);
   if (!url) return usage(NO_URL);
+  // Formats, ratios or a preset make it a job with several outputs.
+  if (values.format || values.ratio || values.preset) {
+    if (values.output) return usage("--output names one file; a job with --format, --ratio or --preset names its own.");
+    const kind = values.sequence ? "sequence" : values.take ? "take" : "scene";
+    const list = (value: string | undefined) =>
+      value
+        ?.split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    const result = await exportJob(
+      {
+        clip: { kind, id: values.sequence ?? values.take ?? values.scene },
+        url,
+        formats: list(values.format),
+        ratios: list(values.ratio),
+        preset: values.preset,
+        size: values.size,
+        fps: number(values.fps),
+        posterAtMs: number(values["poster-at"]),
+      },
+      { ...context, onProgress: progress(invocation, () => "") },
+    );
+    return print(result, (data) =>
+      [
+        `Wrote ${plural(data.outputs.length, "file")} (in ${took(data.elapsedMs)}):`,
+        ...data.outputs.map(
+          (item) =>
+            `  ${item.output}: ${item.width}x${item.height}, ${(item.bytes / 1024 / 1024).toFixed(2)} MB${item.note ? `, ${item.note}` : ""}${item.atMs !== undefined ? `, at ${seconds(item.atMs)} s` : ""}`,
+        ),
+      ].join("\n"),
+    );
+  }
   const shared = { url, output: values.output };
   const sized = {
     ...shared,

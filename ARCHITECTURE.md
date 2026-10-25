@@ -303,7 +303,7 @@ type Preset = {
 - `applyPreset(edit, preset)` is a pure merge: each section merges field by field, `zoom` and `music` are replaced whole, `music: null` removes music, and the trim is never touched because it belongs to one recording. Sections hold only what they set: their defaults are stripped from the schema, so a preset never carries a whole section by accident. A preset's zoom must be `auto` or `off`, because manual keyframes are positions in one recording.
 - `presetFromEdit(edit, fields)` copies the chosen sections of an edit into a preset ("save current as preset"). It leaves out the music seed, so each clip that uses the preset keeps its own tune, and refuses manual zooms.
 - `project/presets.ts` lists, applies and saves. Applying to a take reads the preset from the config and saves through the usual revision check. A scene carries no take edit, so a preset gives a scene only its music (`applyPresetToScene` in `daemon/audio.ts`). Saving rewrites `clipmunk.config.json` with every other key in its place and the file's own indentation (a tab or a number of spaces), so the diff is the preset alone; a preset of the same name is replaced only when asked, and keeps its place. A config that does not validate is never written.
-- `export` options are validated and stored; exports use them from section 19's PR 9 on.
+- `export` options fill in what an export job (12.4a) leaves out.
 
 ### 5.6 Results and errors
 
@@ -593,7 +593,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `GET /v1/audio/:file` | Serve a sound from `.clipmunk/audio`, for the preview |
 | `GET /v1/sequences`, `GET /v1/sequences/:id` | List and read sequences |
 | `PUT /v1/sequences/:id`, `DELETE /v1/sequences/:id` | Save (only when every clip exists) or delete a sequence |
-| `POST /v1/exports` | Start an export job for `{ sceneId }`, `{ takeId }` or `{ sequenceId }` |
+| `POST /v1/exports` | Start an export job: `{ clip, formats?, ratios?, size?, fps?, preset?, posterAtMs? }` for several outputs (12.4a), or the single-file `{ sceneId }`, `{ takeId }` or `{ sequenceId }` |
 | `GET /v1/jobs/:id/events` | Server-sent progress events |
 | `DELETE /v1/jobs/:id` | Cancel a job |
 
@@ -657,7 +657,19 @@ Background music is synthesized by `renderMusic` in `core/music.ts`: a pure Type
 
 These rules live in one place, `export/output.ts`, and the scene, take and sequence exporters all use it: `claimOutput` picks a path that overwrites nothing, `workDirectory` makes the scratch folder beside it, `publish` links the result into place, and `cancellation` turns an abort signal into a `check()` and a list of things to stop.
 
-Outputs are project-relative `.mp4` paths. Existing files are never overwritten. Work happens in a temporary directory next to the target and the result is linked into place only on success. Cancellation (signal or job delete) kills the encoder and the browser and publishes nothing.
+Outputs are project-relative paths (`.mp4`, and `.gif` and `.png` from jobs). Existing files are never overwritten. Work happens in a temporary directory next to the target and the result is linked into place only on success. Cancellation (signal or job delete) kills the encoder and the browser and publishes nothing.
+
+### 12.4a Jobs with several outputs
+
+`exportJob` in `export/job.ts` takes `{ clip: { kind, id }, formats, ratios?, size?, fps?, preset?, posterAtMs?, gifMaxBytes? }` and makes one file per format in each ratio, named `<clip>[.<ratio>].<ext>` in `.clipmunk/exports/` (`9:16` is written `9x16`), with `-2`, `-3` added rather than overwriting.
+
+- **One render per ratio.** The MP4 of each ratio is rendered by the ordinary exporter; a ratio reframes a take (9.9) through the page bridge, which renders a reframed copy and puts the take back. Ratios are for takes; scenes get theirs as variants.
+- **GIF.** FFmpeg `palettegen` and `paletteuse` from the MP4, 15 fps with 720 pixels on the short side. Over the limit (5 MB by default), the frame rate steps down to 12, 10 and 8, then the size to 540, 480, 360, 270 and 180, and the result says what was chosen.
+- **Poster.** A PNG of the MP4 at `posterAtMs`, or by default at a take's first click (after pacing), a scene's first key moment, or a sequence's start.
+- **Presets.** `preset` names one in the config whose `export` options (`size`, `fps`, `formats`, `ratios`) fill in what the job leaves out.
+- **All or nothing.** Everything is made in one work directory and published only when every output is ready, so a failed or cancelled job publishes nothing. Progress counts every step of every output; cancelling stops the browser and any running FFmpeg.
+
+The CLI runs a job when `--format`, `--ratio` or `--preset` is given; `POST /v1/exports` runs one when the body names a `clip`, and the single-file shapes still work.
 
 ### 12.5 Snapshots
 

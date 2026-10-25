@@ -1,5 +1,5 @@
 import { interpolate, type Keyframe } from "./motion";
-import type { Ratio, TakeEvent } from "./take";
+import { RATIOS, type Ratio, type TakeEdit, type TakeEvent } from "./take";
 
 /** Reframing a take to a shape narrower than its recording: a crop window, as tall as the
  * recording, that follows the elements the user clicks. It moves with the same easing and lead
@@ -22,6 +22,12 @@ export function ratioCanvas(ratio: Ratio): Size {
   const even = (value: number) => Math.round(value / 2) * 2;
   return { width: even(w * scale), height: even(h * scale) };
 }
+
+/** An edit reframed to `ratio`: its frame and its canvas take the shape. */
+export function withRatio(edit: TakeEdit, ratio: Ratio): TakeEdit {
+  return { ...edit, frame: { ratio }, canvas: { ...edit.canvas, ...ratioCanvas(ratio) } };
+}
+export const isRatio = (value: unknown): value is Ratio => (RATIOS as readonly unknown[]).includes(value);
 
 const LEAD_MS = 300,
   EASE_MS = 700,

@@ -19,7 +19,7 @@ export interface ClipmunkBridge {
   /** Canvas clips only: render and encode every frame in the page. File bytes go to the
    * `__CLIPMUNK_WRITE__(base64, position)` binding and progress to `__CLIPMUNK_PROGRESS__(done, total)`.
    */
-  encode?(job: { fps: number; width?: number; height?: number }): Promise<EncodedClip>;
+  encode?(job: { fps: number; width?: number; height?: number; ratio?: string }): Promise<EncodedClip>;
 }
 export type EncodedClip = { codec: string; frames: number; width: number; height: number; durationMs: number };
 export const WRITE_BINDING = "__CLIPMUNK_WRITE__";

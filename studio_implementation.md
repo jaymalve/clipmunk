@@ -27,7 +27,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 6 | Captions and the keystroke overlay | Engine | 🔵 [#23](https://github.com/jaymalve/clipmunk/pull/23) |
 | 7 | Dead air and steady typing | Engine | 🔵 [#24](https://github.com/jaymalve/clipmunk/pull/24) |
 | 8 | Reframing takes to other aspect ratios | Engine | 🔵 [#25](https://github.com/jaymalve/clipmunk/pull/25) |
-| 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | ⬜ |
+| 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | 🔵 [#26](https://github.com/jaymalve/clipmunk/pull/26) |
 | 10 | Scene variants: theme, locale, ratio | Engine | ⬜ |
 | 11 | The frame page in the host | Studio | ⬜ |
 | 12 | The daemon serves the Studio (parity) | Studio | ⬜ |
@@ -192,16 +192,19 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** the window follows clicked elements rather than the zoom's own target, because the zoom's follow logic can keep a click inside a view wider than a narrow crop and still crop it out; the zoom then magnifies inside the window. `RATIOS` moved from `core/presets.ts` to `core/take.ts`.
 
 ### PR 9 · Export jobs with several outputs: GIF, poster, ratios
-**Status:** ⬜ · **Branch:** `studio/09-outputs` · **Base:** `studio/08-reframe`
+**Status:** 🔵 [#26](https://github.com/jaymalve/clipmunk/pull/26) · **Branch:** `studio/09-outputs` · **Base:** `studio/08-reframe`
 
-- An export job takes `{ clip, ratios?, variants?, formats: ("mp4" | "gif" | "poster")[], size?, fps? }` and produces one file per combination. The names are `<clip>.<ratio>[.<variant>].<ext>` in `.clipmunk/exports/`, with no overwriting (section 12.4).
-- GIF: FFmpeg palettegen and paletteuse, 720p, 15 fps by default. When a GIF would exceed 5 MB, step down the frame rate and then the width until it fits, and report what was chosen.
-- Poster: a PNG at the first click (takes), the first key moment (scenes), or a chosen time.
-- Job progress reports per output; cancelling stops all outputs. `POST /v1/exports` accepts the new shape, and the old shape still works. CLI: `--format mp4,gif,poster --ratio 16:9,9:16`.
-- Presets' `export` options (PR 3) now apply.
+- An export job takes `{ clip, ratios?, variants?, formats: ("mp4" | "gif" | "poster")[], size?, fps?, preset?, posterAtMs? }` and produces one file per combination (`export/job.ts`). The names are `<clip>[.<ratio>][.<variant>].<ext>` in `.clipmunk/exports/` (ratios written `9x16`), with no overwriting (section 12.4). The MP4 of each ratio is rendered once; GIF and poster come from it. Everything is published at the end, so a failed or cancelled job writes nothing.
+- GIF: FFmpeg palettegen and paletteuse, 720p, 15 fps by default. When a GIF would exceed 5 MB (`gifMaxBytes`), step down the frame rate and then the size until it fits, and report what was chosen.
+- Poster: a PNG at the first click (takes, after pacing), the first key moment (scenes), the start (sequences), or a chosen time.
+- Ratios reframe takes through the page bridge (`encode({ ratio })` renders a reframed copy). Scenes and sequences refuse ratios until variants (PR 10); `variants` is accepted by the schema and refused for now.
+- Job progress counts every step of every output; cancelling stops the browser and FFmpeg. `POST /v1/exports` accepts the new shape (a body with `clip`), and the old shape still works. CLI: `--format mp4,gif,poster --ratio 16:9,9:16 --preset name --poster-at ms`.
+- Presets' `export` options (PR 3) now apply, through `preset`.
 
-**Tests:** `test:export` (GIF size cap, poster frame, file names, cancellation of a multi-output job); a take in two ratios with matching timing.
+**Tests:** `test:export` (names and no overwriting, GIF header and size cap with what it chose, poster PNG size and time, cancellation of a multi-output job publishing nothing, refused ratios and presets); in `test:take` a take in two ratios with matching frame counts, and a 10 s take as MP4, GIF and poster in one job through the daemon.
 **Done when:** a 10 s take exports as MP4, a GIF under 5 MB and a poster in one job.
+
+**Notes:** `EXPORT_FORMATS` moved from `core/presets.ts` to `core/export.ts`. The studio's export panel still makes one MP4; choosing formats there belongs to the Studio PRs.
 
 ### PR 10 · Scene variants: theme, locale, ratio
 **Status:** ⬜ · **Branch:** `studio/10-scene-variants` · **Base:** `studio/09-outputs`
@@ -398,6 +401,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 6 opened as #23, stacked on #22: captions and key pills. For PR 7: captions and pills are on the take clock (`atMs`), so cutting dead air must shift or drop them through the same time map as the picture; `resolveCaptions` and `keyPills` are the places to apply it.
 - 2026-10-25 · PR 7 opened as #24, stacked on #23: pacing and the time map. For PR 8: reframing crops follow the action on take time; build the crop path from the log and look it up at `timeMap.toTake(clipMs)` like every other overlay. For PR 9: GIF and poster frame times are clip times; use the renderer's `timeMap`, never `trim.startMs + t`.
 - 2026-10-25 · PR 8 opened as #25, stacked on #24: reframing. For PR 9: rendering a take "in a ratio" means setting `edit.frame.ratio` (and the canvas from `ratioCanvas`) on a copy of the take for that output; the renderer does the rest.
+- 2026-10-25 · PR 9 opened as #26, stacked on #25: export jobs. For PR 10: `exportJob` refuses `variants` and refuses `ratios` for scenes (`variants-unsupported`, `ratios-unsupported` in `export/job.ts`); lift both there, add the variant to the stem (`<clip>.<ratio>.<variant>`), and pass it to the scene exporter.
 
 ## Environment notes for whoever picks this up
 
