@@ -68,7 +68,9 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   const token = randomBytes(24).toString("base64url");
   const tokenBytes = Buffer.from(token);
   const events = createEvents();
-  const jobs = createJobs((job, event) => events.emit({ type: "job", job: job.id, kind: job.kind, event }));
+  const jobs = createJobs((job, event) =>
+    events.emit({ ...job.meta, type: "job", job: job.id, kind: job.kind, event }),
+  );
   const studioDir = options.studioDir ?? process.env.CLIPMUNK_STUDIO_DIR ?? packagedStudio();
   let port = 0;
 

@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { type CatalogScene, type Issue, SCENE_PARAM, SEQUENCE_PARAM, TAKE_PARAM } from "../core";
 import { Chrome } from "../studio/Chrome";
 import { type DaemonConnection, useDaemon } from "../studio/daemon";
-import { Library } from "../studio/Library";
 import { studioHref } from "../studio/links";
 import { SequenceEditor } from "../studio/SequenceEditor";
 import { TakeEditor } from "../studio/TakeEditor";
+import { onStudioEvent } from "./events";
 import { FramedScene } from "./FramedScene";
+import { ClipLibrary } from "./Library";
 
 /** The standalone Studio, served by the daemon. It needs nothing from the host app except for
  * scene previews, which it shows in an iframe of the host's frame page. Takes, sequences and
@@ -36,7 +37,7 @@ export function StudioApp() {
     return <SequenceEditor id={sequenceId} daemon={daemon} scenes={scenes.scenes} backHref={studioHref()} />;
   const selected = sceneId ? scenes.scenes.find((scene) => scene.id === sceneId) : undefined;
   if (selected) return <FramedScene key={selected.id} scene={selected} daemon={daemon} />;
-  return <Library catalog={scenes} missing={sceneId} daemon={daemon} />;
+  return <ClipLibrary daemon={daemon} scenes={scenes.scenes} sceneIssues={scenes.issues} />;
 }
 
 /** Scene recipes as the daemon reads them from disk, refreshed when one changes. */
@@ -51,14 +52,12 @@ function useScenes(daemon: DaemonConnection | undefined) {
         if (current) setCatalog(result.ok ? result.data : { scenes: [], issues: result.issues });
       });
     load();
-    const events = new EventSource(client.url("/v1/events"));
-    events.onmessage = (message) => {
-      const event = JSON.parse(message.data as string) as { type: string; kind?: string };
+    const stop = onStudioEvent(client, (event) => {
       if (event.type === "edit" && event.kind === "scene") load();
-    };
+    });
     return () => {
       current = false;
-      events.close();
+      stop();
     };
   }, [client]);
   return catalog;

@@ -5,6 +5,7 @@ export {
   ffmpegVersion,
   type MediaInfo,
   MISSING_FFMPEG,
+  posterFrame,
   probeMedia,
   probeVideo,
   remux,

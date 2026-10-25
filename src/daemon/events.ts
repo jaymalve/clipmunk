@@ -8,7 +8,7 @@ export type StudioEvent =
   | { type: "take"; id: string }
   | { type: "edit"; kind: "take" | "scene" | "sequence"; id: string }
   | { type: "config" }
-  | { type: "job"; job: string; kind: string; event: JobEvent };
+  | { type: "job"; job: string; kind: string; event: JobEvent; [key: string]: unknown };
 
 export function createEvents() {
   const listeners = new Set<(event: StudioEvent) => void>();

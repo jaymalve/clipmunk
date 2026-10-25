@@ -28,7 +28,7 @@ import {
   takeId,
   zodIssues,
 } from "../core";
-import { extractAudio, probeMedia, remux } from "../export";
+import { extractAudio, posterFrame, probeMedia, remux } from "../export";
 import {
   exists,
   Fault,
@@ -311,6 +311,35 @@ export async function takeFile(id: string, name: string, context: Context): Prom
   )
     throw new Fault("unknown-file", `Take "${id}" has no file named "${name}".`);
   return absolute;
+}
+
+/** A still of the take for the Studio's library: the screen at its first click, or at a second in.
+ * Made once and kept as `poster.png` beside the take, a cache that stays out of git.
+ */
+export async function takePoster(id: string, context: Context): Promise<string> {
+  const loaded = await loadTake(context.root, id);
+  if (!loaded.ok) throw new Fault(loaded.issues[0]!.code, loaded.issues[0]!.message);
+  const { take } = loaded.data;
+  const poster = await resolveInside(context.root, `${dirOf(id)}/poster.png`);
+  if (
+    await stat(poster).then(
+      () => true,
+      () => false,
+    )
+  )
+    return poster;
+  const events = parseEvents(
+    (await readText(context.root, `${dirOf(id)}/${take.source.events.file}`)) ?? "",
+    TakeEventSchema,
+  );
+  const click = events.find((event) => event.k === "down" && event.t >= take.edit.trim.startMs);
+  const atMs = Math.max(
+    0,
+    (click?.t ?? Math.min(take.edit.trim.startMs + 1000, take.source.durationMs / 2)) - take.source.screen.offsetMs,
+  );
+  const screen = await resolveInside(context.root, `${dirOf(id)}/${take.source.screen.file}`);
+  await posterFrame(screen, poster, atMs, { cwd: context.root });
+  return poster;
 }
 
 export async function ensureTakesDir(context: Context): Promise<void> {

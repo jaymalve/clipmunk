@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { type Browser, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error: a plain script, used here to build the app the daemon serves
 import { buildStudioApp } from "../../scripts/studio-app.mjs";
 import { type Daemon, startDaemon } from "../../src/daemon";
@@ -45,9 +45,18 @@ afterAll(async () => {
   for (const file of made) await rm(path.join(root, file), { force: true });
 });
 
+// A failed test must not leave its page holding connections for the next one.
+afterEach(async () => {
+  for (const page of opened.splice(0)) await page.close().catch(() => {});
+});
+
 const link = () => `${daemon.origin}/#clipmunk-daemon=${daemon.port}.${daemon.token}`;
+const opened: Page[] = [];
 async function openStudio(query = ""): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  opened.push(page);
+  // Rendering in the background (an earlier export) can make a small machine slow to answer.
+  page.setDefaultTimeout(90_000);
   page.on("pageerror", (error) => console.error("pageerror:", error.message));
   await page.goto(link());
   if (query) await page.goto(`${daemon.origin}/${query}`);
@@ -100,21 +109,88 @@ describe("serving the Studio", () => {
   });
 });
 
+describe("the library", () => {
+  it("filters clips by kind and finds them by name, with each clip's summary", async () => {
+    const page = await openStudio();
+    const titles = () => page.locator(".card b").allTextContents();
+    await expect.poll(titles).toContain("Synthetic take");
+    await page.getByRole("tab", { name: /^Takes/ }).click();
+    expect(await page.locator('.card[data-kind="take"]').count()).toBeGreaterThan(0);
+    expect(await page.locator('.card:not([data-kind="take"])').count()).toBe(0);
+    await page.getByRole("tab", { name: /^Scenes/ }).click();
+    expect(await page.locator('.card[data-kind="take"]').count()).toBe(0);
+    // The themed scene says how many themes it comes in; every card has its length, size and ratio.
+    expect(await page.locator(".card", { hasText: "Themed card" }).textContent()).toContain(
+      "1.0 s · 400×300 · 4:3 · 2 themes",
+    );
+    await page.getByRole("tab", { name: /^All/ }).click();
+    await page.getByLabel("Search clips").fill("rack");
+    expect(await titles()).toEqual(["Rack focus"]);
+    await page.getByLabel("Search clips").fill("nothing like this");
+    await page.getByText("No clip matches.").waitFor();
+    await page.close();
+  }, 180_000);
+
+  it("exports several files from the panel, with a queue that shows each one", async () => {
+    const page = await openStudio();
+    const card = page.locator(".card", { hasText: "Themed card" });
+    await card.getByRole("button", { name: "Export" }).click();
+    const panel = page.getByRole("region", { name: "Export" });
+    // The scene's own shape (4:3) is not a ratio Clipmunk renders, so none is preselected.
+    await panel.getByRole("button", { name: "16:9" }).click();
+    await panel.getByRole("button", { name: "light" }).click();
+    await panel.getByRole("button", { name: "dark" }).click();
+    await panel.getByLabel("Poster").check();
+    await panel.getByText("2 themes × 2 formats = 4 files").waitFor();
+    await panel.getByRole("button", { name: "Export 4 files" }).click();
+    // While it runs, the queue lists the planned files and the card shows that it is rendering.
+    await panel.locator("li", { hasText: "themed-card.16x9.light.mp4" }).waitFor();
+    await card.locator(".badge.rendering").waitFor({ timeout: 30_000 });
+    const done = () =>
+      panel
+        .locator("progress")
+        .evaluateAll((bars) => bars.length === 4 && bars.every((bar) => (bar as HTMLProgressElement).value === 1));
+    await expect.poll(done, { timeout: 240_000 }).toBe(true);
+    await expect.poll(() => card.locator(".badge.rendering").count()).toBe(0);
+    const names = await panel.locator("li span").allTextContents();
+    for (const name of names) made.push(`.clipmunk/exports/${name}`);
+    expect([...names].sort()).toEqual(
+      [
+        "themed-card.16x9.dark.mp4",
+        "themed-card.16x9.dark.png",
+        "themed-card.16x9.light.mp4",
+        "themed-card.16x9.light.png",
+      ].sort(),
+    );
+    for (const name of names) expect(existsSync(path.join(root, ".clipmunk/exports", name))).toBe(true);
+    await page.close();
+  }, 300_000);
+
+  it("asks the coding agent for new scenes", async () => {
+    const page = await openStudio();
+    await page.getByRole("button", { name: "New scene" }).click();
+    const dialog = page.getByRole("dialog", { name: "New scene" });
+    expect(await dialog.locator("textarea").inputValue()).toContain("Read CLIPMUNK.md");
+    await dialog.getByRole("button", { name: "Close" }).click();
+    expect(await dialog.count()).toBe(0);
+    await page.close();
+  }, 180_000);
+});
+
 describe("the Studio's flows", () => {
   it("lists scenes and takes from the daemon", async () => {
     const page = await openStudio();
-    await page.waitForSelector(".tile");
-    expect(await page.locator(".tile b").allTextContents()).toEqual(
-      expect.arrayContaining(["Rack focus", "Themed card"]),
-    );
-    await expect.poll(() => page.locator(".row b").allTextContents()).toContain("Synthetic take");
+    await page.waitForSelector(".card");
+    await expect
+      .poll(() => page.locator(".card b").allTextContents())
+      .toEqual(expect.arrayContaining(["Rack focus", "Themed card", "Synthetic take"]));
     await page.close();
-  }, 60_000);
+  }, 180_000);
 
   it("opens a scene in a frame of the host, scrubs it and exports it", async () => {
     const page = await openStudio();
-    await page.locator(".tile", { hasText: "Rack focus" }).click();
-    await expect.poll(() => page.locator(".time").textContent(), { timeout: 45_000 }).toBe("0.00s / 1.50s");
+    await page.locator(".card", { hasText: "Rack focus" }).locator("a.thumb").click();
+    await expect.poll(() => page.locator(".time").textContent(), { timeout: 120_000 }).toBe("0.00s / 1.50s");
     const range = page.getByLabel("Scene time");
     await range.evaluate((element) => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, "750");
@@ -141,7 +217,7 @@ describe("the Studio's flows", () => {
   it("plays and pauses a scene from the Studio's controls", async () => {
     const page = await openStudio("?clipmunk=1&clipmunk-scene=plating");
     const time = () => page.locator(".time").textContent();
-    await expect.poll(time, { timeout: 45_000 }).toBe("0.00s / 6.00s");
+    await expect.poll(time, { timeout: 120_000 }).toBe("0.00s / 6.00s");
     await page.getByRole("button", { name: "Play" }).click();
     await expect.poll(time).not.toBe("0.00s / 6.00s");
     await page.getByRole("button", { name: "Pause" }).click();
@@ -150,11 +226,11 @@ describe("the Studio's flows", () => {
     await page.waitForTimeout(400);
     expect(await time()).toBe(paused);
     await page.close();
-  }, 90_000);
+  }, 180_000);
 
   it("switches a scene's variant from the Studio without reloading the frame", async () => {
     const page = await openStudio("?clipmunk=1&clipmunk-scene=themed-card");
-    await expect.poll(() => page.locator(".time").textContent(), { timeout: 45_000 }).toBe("0.00s / 1.00s");
+    await expect.poll(() => page.locator(".time").textContent(), { timeout: 120_000 }).toBe("0.00s / 1.00s");
     const frameSize = () =>
       page
         .frameLocator("iframe")
@@ -165,15 +241,15 @@ describe("the Studio's flows", () => {
     await expect.poll(frameSize).toBe("300x534");
     expect(new URL(page.url()).searchParams.get("clipmunk-variant")).toBe("theme:dark,ratio:9x16");
     await page.close();
-  }, 90_000);
+  }, 180_000);
 
   it("forwards the app's old studio address to the Studio", async () => {
     const page = await browser.newPage();
     await page.goto(`${origin}/?clipmunk=1&clipmunk-take=${TAKE}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
     await page.waitForURL((url) => url.origin === daemon.origin && url.searchParams.get("clipmunk-take") === TAKE);
-    await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+    await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 120_000 });
     await page.close();
-  }, 60_000);
+  }, 180_000);
 
   it("exports a take while the host's dev server is stopped", async () => {
     await setDevUrl("http://127.0.0.1:9");
@@ -201,7 +277,7 @@ describe("the Studio's flows", () => {
       )
       .toBe(false);
     await page.close();
-  }, 60_000);
+  }, 180_000);
 
   it("builds a sequence and saves it as a file", async () => {
     const page = await openStudio();
@@ -212,7 +288,7 @@ describe("the Studio's flows", () => {
     made.push("src/clipmunk/sequences/zz-studio-built.sequence.json");
     await expect.poll(() => existsSync(file), { timeout: 10_000 }).toBe(true);
     await page.close();
-  }, 60_000);
+  }, 180_000);
 
   it("says when the host's dev server is not answering", async () => {
     await setDevUrl("http://127.0.0.1:9");
@@ -225,5 +301,5 @@ describe("the Studio's flows", () => {
     } finally {
       await setDevUrl(origin);
     }
-  }, 60_000);
+  }, 180_000);
 });

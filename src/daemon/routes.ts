@@ -27,6 +27,7 @@ import {
   listTakes,
   readTakeForEditor,
   takeFile,
+  takePoster,
   updateTakeEdit,
 } from "./takes";
 
@@ -156,6 +157,8 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
     const result = await applyPresetToTake(context.root, id, String(body.name ?? ""));
     return handled(reply(response, announce(events, result, { type: "edit", kind: "take", id })));
   }
+  if (action === "poster" && method === "GET")
+    return handled(await serveFile(request, response, await takePoster(id, context)));
   if (action === "files" && name && method === "GET") {
     return handled(await serveFile(request, response, await takeFile(id, name, context)));
   }
@@ -175,7 +178,16 @@ const exports: Handler = async ({ request, response, url, method, id, origin, co
   // A job with several outputs names its clip; the older single-file shape names the clip by kind.
   const work =
     "clip" in body ? exportJob : "sequenceId" in body ? exportSequence : "takeId" in body ? exportTake : exportScene;
-  const job = jobs.start<unknown>("export", (signal, onProgress) =>
+  // Which clip the job is for, so the Studio can badge it while it renders.
+  const clip =
+    "clip" in body
+      ? (body.clip as { kind: string; id: string })
+      : "sequenceId" in body
+        ? { kind: "sequence", id: String(body.sequenceId) }
+        : "takeId" in body
+          ? { kind: "take", id: String(body.takeId) }
+          : { kind: "scene", id: String(body.sceneId) };
+  const job = jobs.start<unknown>("export", { clip }, (signal, onProgress) =>
     work({ ...body, url: target }, { root: context.root, signal, onProgress }),
   );
   log(`export job ${job} started`);

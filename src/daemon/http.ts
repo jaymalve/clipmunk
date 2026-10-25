@@ -32,6 +32,7 @@ const TYPES: Record<string, string> = {
   ".webm": "video/webm",
   ".mp4": "video/mp4",
   ".wav": "audio/wav",
+  ".png": "image/png",
   ".json": "application/json",
   ".jsonl": "application/x-ndjson",
 };

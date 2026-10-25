@@ -84,7 +84,7 @@ function SequenceList({ sequences }: { sequences: Sequence[] }) {
 }
 
 /** Name a sequence and create it with one clip in it; the builder opens next. */
-function NewSequence(props: {
+export function NewSequence(props: {
   client: DaemonClient;
   /** The clip a new sequence starts with, if the project has any. */
   first: Sequence["items"][number]["clip"] | undefined;
