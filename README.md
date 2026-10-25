@@ -1,113 +1,58 @@
-# Clipmunk
+<div align="center">
+  <img src=".github/assets/logo.svg" alt="Clipmunk" width="88" />
+  <h1>Clipmunk</h1>
+  <p><strong>Ship the feature. Clipmunk cuts the clip.</strong></p>
+  <p>A TypeScript SDK for product videos, made from your real UI.<br />Runs inside your React or Next.js app and exports an MP4 on your machine.</p>
+  <br />
+  <img src=".github/assets/demo.gif" alt="A Clipmunk launch video: an agent sets up Clipmunk, directs a 3D shot of a real dashboard, records a take, scores it and exports an MP4" width="800" />
+  <p><sub>This video was made with Clipmunk.</sub></p>
+</div>
 
-A TypeScript SDK for product videos. Clipmunk lives inside your React or Next.js app and films its real UI, then exports an MP4 on your own machine. There is no account, no hosted service and nothing to upload.
+## Why Clipmunk
 
-The fastest start is a launch video of your own product: paste the agent prompt from [clipmunk.dev](https://clipmunk.dev) into Claude Code, Cursor or Codex. Your agent installs Clipmunk, plans a 20 to 30 second video from your real pages (a title, three or four features, an end card), writes the scenes, and exports it with generated music. The demo video on the site was made with Clipmunk too.
+- **Your real UI, not a mockup.** Clipmunk films your actual components and pages, so the video matches what you ship.
+- **Your agent directs.** Claude Code, Cursor or Codex writes the scenes as source files: camera, lens, depth of field and motion.
+- **Or record it yourself.** Capture a take in your browser tab and get a smoothed cursor, automatic zooms and music.
+- **Scored in code.** Music and sound effects are generated on your machine, timed to your cuts, and yours to use.
+- **Local and private.** No account, no hosted service, nothing to upload. A production build contains no Clipmunk code.
 
-Clipmunk films your app two ways:
+## Quick start
 
-- **Scenes.** Your real components placed in 3D, with a camera, a lens and depth of field, written as source files. A coding agent can write them for you. Join several into a **sequence** to make one video.
-- **Takes.** A recording of you using your app in a browser tab, finished with a smoothed cursor, automatic zooms, an optional camera bubble and generated music.
+The fastest start is to paste the agent prompt from [clipmunk.dev](https://clipmunk.dev) into your coding agent. It installs Clipmunk, plans a 20 to 30 second launch video from your real pages, and exports it with music.
 
-Site: [clipmunk.dev](https://clipmunk.dev)
-
-## Requirements
-
-- Node 22.12 or newer
-- React DOM 18.2 or 19, with Vite or Next.js
-- Chromium, for recording and export (the `playwright` package provides one for export)
-- FFmpeg, on your `PATH` or from the `ffmpeg-static` package
-
-`npx clipmunk doctor` checks all of these and names the fix for anything missing.
-
-## Start
+Or set it up by hand:
 
 ```sh
 npm install clipmunk
-npx clipmunk init
-npx clipmunk doctor
+npx clipmunk init     # connects your Vite or Next.js app
+npx clipmunk doctor   # checks Node, FFmpeg and Chromium, and names any fix
 ```
 
-`init` detects Vite or Next.js and connects the app. If it cannot edit your entry file safely, it prints the one line to add by hand. It also writes `CLIPMUNK.md`, a short pointer for coding agents.
+Requires Node 22.12+, React DOM 18.2 or 19 with Vite or Next.js, Chromium and FFmpeg. `doctor` checks all of them.
 
-## Make a scene
+## Two ways to film
 
-A scene is two files in `src/clipmunk/scenes/`: `<id>.scene.json` (camera, focus, motion) and `<id>.tsx` (your components wrapped in `Surface`).
+**Scenes** are your real components placed in 3D, written as two files in `src/clipmunk/scenes/`. Join several into a **sequence** to make one video.
 
 ```sh
-npx clipmunk guide                 # the authoring reference; give this to your agent
-npx clipmunk scenes                # validate what was written
-npx clipmunk export --scene <id>   # render an MP4
+npx clipmunk guide                        # the authoring reference; give it to your agent
+npx clipmunk export --scene <id>          # render one scene
+npx clipmunk export --sequence launch     # render a full video
 ```
 
-To look at a scene before exporting, open your running dev server with `?clipmunk=1`.
-
-## Make a launch video
-
-A sequence joins scenes (and takes) into one video. It is a JSON file in `src/clipmunk/sequences/`:
-
-```json
-{
-  "version": 1,
-  "id": "launch",
-  "title": "Launch video",
-  "width": 1920,
-  "height": 1080,
-  "fps": 60,
-  "items": [
-    { "clip": { "kind": "scene", "id": "title" } },
-    { "clip": { "kind": "scene", "id": "dashboard" }, "transition": { "kind": "cut" } },
-    { "clip": { "kind": "scene", "id": "end-card" }, "transition": { "kind": "cut" } }
-  ],
-  "music": { "style": "launch" }
-}
-```
+**Takes** are recordings of you using your app.
 
 ```sh
-npx clipmunk sequences                 # validate it
-npx clipmunk export --sequence launch  # render the MP4
+npx clipmunk dev                          # then press Alt+Shift+R in your app to start and stop
+npx clipmunk export --take <id>
 ```
 
-The music is generated in code, timed to the cuts. Styles: `launch` (half-time drums and rolling hi-hats that drop on an early moment and land the ending on the beat), `upbeat` and `lofi`. A scene that types text can add key clicks in its recipe: `"sounds": [{ "kind": "typing", "atMs": 400, "chars": 52, "perSecond": 46, "enter": true }]`.
+Run `npx clipmunk --help` for every command. Each one accepts `--json`.
 
-## Record a take
+## Learn more
 
-```sh
-npx clipmunk dev
-```
-
-Open the link it prints once, then press `Alt+Shift+R` on any page of your running app. Press it again to stop. Takes are saved in `.clipmunk/takes/`.
-
-```sh
-npx clipmunk takes                 # list recordings
-npx clipmunk export --take <id>    # render an MP4
-```
-
-## Commands
-
-| Command | What it does |
-|---|---|
-| `init` | Connect this app to Clipmunk |
-| `doctor` | Check Node, FFmpeg, Chromium and the project |
-| `guide` | Print the scene authoring guide |
-| `scenes`, `takes`, `sequences` | List what exists, with validation issues |
-| `dev` | Start the local daemon for recording and studio exports |
-| `open` | Open the studio in your browser |
-| `snapshot --scene <id>` | Save a thumbnail into the scene's recipe |
-| `zoom <take>` | Show a take's automatic zooms, or store them for hand editing |
-| `music <launch\|upbeat\|lofi>` | Write a sample of the generated music |
-| `export` | Render a scene, a take or a sequence to MP4 |
-
-Every command accepts `--json`.
-
-## Good to know
-
-- Clipmunk is a development tool. A production build renders your app unchanged and contains no Clipmunk code.
-- Recording covers your app's own tab, in Chromium. It does not capture the desktop.
-- Depth of field is a Gaussian approximation in the DOM, not ray-traced bokeh.
-- The music and sound effects are generated in code on your machine, so they are yours to use.
-
-`ARCHITECTURE.md`, shipped in the package, is the full design.
+- `npx clipmunk guide` covers scenes, sequences, transitions, music and sound.
+- `ARCHITECTURE.md`, shipped in the package, has the full design.
 
 ## Licence
 
