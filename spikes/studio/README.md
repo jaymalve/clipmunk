@@ -46,3 +46,17 @@ The heavy-scene timings are not meaningful here (software rendering at ~1.7 s/fr
 Open on the Mac: depth-scene scrub overhead, and whether a second live iframe starves. (An earlier run
 stacked two 980 px frames with the second partly off screen and got 0.5 + 0 fps; the `pair` check now keeps
 both fully on screen.)
+
+## Results on the Mac (Apple M5, 120 Hz, DPR 2, headed Playwright Chromium), 2026-10-25
+
+page-survey (1400x980, depth blur):
+
+| Check | In-app | Standalone (iframe) |
+|---|---|---|
+| Scrub, mean / p50 / p95 per seek | 10.1 / 8.3 / 9.3 ms | 8.2 / 8.3 / 9.6 ms |
+| Fast drag, 60 seeks at 4 ms | | final frame 11.1 ms after release, 59 dropped |
+| Playback fps | 120.5 | 120.3 |
+| Two iframes side by side, 700x490 | 120.5 (one page) | one: 120; two: 120.3 + 120.3 |
+
+Verdict: no measurable cost and no starvation. Every number sits at the display's 120 Hz cap,
+so the frame work is under 8.3 ms either way; how two frames share a saturated GPU was not reached.
