@@ -260,6 +260,8 @@ export function getGuide() {
       "clipmunk takes": "List recorded takes.",
       "clipmunk stale [--base <git ref>]":
         "List exported clips whose source files changed since their export (or since the ref), with the files. Re-export stale scenes; record stale takes again.",
+      "clipmunk ci export --base <ref> [--url <origin>] | ci comment":
+        "In CI (the jaymalve/clipmunk GitHub Action runs these): export the clips a pull request made stale again, then print the pull request comment.",
       "clipmunk preset list | apply <name> --take <id> | --scene <id> | save <name> --take <id> --fields <parts>":
         "List, apply or save the presets in clipmunk.config.json.",
       "clipmunk mcp":

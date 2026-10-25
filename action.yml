@@ -1,0 +1,172 @@
+name: Clipmunk
+description: On a pull request, find the product videos it made out of date, export the stale scenes again, and post one comment that says what changed.
+author: jaymalve
+branding:
+  icon: film
+  color: purple
+
+# Use it from a workflow triggered by pull_request, after actions/checkout with fetch-depth: 0:
+#
+#   - uses: jaymalve/clipmunk@v0
+#     with:
+#       dev-command: npm run dev -- --host 127.0.0.1 --port 5173
+#       dev-url: http://127.0.0.1:5173
+#
+# The job needs `permissions: pull-requests: write` to comment (and `contents: write` with media-branch).
+inputs:
+  working-directory:
+    description: The app's directory, where clipmunk.config.json and .clipmunk are.
+    default: .
+  install:
+    description: How to install the app's dependencies. Empty to skip (when an earlier step did it).
+    default: npm ci
+  browsers:
+    description: Installs the Chromium that export renders with, for the app's own Playwright. Empty to skip.
+    default: npx playwright install --with-deps chromium
+  dev-command:
+    description: Starts the app's dev server, which scenes are rendered from. Empty when no scene needs it.
+    default: ""
+  dev-url:
+    description: Where the dev server answers once it is up.
+    default: http://127.0.0.1:5173
+  base:
+    description: The branch the pull request goes into. Defaults to the pull request's base branch.
+    default: ""
+  clipmunk:
+    description: How to run the Clipmunk CLI.
+    default: npx clipmunk
+  media-branch:
+    description: >-
+      A branch to commit posters and GIFs to (under pr-<number>/), so the comment can show them inline.
+      Empty to only upload the files as a workflow artifact, which a comment can link but not show.
+    default: ""
+  comment:
+    description: Post or update the pull request comment.
+    default: "true"
+  github-token:
+    description: The token used to comment and to push to media-branch.
+    default: ${{ github.token }}
+outputs:
+  stale:
+    description: How many exported clips the pull request made out of date.
+    value: ${{ steps.export.outputs.stale }}
+  artifact-url:
+    description: Where the re-exported files can be downloaded.
+    value: ${{ steps.upload.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install the app
+      if: inputs.install != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.install }}
+
+    - name: Install Chromium for export
+      if: inputs.browsers != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.browsers }}
+
+    - name: Install FFmpeg for export
+      shell: bash
+      run: command -v ffmpeg >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q ffmpeg; }
+
+    - name: Fetch the base branch
+      id: base
+      shell: bash
+      env:
+        BASE: ${{ inputs.base || github.base_ref }}
+      run: |
+        if [ -z "$BASE" ]; then echo "::error::No base branch: run this on pull_request, or set the base input."; exit 1; fi
+        git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+        echo "ref=origin/$BASE" >> "$GITHUB_OUTPUT"
+
+    - name: Start the dev server
+      if: inputs.dev-command != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        DEV_COMMAND: ${{ inputs.dev-command }}
+        DEV_URL: ${{ inputs.dev-url }}
+      run: |
+        nohup bash -c "$DEV_COMMAND" > "$RUNNER_TEMP/clipmunk-dev.log" 2>&1 &
+        for i in $(seq 1 120); do
+          if curl -s -o /dev/null "$DEV_URL"; then exit 0; fi
+          sleep 1
+        done
+        cat "$RUNNER_TEMP/clipmunk-dev.log"
+        echo "::error::The dev server did not answer at $DEV_URL"
+        exit 1
+
+    - name: Export the stale clips again
+      id: export
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        BASE_REF: ${{ steps.base.outputs.ref }}
+        DEV_URL: ${{ inputs.dev-url }}
+        HAS_DEV: ${{ inputs.dev-command != '' }}
+      run: |
+        url=()
+        if [ "$HAS_DEV" = "true" ]; then url=(--url "$DEV_URL"); fi
+        ${{ inputs.clipmunk }} ci export --base "$BASE_REF" "${url[@]}" --json > "$RUNNER_TEMP/clipmunk-ci.json"
+        node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log("stale=" + r.data.clips.filter((c) => c.stale).length); console.log("media=" + r.data.media.length)' "$RUNNER_TEMP/clipmunk-ci.json" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the videos
+      id: upload
+      if: steps.export.outputs.media != '0'
+      uses: actions/upload-artifact@v4
+      with:
+        name: clipmunk-${{ github.event.pull_request.number || github.run_id }}
+        path: ${{ inputs.working-directory }}/.clipmunk/ci/media
+        if-no-files-found: ignore
+
+    - name: Publish posters and GIFs
+      id: media
+      if: inputs.media-branch != '' && steps.export.outputs.media != '0' && github.event.pull_request.number
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        BRANCH: ${{ inputs.media-branch }}
+        PR: ${{ github.event.pull_request.number }}
+        TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+      run: |
+        media="$PWD/.clipmunk/ci/media"
+        dir="$(mktemp -d)"
+        cd "$dir"
+        git init -q
+        git remote add origin "https://x-access-token:$TOKEN@github.com/$REPO.git"
+        if git fetch -q --depth=1 origin "$BRANCH"; then git checkout -q -b "$BRANCH" FETCH_HEAD; else git checkout -q --orphan "$BRANCH"; fi
+        mkdir -p "pr-$PR"
+        find "$media" -maxdepth 1 \( -name '*.gif' -o -name '*.png' \) -exec cp {} "pr-$PR/" \;
+        git add -A
+        git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Clipmunk media for #$PR" || exit 0
+        git push -q origin "HEAD:$BRANCH"
+        echo "url=https://github.com/$REPO/raw/$BRANCH/pr-$PR" >> "$GITHUB_OUTPUT"
+
+    - name: Comment on the pull request
+      if: inputs.comment == 'true' && github.event.pull_request.number
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        MEDIA_URL: ${{ steps.media.outputs.url }}
+      run: |
+        args=()
+        if [ -n "$ARTIFACT_URL" ]; then args+=(--artifact-url "$ARTIFACT_URL"); fi
+        if [ -n "$MEDIA_URL" ]; then args+=(--media-url "$MEDIA_URL"); fi
+        ${{ inputs.clipmunk }} ci comment "${args[@]}" > "$RUNNER_TEMP/clipmunk-comment.md"
+        body="$(node -e 'process.stdout.write(JSON.stringify({ body: require("fs").readFileSync(process.argv[1], "utf8") }))' "$RUNNER_TEMP/clipmunk-comment.md")"
+        # One comment per pull request: update the one with the marker, or post it.
+        id="$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | contains("<!-- clipmunk:pr-comment -->")) | .id' | head -n 1)"
+        if [ -n "$id" ]; then
+          echo "$body" | gh api -X PATCH "repos/$REPO/issues/comments/$id" --input - > /dev/null
+        else
+          echo "$body" | gh api -X POST "repos/$REPO/issues/$PR/comments" --input - > /dev/null
+        fi

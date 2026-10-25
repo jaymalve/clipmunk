@@ -42,6 +42,8 @@ export const OPTIONS = {
   replace: { type: "boolean" },
   title: { type: "string" },
   base: { type: "string" },
+  "artifact-url": { type: "string" },
+  "media-url": { type: "string" },
 } as const;
 
 type Parsed = ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;

@@ -1,4 +1,5 @@
 import { ADAPTERS, EXPORT_FPS, MUSIC_STYLES } from "../core";
+import { ci } from "./ci";
 import * as commands from "./commands";
 import { type Command, type Io, invocation, parse } from "./invocation";
 import { exportClip, snapshot } from "./render-commands";
@@ -17,6 +18,9 @@ const HELP = `clipmunk <command> [options]
   scenes                                   List scenes and validation issues
   takes                                    List recorded takes
   stale [--base <git ref>]                 List exported clips whose source files changed since (or since the ref)
+  ci export --base <ref> [--url <origin>]  In CI: export the clips a pull request made stale again
+  ci comment [--artifact-url <url>] [--media-url <base>]
+                                           In CI: print the pull request comment for what ci export did
   sync                                     Regenerate the scene catalog (Next.js, generic React)
   open [--scene <id>] [--url <origin>]     Open the studio in your browser
   snapshot --scene <id> [--time <ms>]      Save a thumbnail into the recipe
@@ -44,6 +48,7 @@ const COMMANDS: Record<string, Command> = {
   scenes: commands.scenes,
   takes: commands.takes,
   stale: commands.stale,
+  ci,
   sequences: commands.sequences,
   sync: commands.sync,
   open: commands.open,

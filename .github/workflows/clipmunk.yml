@@ -1,0 +1,37 @@
+# The Clipmunk action on this repository's own example app: a pull request that changes a filmed
+# component of examples/vite-app gets its scenes exported again and one comment saying so.
+name: Clipmunk
+
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  videos:
+    # A fork's token cannot comment.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build Clipmunk
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      - uses: ./
+        with:
+          working-directory: examples/vite-app
+          install: ""
+          browsers: ""
+          clipmunk: node ../../dist/cli.js
+          dev-command: ../../node_modules/.bin/vite --host 127.0.0.1 --port 5173 --strictPort
+          dev-url: http://127.0.0.1:5173
