@@ -33,6 +33,9 @@ export const OPTIONS = {
   workers: { type: "string" },
   port: { type: "string" },
   "no-launch": { type: "boolean" },
+  fields: { type: "string" },
+  replace: { type: "boolean" },
+  title: { type: "string" },
 } as const;
 
 type Parsed = ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;

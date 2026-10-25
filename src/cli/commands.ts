@@ -10,17 +10,21 @@ import {
   getGuide,
   MUSIC_STYLES,
   type MusicStyle,
+  PRESET_FIELDS,
   PROJECT_FILE,
+  type PresetField,
   renderMusic,
   resolveZoomTracks,
   studioUrl,
   zoomSegments,
 } from "../core";
-import { listTakes, readTake, readTakeEvents, startDaemon, updateTakeEdit } from "../daemon";
+import { applyPresetToScene, listTakes, readTake, readTakeEvents, startDaemon, updateTakeEdit } from "../daemon";
 import { ffmpegVersion, launchBrowser, MISSING_FFMPEG } from "../export";
 import {
+  applyPresetToTake,
   configWarnings,
   initProject,
+  listPresets,
   listScenes,
   listSequences,
   readConfig,
@@ -28,6 +32,7 @@ import {
   refreshStateFiles,
   resolveInside,
   resolveStudio,
+  savePreset,
   syncProject,
 } from "../project";
 import { type Command, formatIssues, number, plural } from "./invocation";
@@ -303,4 +308,50 @@ export const doctor: Command = async ({ io, print }) => {
     data.map((check) => `  ${check.ok ? "ok  " : "FAIL"}  ${check.name}: ${check.detail}`).join("\n"),
   );
   return list.every((check) => check.ok) ? 0 : 1;
+};
+
+/** clipmunk preset list | apply <name> --take <id> | --scene <id> | save <name> --take <id> --fields a,b */
+export const preset: Command = async ({ values, args, context, print, usage }) => {
+  const [action, name] = args;
+  if (action === "list" || !action) {
+    const listed = await listPresets(context.root);
+    return print(listed, (data) =>
+      data.presets.length
+        ? data.presets.map((entry) => `  ${entry.name.padEnd(20)} ${entry.summary}`).join("\n")
+        : `No presets yet. Save one with: clipmunk preset save <name> --take <id> --fields ${PRESET_FIELDS.join(",")}`,
+    );
+  }
+  if (!name) return usage(`preset ${action} needs a preset name: clipmunk preset ${action} <name>.`);
+  if (action === "apply") {
+    if (values.scene) {
+      const applied = await applyPresetToScene(values.scene, name, context);
+      return print(applied, (data) =>
+        data.music
+          ? `Set the music of ${values.scene} to ${data.music.style}.`
+          : `Removed the music of ${values.scene}.`,
+      );
+    }
+    if (!values.take) return usage("preset apply needs --take <id> or --scene <id>.");
+    const applied = await applyPresetToTake(context.root, values.take, name);
+    return print(
+      applied,
+      () => `Applied ${name} to ${values.take}; saved in .clipmunk/takes/${values.take}/edit.json.`,
+    );
+  }
+  if (action === "save") {
+    if (!values.take) return usage("preset save needs --take <id>: the take whose settings to save.");
+    const fields = (values.fields ?? "").split(",").filter(Boolean);
+    const unknown = fields.filter((field) => !(PRESET_FIELDS as readonly string[]).includes(field));
+    if (!fields.length || unknown.length)
+      return usage(`--fields takes a comma-separated list of ${PRESET_FIELDS.join(", ")}.`);
+    const saved = await savePreset(context.root, {
+      name,
+      fromTake: values.take,
+      fields: fields as PresetField[],
+      ...(values.title ? { title: values.title } : {}),
+      replace: !!values.replace,
+    });
+    return print(saved, (data) => `Saved preset ${data.name} (${data.summary}) in ${CONFIG_FILE}.`);
+  }
+  return usage(`Unknown preset action "${action}". Use list, apply or save.`);
 };

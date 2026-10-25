@@ -13,7 +13,7 @@ import {
   zodIssues,
 } from "../core";
 import { extractAudio } from "../export";
-import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
+import { Fault, presetMusicFor, readText, resolveInside, toIssues, writeText } from "../project";
 
 /** Narration recorded over a scene. The sound is stored as WAV in .clipmunk/audio and the
  * scene's recipe points at it, so preview and export find it the same way.
@@ -128,4 +128,22 @@ export async function setSceneMusic(
   } catch (error) {
     return fail(toIssues(error, "music-failed"));
   }
+}
+
+/** Apply a preset to a scene. Scenes carry no take edit, so only the preset's music applies. */
+export async function applyPresetToScene(
+  sceneId: string,
+  name: string,
+  context: Context,
+): Promise<Result<{ music: Music | null }>> {
+  const music = await presetMusicFor(context.root, name);
+  if (!music.ok) return music;
+  if (music.data === undefined)
+    return fail([
+      {
+        code: "invalid-preset",
+        message: `The preset "${name}" sets nothing a scene has: scenes take only a preset's music.`,
+      },
+    ]);
+  return setSceneMusic(sceneId, music.data, context);
 }
