@@ -1,9 +1,15 @@
 import { CanvasSource, getFirstEncodableVideoCodec, Mp4OutputFormat, Output, StreamTarget } from "mediabunny";
 import {
+  type Caption,
   type CursorPath,
+  captionAt,
+  type KeyPill,
+  keyPills,
+  pillsAt,
   prepareCursor,
   type RedactionTrack,
   redactionTrack,
+  resolveCaptions,
   resolveZoomTracks,
   type Take,
   type TakeEvent,
@@ -21,7 +27,7 @@ export type EncodeResult = { codec: string; frames: number; width: number; heigh
 export type TakeRenderer = {
   readonly durationMs: number;
   readonly zoomTracks: readonly ZoomTrack[];
-  /** Apply an edited take. Media is kept; zoom, cursor, redaction and layout are derived again. */
+  /** Apply an edited take. Media is kept; zoom, cursor, redaction, captions and layout are derived again. */
   update(take: Take): void;
   /** Draw the frame at a clip time onto the preview canvas. Later calls supersede earlier ones. */
   renderAt(clipMs: number): Promise<void>;
@@ -52,9 +58,12 @@ export async function createTakeRenderer(options: {
   let cursor: CursorPath = prepareCursor(events, take.edit.cursor.smoothing);
   let smoothing = Number.NaN;
   let redaction: RedactionTrack = redactionTrack([], []);
+  let captions: Caption[] = [];
+  const pills: KeyPill[] = keyPills(events);
   const derive = () => {
     zoomTracks = resolveZoomTracks(take.edit, events, take.source);
     redaction = redactionTrack(events, take.edit.redact);
+    captions = resolveCaptions(take.edit, events);
     if (smoothing !== take.edit.cursor.smoothing) {
       smoothing = take.edit.cursor.smoothing;
       cursor = prepareCursor(events, smoothing);
@@ -82,6 +91,8 @@ export async function createTakeRenderer(options: {
       cursor: { ...state, opacity },
       clicks: cursor.clicks.map((click) => ({ x: click.x, y: click.y, ageMs: timeMs - click.t })),
       redact: redaction.empty ? [] : redaction.at(timeMs),
+      caption: captionAt(captions, timeMs),
+      keys: pillsAt(pills, timeMs),
     });
   }
 

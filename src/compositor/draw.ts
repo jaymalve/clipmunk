@@ -1,5 +1,5 @@
 import type { VideoSample } from "mediabunny";
-import type { CursorState, CursorStyle, RedactBox, Take, ZoomView } from "../core";
+import type { CursorState, CursorStyle, KeyPill, RedactBox, Take, ZoomView } from "../core";
 
 /** Draws one frame of a take. A pure function of its arguments: the same inputs always
  * produce the same pixels, which is what makes the preview and the export identical.
@@ -7,7 +7,8 @@ import type { CursorState, CursorStyle, RedactBox, Take, ZoomView } from "../cor
  * Layers, bottom to top: canvas background; the screen recording in a rounded, shadowed
  * frame, moved by the zoom; the redacted areas, blurred or blocked on the recording so they
  * move and zoom with it; click ripples and the synthetic cursor, which zoom with the
- * content; the camera bubble, which does not.
+ * content; the camera bubble, which does not; then the caption and key pills over the bottom of
+ * the recording, in canvas space so they stay readable at any zoom.
  */
 export type Context2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export type TakeFrame = {
@@ -19,6 +20,8 @@ export type TakeFrame = {
   clicks: { x: number; y: number; ageMs: number }[];
   /** Areas to hide, in source CSS pixels. */
   redact: RedactBox[];
+  caption?: { text: string; opacity: number };
+  keys: (KeyPill & { opacity: number })[];
 };
 
 /** The solid colour of a blocked area. */
@@ -221,5 +224,80 @@ export function drawTake(ctx: Context2D, width: number, height: number, take: Ta
     ctx.stroke();
     ctx.restore();
   }
+  drawOverlays(ctx, take, frame, box, unit);
   ctx.restore();
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+/** The caption strip and key pills, along the bottom of the recording. Their colour is the
+ * edit's backdrop, which the brand sets, with text in black or white, whichever reads better.
+ */
+function drawOverlays(ctx: Context2D, take: Take, frame: TakeFrame, box: Box, unit: number) {
+  const pills = take.edit.keys.visible ? frame.keys : [];
+  if (!frame.caption && !pills.length) return;
+  ctx.fillStyle = take.edit.canvas.background;
+  const [r, g, b] = rgbOf(String(ctx.fillStyle));
+  const fill = `rgba(${r}, ${g}, ${b}, 0.88)`;
+  const ink = 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#111111" : "#ffffff";
+  const margin = 28 * unit;
+  let bottom = box.y + box.height - margin;
+  const maxWidth = box.width - 2 * margin;
+  const centre = box.x + box.width / 2;
+
+  const pill = (text: string, size: number, opacity: number, weight: number, x?: number) => {
+    ctx.font = `${weight} ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    let width = ctx.measureText(text).width;
+    // Shrink long text to fit the recording's width.
+    if (width + size * 1.6 > maxWidth) {
+      size *= (maxWidth - size * 1.6) / width;
+      ctx.font = `${weight} ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+      width = ctx.measureText(text).width;
+    }
+    const w = width + size * 1.6,
+      h = size * 1.9;
+    const left = x ?? centre - w / 2;
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+    ctx.shadowBlur = 18 * unit;
+    ctx.shadowOffsetY = 4 * unit;
+    ctx.beginPath();
+    ctx.roundRect(left, bottom - h, w, h, Math.min(h / 2, 14 * unit));
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, left + w / 2, bottom - h / 2 + size * 0.05);
+    ctx.restore();
+    return { w, h };
+  };
+
+  if (frame.caption) {
+    const { h } = pill(frame.caption.text, 34 * unit, frame.caption.opacity, 600);
+    bottom -= h + 14 * unit;
+  }
+  if (pills.length) {
+    // Measure first so the row is centred, then draw left to right.
+    const size = 30 * unit,
+      gap = 12 * unit;
+    ctx.font = `700 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const texts = pills.map((item) => item.keys.join(" "));
+    const widths = texts.map((text) => ctx.measureText(text).width + size * 1.6);
+    let x = centre - (widths.reduce((sum, width) => sum + width, 0) + gap * (pills.length - 1)) / 2;
+    pills.forEach((item, index) => {
+      pill(texts[index]!, size, item.opacity, 700, x);
+      x += widths[index]! + gap;
+    });
+  }
+}
+
+/** [r, g, b] of a colour as the canvas normalises it: "#rrggbb" or "rgba(r, g, b, a)". */
+function rgbOf(colour: string): [number, number, number] {
+  if (colour.startsWith("#") && colour.length === 7)
+    return [1, 3, 5].map((index) => Number.parseInt(colour.slice(index, index + 2), 16)) as [number, number, number];
+  const parts = colour.match(/[\d.]+/g)?.map(Number) ?? [];
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
 }

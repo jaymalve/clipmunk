@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type Issue,
   parseEvents,
+  resolveCaptions,
   resolveZoomTracks,
   type Take,
   type TakeEdit,
@@ -100,6 +101,13 @@ function Editor(props: {
     () => zoomSegments(resolveZoomTracks({ zoom: edit.zoom }, events, source)),
     [edit.zoom, events, source],
   );
+  const captions = useMemo(
+    () =>
+      resolveCaptions(edit, events, { keepEmpty: true }).filter(
+        (caption) => caption.atMs + caption.durMs > edit.trim.startMs && caption.atMs < edit.trim.endMs,
+      ),
+    [edit, events],
+  );
 
   // The revision detects a take that was edited elsewhere since it was read.
   const revision = useRef(props.revision);
@@ -158,7 +166,13 @@ function Editor(props: {
           )}
           {!renderer && !failure && <p className="note">Loading the recording…</p>}
         </div>
-        <TakeControls take={take} change={change} zooms={segments.length} moments={moments.length} />
+        <TakeControls
+          take={take}
+          change={change}
+          zooms={segments.length}
+          moments={moments.length}
+          captions={captions}
+        />
         <footer>
           <div className="transport">
             <button type="button" onClick={session.toggle} disabled={!renderer}>

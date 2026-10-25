@@ -14,6 +14,7 @@ import { FFMPEG, makeTake, QUADRANTS, SECRET, secretTop } from "../support/take"
 const root = path.resolve("examples/vite-app");
 const IDS = ["zz-test-edit", "zz-test-export", "zz-test-zoom"];
 const SECRETS = { "zz-test-redact": "redacted", "zz-test-plain": "visible" } as const;
+const NAMED = "zz-test-captions";
 const made: string[] = [];
 let server: ViteDevServer, daemon: Daemon, browser: Browser, page: Page, origin: string, projectFile: string;
 
@@ -40,6 +41,7 @@ beforeAll(async () => {
   projectFile = await readFile(path.join(root, ".clipmunk/project.json"), "utf8");
   for (const id of IDS) await makeTake(root, id);
   for (const [id, secret] of Object.entries(SECRETS)) await makeTake(root, id, { secret, cam: false });
+  await makeTake(root, NAMED, { named: true, cam: false });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -54,7 +56,7 @@ afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of [...IDS, ...Object.keys(SECRETS)])
+  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED])
     await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
   await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
@@ -264,6 +266,79 @@ describe("redaction", () => {
       const [x, y] = stripe(ms);
       expect(hidden(colourAt(file, ms / 1000, `6:6:${Math.round(x - 3)}:${Math.round(y - 3)}`)), `${ms}`).toBe(true);
     }
+  }, 240_000);
+});
+
+describe("captions and shortcuts", () => {
+  // Inside the caption strip, above its text, and inside the key pill above it (default 16:9 canvas).
+  const CAPTION = [900, 930] as const,
+    PILL = [960, 856] as const;
+  const DARK = [11, 11, 15];
+
+  it("captions the named click and shows ⌘K as a pill, and both can be turned off", async () => {
+    const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await tab.goto(`${origin}/?clipmunk=1&clipmunk-take=${NAMED}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+      await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+      const pixelAt = async (ms: number, [x, y]: readonly [number, number]) => {
+        await tab.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
+        return tab.evaluate(
+          ([px, py]) => {
+            const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
+            return [...canvas.getContext("2d")!.getImageData(px!, py!, 1, 1).data.slice(0, 3)];
+          },
+          [x, y],
+        );
+      };
+      const saved = (read: (edit: any) => unknown, expected: unknown) =>
+        expect
+          .poll(async () => read(JSON.parse(await readFile(editFile(NAMED), "utf8")).edit), { timeout: 10_000 })
+          .toEqual(expected);
+
+      expect(near(await pixelAt(500, CAPTION), DARK, 45), "no caption before the click").toBe(false);
+      expect(near(await pixelAt(2000, CAPTION), DARK, 45), "caption at the click").toBe(true);
+      expect(near(await pixelAt(2000, PILL), DARK, 45), "no pill before the shortcut").toBe(false);
+      expect(near(await pixelAt(3100, PILL), DARK, 45), "pill for ⌘K").toBe(true);
+      expect(near(await pixelAt(3100 + 900, PILL), DARK, 45), "the pill has gone").toBe(false);
+
+      // The caption's text is listed and editable; an edit is kept as a manual caption.
+      const field = tab.getByLabel("Caption at 1.7s");
+      await expect.poll(() => field.inputValue()).toBe("Click Go");
+      await field.fill("Press Go");
+      await saved((edit) => edit.captions.items, [{ atMs: 1700, durMs: 1800, text: "Press Go", source: "manual" }]);
+
+      await tab.getByLabel("Show shortcuts", { exact: true }).click();
+      await saved((edit) => edit.keys.visible, false);
+      expect(near(await pixelAt(3100, PILL), DARK, 45), "shortcuts off").toBe(false);
+      await tab.getByLabel("Automatic captions", { exact: true }).click();
+      await saved((edit) => edit.captions.auto, false);
+      // With automatic captions off the stored items still show, so clear the edited one too.
+      expect(near(await pixelAt(2000, CAPTION), DARK, 45), "manual caption stays").toBe(true);
+      await field.fill("");
+      await saved((edit) => edit.captions.items[0].text, "");
+      expect(near(await pixelAt(2000, CAPTION), DARK, 45), "cleared").toBe(false);
+      // Back to the defaults, for the export below.
+      await tab.getByLabel("Automatic captions", { exact: true }).click();
+      await tab.getByLabel("Show shortcuts", { exact: true }).click();
+      await saved((edit) => [edit.captions.auto, edit.keys.visible], [true, true]);
+      await field.fill("Press Go");
+      await saved((edit) => edit.captions.items[0].text, "Press Go");
+    } finally {
+      await tab.close();
+    }
+  }, 120_000);
+
+  it("exports them into the MP4", async () => {
+    const output = ".clipmunk/exports/zz-test-captions.mp4";
+    made.push(output);
+    const result = await exportTake({ takeId: NAMED, url: origin, output, fps: 30 }, { root });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    const file = path.join(root, output);
+    const at = (seconds: number, [x, y]: readonly [number, number]) => colourAt(file, seconds, `4:4:${x - 2}:${y - 2}`);
+    expect(near(at(2.0, CAPTION), DARK, 50), "caption").toBe(true);
+    expect(near(at(0.5, CAPTION), DARK, 50), "no caption yet").toBe(false);
+    expect(near(at(3.1, PILL), DARK, 50), "pill above the caption").toBe(true);
+    expect(near(at(2.0, PILL), DARK, 50), "no pill yet").toBe(false);
   }, 240_000);
 });
 

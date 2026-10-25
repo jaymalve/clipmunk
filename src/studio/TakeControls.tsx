@@ -1,4 +1,4 @@
-import type { RedactEntry, Take, TakeEdit } from "../core";
+import type { Caption, RedactEntry, Take, TakeEdit } from "../core";
 import { Check, Group, percent, Select, Slider, times } from "./fields";
 import { MusicControls } from "./music";
 
@@ -230,6 +230,50 @@ function RedactionControls({ edit, change }: Section) {
   );
 }
 
+function CaptionControls({ edit, change, captions }: Section & { captions: Caption[] }) {
+  const setText = (caption: Caption, text: string) =>
+    change((current) => {
+      // Editing a caption stores it as a manual item at its time, which regeneration keeps.
+      const items = current.captions.items.filter((item) => item.atMs !== caption.atMs);
+      return {
+        ...current,
+        captions: {
+          ...current.captions,
+          items: [...items, { atMs: caption.atMs, durMs: caption.durMs, text, source: "manual" as const }].sort(
+            (a, b) => a.atMs - b.atMs,
+          ),
+        },
+      };
+    });
+  return (
+    <Group title="Captions">
+      <Check
+        label="Automatic captions"
+        value={edit.captions.auto}
+        onChange={(auto) => change((current) => ({ ...current, captions: { ...current.captions, auto } }))}
+      />
+      <Check
+        label="Show shortcuts"
+        value={edit.keys.visible}
+        onChange={(visible) => change((current) => ({ ...current, keys: { visible } }))}
+      />
+      {captions.map((caption) => (
+        <label className="field" key={caption.atMs}>
+          <span>{seconds(caption.atMs)}</span>
+          <input
+            type="text"
+            aria-label={`Caption at ${seconds(caption.atMs)}`}
+            value={caption.text}
+            maxLength={120}
+            onChange={(event) => setText(caption, event.currentTarget.value)}
+          />
+        </label>
+      ))}
+      {!captions.length && <p className="hint">No captions: clicks on named controls get one automatically.</p>}
+    </Group>
+  );
+}
+
 function VoiceControls({ edit, change }: Section) {
   const update = set(change, "audio");
   return (
@@ -258,11 +302,13 @@ export function TakeControls({
   change,
   zooms,
   moments,
+  captions,
 }: {
   take: Take;
   change: Change;
   zooms: number;
   moments: number;
+  captions: Caption[];
 }) {
   const { edit, source } = take;
   const section = { edit, change };
@@ -273,6 +319,7 @@ export function TakeControls({
       {source.cam && <CameraControls {...section} />}
       <FrameControls {...section} />
       <RedactionControls {...section} />
+      <CaptionControls {...section} captions={captions} />
       <Group title="Music">
         <MusicControls
           value={edit.music}

@@ -197,6 +197,8 @@ type Take = {
     audio:  { muted: boolean; gain: number; normalize: boolean };
     redact: ({ sel: string; mode: "blur" | "block" }                                  // follows the log's redact boxes
            | { rect: [x, y, w, h]; fromMs: number; toMs: number; mode: "blur" | "block" })[];  // a hand-drawn box
+    captions: { auto: boolean; items: { atMs: number; durMs: number; text: string; source: "auto" | "manual" }[] };
+    keys:   { visible: boolean };                // shortcut pills from the log's combo events
   };
 };
 ```
@@ -448,6 +450,7 @@ Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c
 4. Click ripples, in screen space.
 5. The synthetic cursor, in screen space, so it grows with the zoom. Arrow, hand and text-beam shapes are vector paths.
 6. The camera bubble, in canvas space: a circle or rounded square in a chosen corner, cover-cropped and optionally mirrored.
+7. The caption strip and key pills (9.7), in canvas space along the bottom of the recording, so they stay readable at any zoom.
 
 Pixel-valued settings (corner radius, cursor size, margins) are authored against the edit's canvas size and scaled for any other output size, so a half-size export looks the same.
 
@@ -480,6 +483,20 @@ The preview plays the extracted voice track alongside the clock. Export never ha
 - **Box entries** are drawn exactly as given, from `fromMs` until `toMs`, for anything a selector does not cover. The Studio will draw them by hand; for now they are written in `edit.json`.
 
 `drawTake` hides each box on the screen frame, under the cursor. `block` fills it with a solid colour. `blur` redraws the part of the recording the blur reaches, clipped to the box, with a Gaussian blur of a quarter of the box's short side and at least 6 source pixels, so text of any size in the box is unreadable. Every export path draws through `drawTake`, so MP4 has it now and GIF and poster will too. The take editor lists the entries, each with blur or block.
+
+### 9.7 Captions and key pills
+
+`generateCaptions(events, redaction)` in `core/captions.ts` is pure and deterministic, like auto-zoom:
+
+1. **Bursts.** Clicks and keystrokes closer together than 2.5 seconds are one burst, and a burst gets at most one caption.
+2. **Phrase.** From the burst's first click on a named control, by its role: "Click New invoice" for a button, "Open Settings" for a link, tab or menu item, "Choose Monthly" for a radio or option, "Toggle Dark mode" for a checkbox or switch, and "Type in Search" for a field typed into during the burst. A control has a name only when the recorder logged one, which it never does inside a redaction selector (5.4), and a click inside a redacted box (9.6) is skipped as well.
+3. **Timing.** From 300 ms before that click until a second after the burst's last activity, at least 1.8 seconds, and ending before the next caption starts.
+
+`resolveCaptions(edit, events)` gives what a take shows. With `captions.auto` on, the generated captions are recomputed and the edit's manual items replace the ones they overlap; a manual item with empty text hides the caption at its time. With it off, the stored items are shown as they are. The take editor lists the captions with their text editable, and an edit stores a manual item at that caption's time. `captionAt` fades a caption in and out over 150 ms.
+
+`keyPills(events)` in `core/keys.ts` turns `combo` events into pills such as "⌘ K", each shown for 900 ms, at most three at once. The recorder logs a combo only when Meta, Control or Alt is held and never in a password field, so plain typing never makes a pill.
+
+`drawTake` draws the caption centred along the bottom of the recording, and the pills in a row above it (or in its place when no caption shows). Both use the edit's backdrop colour, which the brand sets, at 88% opacity, with black or white text, whichever reads better; long text shrinks to fit the recording's width.
 
 ## 10. Studio (`studio`)
 
