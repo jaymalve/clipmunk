@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyBrand, defaultEdit, STARTER_CONFIG, validateConfig } from "./index";
+import { applyBrand, applyRedaction, defaultEdit, redactionOf, STARTER_CONFIG, validateConfig } from "./index";
 
 const issue = (input: unknown) => {
   const result = validateConfig(input);
@@ -58,5 +58,35 @@ describe("clipmunk.config.json", () => {
       applyBrand({ ...edit, canvas: { ...edit.canvas, width: 600, height: 600 } }, { padding: 400 }).canvas.padding,
     ).toBe(0.4);
     expect(applyBrand(edit, { logo: "./logo.svg" }).canvas).toEqual(edit.canvas);
+  });
+
+  it("reads redaction as a list of selectors or as selectors with a mode and live masking", () => {
+    expect(redactionOf(undefined)).toEqual({ selectors: [], mode: "blur", live: false });
+    expect(redactionOf({ redact: [".a"] })).toEqual({ selectors: [".a"], mode: "blur", live: false });
+    const written = { version: 1, redact: { selectors: [".a"], mode: "block", live: true } };
+    expect(validateConfig(written).ok).toBe(true);
+    expect(redactionOf(written as never)).toEqual({ selectors: [".a"], mode: "block", live: true });
+    expect(issue({ version: 1, redact: { selectors: ["a {"] } })?.path).toBe(
+      "clipmunk.config.json: redact.selectors.0",
+    );
+    expect(issue({ version: 1, redact: { selectors: [], mode: "pixelate" } })?.path).toMatch(
+      /^clipmunk\.config\.json: redact/,
+    );
+  });
+
+  it("gives a new take one redaction entry per configured or logged selector", () => {
+    const edit = defaultEdit(4000);
+    expect(applyRedaction(edit, undefined)).toBe(edit);
+    expect(applyRedaction(edit, { redact: { selectors: [".a", ".b"], mode: "block" } }, [".b", ".c"]).redact).toEqual([
+      { sel: ".a", mode: "block" },
+      { sel: ".b", mode: "block" },
+      { sel: ".c", mode: "block" },
+    ]);
+    // A broken config still hides what the recording logged; an entry already there is kept as is.
+    const own = { ...edit, redact: [{ sel: ".c", mode: "block" as const }] };
+    expect(applyRedaction(own, undefined, [".c", ".d"]).redact).toEqual([
+      { sel: ".d", mode: "blur" },
+      { sel: ".c", mode: "block" },
+    ]);
   });
 });

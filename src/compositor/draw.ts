@@ -1,11 +1,12 @@
 import type { VideoSample } from "mediabunny";
-import type { CursorState, CursorStyle, Take, ZoomView } from "../core";
+import type { CursorState, CursorStyle, RedactBox, Take, ZoomView } from "../core";
 
 /** Draws one frame of a take. A pure function of its arguments: the same inputs always
  * produce the same pixels, which is what makes the preview and the export identical.
  *
  * Layers, bottom to top: canvas background; the screen recording in a rounded, shadowed
- * frame, moved by the zoom; click ripples and the synthetic cursor, which zoom with the
+ * frame, moved by the zoom; the redacted areas, blurred or blocked on the recording so they
+ * move and zoom with it; click ripples and the synthetic cursor, which zoom with the
  * content; the camera bubble, which does not.
  */
 export type Context2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -16,7 +17,12 @@ export type TakeFrame = {
   cursor: CursorState & { opacity: number };
   /** Recent clicks with their age in milliseconds. */
   clicks: { x: number; y: number; ageMs: number }[];
+  /** Areas to hide, in source CSS pixels. */
+  redact: RedactBox[];
 };
+
+/** The solid colour of a blocked area. */
+export const REDACT_BLOCK = "#1c1c21";
 
 const RIPPLE_MS = 520;
 // Cursor glyphs on a 22-unit grid, with the point that sits on the pointer position.
@@ -98,6 +104,47 @@ export function drawTake(ctx: Context2D, width: number, height: number, take: Ta
   if (frame.screen) {
     const [x, y] = place(0, 0);
     frame.screen.draw(ctx, x, y, source.width * scale * zoom, source.height * scale * zoom);
+  }
+  for (const { rect, mode } of frame.redact) {
+    const [x, y] = place(rect[0], rect[1]);
+    const w = rect[2] * scale * zoom,
+      h = rect[3] * scale * zoom;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    if (mode === "block" || !frame.screen) {
+      ctx.fillStyle = REDACT_BLOCK;
+      ctx.fillRect(x, y, w, h);
+    } else {
+      // Strong enough that text of any size in the box is unreadable. Only the part of the
+      // recording the blur reaches is drawn, which keeps a full-frame blur off every frame.
+      const radius = Math.max(6 * scale * zoom, Math.min(w, h) / 4);
+      const reach = (3 * radius) / (scale * zoom);
+      const left = Math.max(0, rect[0] - reach),
+        top = Math.max(0, rect[1] - reach);
+      const right = Math.min(source.width, rect[0] + rect[2] + reach),
+        bottom = Math.min(source.height, rect[1] + rect[3] + reach);
+      const pixels = frame.screen.displayWidth / source.width;
+      const [dx, dy] = place(left, top);
+      ctx.fillStyle = source.background;
+      ctx.fillRect(x, y, w, h);
+      if (right > left && bottom > top) {
+        ctx.filter = `blur(${radius}px)`;
+        frame.screen.draw(
+          ctx,
+          left * pixels,
+          top * pixels,
+          (right - left) * pixels,
+          (bottom - top) * pixels,
+          dx,
+          dy,
+          (right - left) * scale * zoom,
+          (bottom - top) * scale * zoom,
+        );
+      }
+    }
+    ctx.restore();
   }
   if (edit.cursor.visible) {
     const size = edit.cursor.size * unit * zoom;

@@ -11,6 +11,7 @@ export * from "./music";
 export * from "./presets";
 export * from "./project";
 export * from "./recipe";
+export * from "./redact";
 export * from "./result";
 export * from "./scene";
 export * from "./sequence";

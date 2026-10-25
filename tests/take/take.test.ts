@@ -8,11 +8,12 @@ import { run } from "../../src/cli/run";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
 import { colourAt, near } from "../support/media";
-import { FFMPEG, makeTake, QUADRANTS } from "../support/take";
+import { FFMPEG, makeTake, QUADRANTS, SECRET, secretTop } from "../support/take";
 
 /** The take compositor, editor and export, checked against a synthetic take whose pixels are known. */
 const root = path.resolve("examples/vite-app");
 const IDS = ["zz-test-edit", "zz-test-export", "zz-test-zoom"];
+const SECRETS = { "zz-test-redact": "redacted", "zz-test-plain": "visible" } as const;
 const made: string[] = [];
 let server: ViteDevServer, daemon: Daemon, browser: Browser, page: Page, origin: string, projectFile: string;
 
@@ -38,6 +39,7 @@ beforeAll(async () => {
   process.env.CLIPMUNK_FFMPEG ??= FFMPEG;
   projectFile = await readFile(path.join(root, ".clipmunk/project.json"), "utf8");
   for (const id of IDS) await makeTake(root, id);
+  for (const [id, secret] of Object.entries(SECRETS)) await makeTake(root, id, { secret, cam: false });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -52,7 +54,8 @@ afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of IDS) await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
+  for (const id of [...IDS, ...Object.keys(SECRETS)])
+    await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
   await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
 });
@@ -191,6 +194,76 @@ describe("exporting from the editor", () => {
     expect(output).toBe(".clipmunk/exports/zz-test-edit.mp4");
     // The editor's trim (1.0 s to 3.0 s, set above) and the chosen size both reach the file.
     expect(await probeVideo(output, root)).toMatchObject({ width: 1280, height: 720, fps: 30, frames: 60 });
+  }, 240_000);
+});
+
+describe("redaction", () => {
+  // The middle of a white stripe of the secret box, in canvas pixels, at a time on the take clock.
+  const stripe = (ms: number) => at(SECRET.x + 4.5 * SECRET.stripe, secretTop(ms) + SECRET.height / 2);
+  const WHITE = [255, 255, 255],
+    BLACK = [0, 0, 0];
+  // Before, at the start of, during, at the end of and after the scroll.
+  const TIMES = [500, 1000, 1100, 1250, 1400, 1500, 1700, 2500];
+  const hidden = (colour: number[]) => !near(colour, WHITE, 60) && !near(colour, BLACK, 60);
+  const open = async (id: string) => {
+    const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await tab.goto(`${origin}/?clipmunk=1&clipmunk-take=${id}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+    await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+    const pixelAt = async (ms: number, [x, y]: readonly [number, number]) => {
+      await tab.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
+      return tab.evaluate(
+        ([px, py]) => {
+          const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
+          return [...canvas.getContext("2d")!.getImageData(Math.round(px!), Math.round(py!), 1, 1).data.slice(0, 3)];
+        },
+        [x, y],
+      );
+    };
+    return { tab, pixelAt };
+  };
+
+  it("blurs or blocks a scrolling element in every frame of the preview", async () => {
+    const plain = await open("zz-test-plain");
+    try {
+      // Without redaction the stripe shows, so the checks below look at the secret itself.
+      for (const ms of [500, 1250, 2500])
+        expect(near(await plain.pixelAt(ms, stripe(ms)), WHITE, 40), `${ms}`).toBe(true);
+    } finally {
+      await plain.tab.close();
+    }
+    const { tab, pixelAt } = await open("zz-test-redact");
+    try {
+      for (const ms of TIMES) expect(hidden(await pixelAt(ms, stripe(ms))), `blurred at ${ms}`).toBe(true);
+      // Next to the box, the recording is untouched.
+      expect(near(await pixelAt(2500, at(300, 40)), QUADRANTS.red)).toBe(true);
+      const mode = tab.locator(`label.field:has-text("${SECRET.sel}") select`);
+      const saved = (expected: string) =>
+        expect
+          .poll(async () => JSON.parse(await readFile(editFile("zz-test-redact"), "utf8")).edit.redact[0].mode, {
+            timeout: 10_000,
+          })
+          .toBe(expected);
+      await mode.selectOption("block");
+      await saved("block");
+      for (const ms of TIMES)
+        expect(near(await pixelAt(ms, stripe(ms)), [28, 28, 33], 8), `blocked at ${ms}`).toBe(true);
+      await mode.selectOption("blur");
+      await saved("blur");
+    } finally {
+      await tab.close();
+    }
+  }, 120_000);
+
+  it("keeps it hidden in the exported MP4", async () => {
+    const output = ".clipmunk/exports/zz-test-redact.mp4";
+    made.push(output);
+    const result = await exportTake({ takeId: "zz-test-redact", url: origin, output, fps: 30, height: 1080 }, { root });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    const file = path.join(root, output);
+    for (const ms of TIMES) {
+      const [x, y] = stripe(ms);
+      expect(hidden(colourAt(file, ms / 1000, `6:6:${Math.round(x - 3)}:${Math.round(y - 3)}`)), `${ms}`).toBe(true);
+    }
   }, 240_000);
 });
 

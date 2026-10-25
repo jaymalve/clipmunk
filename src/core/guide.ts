@@ -163,9 +163,11 @@ export function getGuide() {
       path: CONFIG_FILE,
       what: "Project-wide settings in one JSON file at the project root, shared through the repository. Every field is optional. Clipmunk reads it and never runs it.",
       shape:
-        '{ version: 1, brand?: { backdrop?, padding?, radius?, logo?, outro? }, redact?: ["<css selector>"], presets?: { <name>: {...} }, variants?: { themes?: ["light", "dark"], locales?: ["en", "de"] } }. Unknown keys are rejected.',
+        '{ version: 1, brand?: { backdrop?, padding?, radius?, logo?, outro? }, redact?: ["<css selector>"] | { selectors: [...], mode?: "blur" | "block", live?: boolean }, presets?: { <name>: {...} }, variants?: { themes?: ["light", "dark"], locales?: ["en", "de"] } }. Unknown keys are rejected.',
       brand:
         "backdrop is the colour behind a take's recording, padding the space around it in pixels on the frame's short side, radius its corner radius in pixels. A take gets the brand when it is recorded; changing the brand later leaves existing takes as they are. logo and outro are stored for a later version and not drawn yet.",
+      redact:
+        "Elements to hide in every exported frame, as CSS selectors. The recorder logs where they are while recording, and a new take gets one entry per selector in its edit's redact list (blur unless mode says block), which the take editor or edit.json can change to blur or block. A box that no selector covers can be added to edit.json as { rect: [x, y, width, height], fromMs, toMs, mode } in CSS pixels of the recording. live: true also blurs them in the page while recording, so they never reach the video; the developer then sees them blurred too.",
       presets: `presets: { <name>: { title?, description?, edit?: { canvas?, zoom?, cursor?, cam?, audio? }, music?: {...} | null, export?: { size?: "1920x1080", fps?, formats?: ["mp4" | "gif" | "poster"], ratios?: ["16:9" | "9:16" | "1:1" | "4:5"] } } }. A preset is a partial edit: applying it to a take merges each section field by field, replaces zoom and music whole, and leaves the trim alone; music: null removes music. Zoom must be auto or off, because manual keyframes are positions in one recording. A scene takes only a preset's music. export is stored now and used by later versions. Apply with clipmunk preset apply <name> --take <id>; save one from a take with clipmunk preset save <name> --take <id> --fields ${PRESET_FIELDS.join(",")}.`,
       example: STARTER_CONFIG,
     },

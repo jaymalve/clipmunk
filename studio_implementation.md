@@ -23,7 +23,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 2 | `clipmunk.config.json` and brand defaults | Engine | 🔵 [#19](https://github.com/jaymalve/clipmunk/pull/19) |
 | 3 | Presets: apply and save | Engine | 🔵 [#20](https://github.com/jaymalve/clipmunk/pull/20) |
 | 4 | Event log v2: what was touched | Engine | 🔵 [#21](https://github.com/jaymalve/clipmunk/pull/21) |
-| 5 | Redaction | Engine | ⬜ |
+| 5 | Redaction | Engine | 🔵 [#22](https://github.com/jaymalve/clipmunk/pull/22) |
 | 6 | Captions and the keystroke overlay | Engine | ⬜ |
 | 7 | Dead air and steady typing | Engine | ⬜ |
 | 8 | Reframing takes to other aspect ratios | Engine | ⬜ |
@@ -133,18 +133,20 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Done when:** a recording of "click New report, type, press ⌘K" yields events naming the button and the combo, and nothing typed.
 
 ### PR 5 · Redaction
-**Status:** ⬜ · **Branch:** `studio/05-redaction` · **Base:** `studio/04-event-log-v2`
+**Status:** 🔵 [#22](https://github.com/jaymalve/clipmunk/pull/22) · **Branch:** `studio/05-redaction` · **Base:** `studio/04-event-log-v2`
 
 **Goal:** sensitive elements are hidden in every exported frame.
 
-- Edit: `redact: [{ sel, mode: "blur" | "block" } | { rect: [x,y,w,h], fromMs, toMs, mode }]`. Selector entries default from the config; box entries are for anything not covered by a selector, drawn by hand in the Studio later.
-- `core/redact.ts`: from the log's `redact` events, the box of each selector at any time, holding the last box between events. Pure and unit-tested.
-- Compositor: draw blur or block over the source picture before zoom, so a box follows scrolling and zooms with the picture. Every export path inherits it: MP4 now, GIF and poster in PR 9.
+- Edit: `redact: [{ sel, mode: "blur" | "block" } | { rect: [x,y,w,h], fromMs, toMs, mode }]`, default `[]`. Ingest adds one selector entry per selector in the config and per selector the log has boxes for, so a take recorded with redaction keeps it even when the config cannot be read at ingest. Box entries are for anything not covered by a selector, drawn by hand in the Studio later.
+- `core/redact.ts`: from the log's `redact` events, the boxes of each selector at any time, holding the last boxes between events. Around every change the old and new boxes are both covered for 150 ms either side, and logged boxes grow by 4 px, so a frame that lags or leads the log stays hidden. Pure and unit-tested.
+- Compositor: draws blur or block on the screen frame, under the cursor, so a box follows scrolling and zooms with the picture. Blur redraws only the part of the recording it reaches. Every export path inherits it: MP4 now, GIF and poster in PR 9.
 - Optional live masking: `redact.live: true` in the config makes the recorder also blur matching elements in the page while recording, so the secret never reaches `screen.webm`. It is off by default, because the developer then sees their own app blurred.
 - Minimal control in the current take editor: one list of redaction entries with blur or block.
 
-**Tests:** on the synthetic take in `tests/take`, a known box is blurred in the composite and in the exported MP4 at frames before, during and after a scroll.
+**Tests:** on a synthetic take with a striped box that scrolls, the stripe is hidden in the composite and in the exported MP4 before, during and after the scroll, with blur and with block; the same take without redaction shows the stripe. Unit tests for the track and the config; the daemon suite checks the entries ingest writes; `test:recorder` checks live masking turns on and off with the recording.
 **Done when:** the spec's check passes: a moving or scrolled redacted element stays covered in every frame.
+
+**Notes:** `redact.live` needed an object in the config, so `redact` is now either the list of selectors (as before) or `{ selectors, mode?, live? }`; `redactionOf` reads both. Presets do not carry redaction: it belongs to what a recording shows, not to a look. `source.screen.latencyMs` is not used for the guard window, because sync does not depend on it (`ARCHITECTURE.md` 8.2). The recorder test that required a take longer than 1500 ms failed on a fast machine (its own steps take about 1.4 s); it now requires the take to be at least as long as the steps took.
 
 ### PR 6 · Captions and the keystroke overlay
 **Status:** ⬜ · **Branch:** `studio/06-captions-keys` · **Base:** `studio/05-redaction`
@@ -376,6 +378,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25: takes stay pixel recordings, and replay is not built. Variants are a scene feature; takes get ratios by reframing.
 - 2026-10-25: configuration is `clipmunk.config.json`, not TypeScript.
 - 2026-10-25: REST and server-sent events, no WebSocket unless a feature needs one.
+- 2026-10-25: `redact` in the config is a list of selectors or `{ selectors, mode?, live? }`, so live masking and a default mode fit without a second key.
 
 ## Log
 
@@ -385,6 +388,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 2 opened as #19, stacked on #18: `clipmunk.config.json` and brand at ingest. For PR 3: `presets` is currently `z.record(slug, z.record(string, unknown))` in `core/config.ts`; give it the real preset schema there. Writing the config must keep the developer's other keys and their order.
 - 2026-10-25 · PR 3 opened as #20, stacked on #19: presets. For PR 4: the recorder can fetch the redaction selectors from `GET /v1/config` (`config.redact`); the CLI has no `config` command, `clipmunk doctor` is where config problems show. For PR 9: presets' `export` options (`size`, `fps`, `formats`, `ratios`) are validated but no export reads them yet.
 - 2026-10-25 · PR 4 opened as #21, stacked on #20: event log v2 (`el` on `down` and `focus`, `route`, `combo`, `redact`). For PR 5: `redact` events carry `sel` and `rects` in CSS pixels, one event per selector, logged only when a box changes, so hold each box until the next event for that selector; empty `rects` means nothing to hide. A config the recorder cannot read means a take without redaction, noted in `recorder.log`.
+- 2026-10-25 · PR 5 opened as #22, stacked on #21: redaction. For PR 6: captions and the keystroke overlay are drawn in `drawTake`, which now takes `redact` boxes in `TakeFrame`; draw overlays above the redaction layer so captions and keys stay readable. For PR 9: GIF and poster must render through `drawTake` to inherit redaction.
 
 ## Environment notes for whoever picks this up
 

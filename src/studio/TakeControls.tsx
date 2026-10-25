@@ -1,4 +1,4 @@
-import type { Take, TakeEdit } from "../core";
+import type { RedactEntry, Take, TakeEdit } from "../core";
 import { Check, Group, percent, Select, Slider, times } from "./fields";
 import { MusicControls } from "./music";
 
@@ -197,6 +197,39 @@ function FrameControls({ edit, change }: Section) {
   );
 }
 
+const MODES = { blur: "Blur", block: "Block" };
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+const describeEntry = (entry: RedactEntry) =>
+  "sel" in entry
+    ? entry.sel
+    : `Box ${entry.rect.map(Math.round).join(", ")}, ${seconds(entry.fromMs)}–${seconds(entry.toMs)}`;
+
+function RedactionControls({ edit, change }: Section) {
+  const setMode = (index: number, mode: RedactEntry["mode"]) =>
+    change((current) => ({
+      ...current,
+      redact: current.redact.map((entry, at) => (at === index ? { ...entry, mode } : entry)),
+    }));
+  return (
+    <Group title="Redaction">
+      {edit.redact.map((entry, index) => (
+        <Select
+          // biome-ignore lint/suspicious/noArrayIndexKey: entries have no id, and the list never reorders
+          key={index}
+          label={describeEntry(entry)}
+          value={entry.mode}
+          options={["blur", "block"]}
+          names={MODES}
+          onChange={(mode) => setMode(index, mode)}
+        />
+      ))}
+      {!edit.redact.length && (
+        <p className="hint">Nothing is hidden. List selectors under redact in clipmunk.config.json before recording.</p>
+      )}
+    </Group>
+  );
+}
+
 function VoiceControls({ edit, change }: Section) {
   const update = set(change, "audio");
   return (
@@ -239,6 +272,7 @@ export function TakeControls({
       <CursorControls {...section} />
       {source.cam && <CameraControls {...section} />}
       <FrameControls {...section} />
+      <RedactionControls {...section} />
       <Group title="Music">
         <MusicControls
           value={edit.music}
