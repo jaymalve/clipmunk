@@ -19,7 +19,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | # | PR | Part | Status |
 |---|---|---|---|
 | 0 | Plan: architecture direction and this file | Plan | ✅ [#17](https://github.com/jaymalve/clipmunk/pull/17) |
-| 1 | Take edits in a sidecar file | Engine | 🟡 |
+| 1 | Take edits in a sidecar file | Engine | 🔵 [#18](https://github.com/jaymalve/clipmunk/pull/18) |
 | 2 | `clipmunk.config.json` and brand defaults | Engine | ⬜ |
 | 3 | Presets: apply and save | Engine | ⬜ |
 | 4 | Event log v2: what was touched | Engine | ⬜ |
@@ -63,7 +63,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 ## Part 1: Engine
 
 ### PR 1 · Take edits in a sidecar file
-**Status:** 🟡 · **Branch:** `studio/01-edit-sidecar` · **Base:** `main` (PR 0 merged first)
+**Status:** 🔵 [#18](https://github.com/jaymalve/clipmunk/pull/18) · **Branch:** `studio/01-edit-sidecar` · **Base:** `main` (PR 0 merged first)
 
 **Goal:** a raw take is never rewritten; every change lives in `edit.json` beside it (section 19.4).
 
@@ -76,7 +76,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 
 **Tests:** unit tests for the three read paths and for a save never touching `take.json` (compare bytes before and after); `test:take` and `test:recorder` still pass.
 **Done when:** editing a take in the Studio or with `clipmunk zoom --write` leaves `take.json` byte-identical, and an old-format take opens and saves correctly.
-**Notes:** —
+**Notes:** `clipmunk zoom --write` goes through the same `saveTakeEdit`, so it is covered by the same guarantee; the take suite checks its output in `edit.json`.
 
 ### PR 2 · `clipmunk.config.json` and brand defaults
 **Status:** ⬜ · **Branch:** `studio/02-config` · **Base:** `studio/01-edit-sidecar`
@@ -381,6 +381,7 @@ Decisions made while working through this plan, with the date. The architecture-
 
 - 2026-10-25 · PR 0 opened as #17: plan and architecture direction.
 - 2026-10-25 · PR 0 merged (#17). PR 1 is based on `main`.
+- 2026-10-25 · PR 1 opened as #18: take edits in `edit.json`. For PR 2: brand defaults belong in `defaultEdit` at ingest (`daemon/takes.ts`, `finalizeTake`), because ingest now writes the edit file. Tests that touch the example app restore `.clipmunk/project.json` themselves; re-check `git diff` on it after a run.
 
 ## Environment notes for whoever picks this up
 
