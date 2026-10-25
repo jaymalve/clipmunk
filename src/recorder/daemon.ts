@@ -68,13 +68,22 @@ export function createDaemonClient(link: DaemonLink) {
         body: text,
         keepalive: true,
       }).catch(() => {}),
+    /** The link this client uses, for handing on to a page the Studio frames. */
+    link,
     /** URLs for media elements and EventSource, which cannot send an Authorization header. */
     url: (route: string) =>
       `${origin}${route}${route.includes("?") ? "&" : "?"}token=${encodeURIComponent(link.token)}`,
   };
 }
 
-export type DaemonStatus = { version: string; project: string; ffmpeg: boolean };
+export type DaemonStatus = {
+  version: string;
+  project: string;
+  ffmpeg: boolean;
+  /** The host app's dev server and studio path, once the project is connected. */
+  devUrl?: string;
+  studioPath?: string;
+};
 export type DaemonProblem = { reason: "no-link" | "unreachable" | "rejected"; message: string };
 /** A client for the remembered daemon, or the specific reason there is none. */
 export async function connectDaemon(): Promise<

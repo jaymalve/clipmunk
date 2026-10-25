@@ -50,6 +50,7 @@
     "test:recorder": "xvfb-run -a -s \"-screen 0 1600x1000x24\" vitest run tests/recorder",
     "test:take": "vitest run tests/take",
     "test:sequence": "vitest run tests/sequence",
+    "test:studio": "vitest run tests/studio",
     "lint": "biome check .",
     "format": "biome check --write ."
   },

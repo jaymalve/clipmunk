@@ -30,7 +30,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | 🔵 [#26](https://github.com/jaymalve/clipmunk/pull/26) |
 | 10 | Scene variants: theme, locale, ratio | Engine | 🔵 [#27](https://github.com/jaymalve/clipmunk/pull/27) |
 | 11 | The frame page in the host | Studio | 🔵 [#28](https://github.com/jaymalve/clipmunk/pull/28) |
-| 12 | The daemon serves the Studio (parity) | Studio | ⬜ |
+| 12 | The daemon serves the Studio (parity) | Studio | 🔵 [#29](https://github.com/jaymalve/clipmunk/pull/29) |
 | 13 | Switch over to the standalone Studio | Studio | ⬜ |
 | 14 | Library screen | Studio | ⬜ |
 | 15 | Editor screen: timeline, inspector, undo | Studio | ⬜ |
@@ -242,18 +242,20 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** Chrome's local network access checks block a Playwright-fulfilled parent page from framing a loopback page, so the frame test launches Chromium with that check off; the daemon-served Studio is itself on loopback. The example app's `Studio.tsx` is Biome-formatted, so it differs from the template and `sync` reports it as edited there.
 
 ### PR 12 · The daemon serves the Studio (parity)
-**Status:** ⬜ · **Branch:** `studio/12-studio-app` · **Base:** `studio/11-frame-page`
+**Status:** 🔵 [#29](https://github.com/jaymalve/clipmunk/pull/29) · **Branch:** `studio/12-studio-app` · **Base:** `studio/11-frame-page`
 
 **Goal:** a standalone Studio at `http://127.0.0.1:4747/` that does everything today's does. No new design yet.
 
-- A new browser build, `dist/studio-app/`, a static single-page app built by `scripts/build.mjs`. It reuses `src/studio` components. Import boundaries: the app may import `studio`, `core`, `compositor`, `bridge` and the daemon client.
-- Daemon: unauthenticated `GET` for the app's static files only, with `Content-Security-Policy: frame-ancestors 'none'`, and everything under `/v1` still needs the token. `GET /v1/status` adds the host's `devUrl` from `project.json`. A new `GET /v1/events` is one server-sent-events stream for things the Studio should hear: take recorded, edit changed, config changed, job progress. Later PRs add chat and staleness.
-- `clipmunk dev` prints the Studio link `http://127.0.0.1:4747/#clipmunk-daemon=<port>.<token>`, which stores the link for the Studio's origin, as today.
-- Screens at parity: library (scenes from `GET /v1/scenes`, with thumbnails from recipes; takes; sequences), the scene player (an iframe of the frame page, with controls in the Studio), the take editor (in the Studio itself), the sequence builder, and the export panel.
+- A new browser build, `dist/studio-app/`, a static single-page app (`src/studio-app`) built by `scripts/studio-app.mjs`, which `scripts/build.mjs` calls. It reuses `src/studio` components. Import boundaries: the app may import `studio`, `core`, `compositor`, `bridge`, `react` and `recorder` (where the daemon client lives).
+- Daemon: unauthenticated `GET` for the app's static files only (`daemon/studio.ts`), with `Content-Security-Policy: frame-ancestors 'none'`, and everything under `/v1` still needs the token. `GET /v1/status` adds the host's `devUrl` and `studioPath` from `project.json`. A new `GET /v1/events` is one server-sent-events stream (`daemon/events.ts`): take recorded, edit changed (takes, scenes, sequences), config changed (a file watcher), job progress. `GET /v1/scenes?detail=1` gives the recipes. An export started from the Studio renders from the project's `devUrl`.
+- `clipmunk dev` prints the Studio link `http://127.0.0.1:4747/#clipmunk-daemon=<port>.<token>`, and the in-app link once for recording.
+- Screens at parity: library, the scene player (an iframe of the frame page, with play, scrub, variant, narration, music and export in the Studio), the take editor (in the Studio itself), the sequence builder, and the export panel.
 - When the host dev server is not answering, scene previews say so with the command to start it; takes, sequences and export keep working.
 
-**Tests:** a new `tests/studio` suite opens the daemon-served Studio and repeats today's studio checks (open a scene, scrub, export; edit a take and save; build a sequence); the guard tests (static files without a token, `/v1` refused without one, framing refused).
+**Tests:** a new `tests/studio` suite (`npm run test:studio`) builds the app, opens the daemon-served Studio and repeats today's studio checks (list, open a scene in its frame, scrub, export; edit a take and save; build a sequence; the host-down message); the guard tests (static files without a token, `/v1` refused without one, the wrong Host refused, framing refused, no files from outside the app) and the event stream.
 **Done when:** every flow of the in-app Studio works in the standalone one, and the in-app Studio still works.
+
+**Notes:** Vitest sets `NODE_ENV=test`, which made the React plugin emit development JSX into the production bundle; `buildStudioApp` forces production while it builds.
 
 ### PR 13 · Switch over to the standalone Studio
 **Status:** ⬜ · **Branch:** `studio/13-switch-over` · **Base:** `studio/12-studio-app`
@@ -408,11 +410,13 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 9 opened as #26, stacked on #25: export jobs. For PR 10: `exportJob` refuses `variants` and refuses `ratios` for scenes (`variants-unsupported`, `ratios-unsupported` in `export/job.ts`); lift both there, add the variant to the stem (`<clip>.<ratio>.<variant>`), and pass it to the scene exporter.
 - 2026-10-25 · PR 10 opened as #27, stacked on #26: scene variants. The engine part is done. For PR 11: the frame page must read `clipmunk-variant` from its own URL and wrap the scene in `SceneVariantProvider`, exactly as `ScenePreview` does, and size the frame with `variantFrame`.
 - 2026-10-25 · PR 11 opened as #28, stacked on #27: the frame page. For PR 12: frame the host page at `frameUrl(devUrl, studioPath, id)` plus the daemon link hash (`#clipmunk-daemon=<port>.<token>`); the frame trusts only loopback origins on that port. Post `{ cm: 1, type, … }` messages; the frame answers with `ready`, `frame`, `tick`, `stopped`, `picked` and `narration`.
+- 2026-10-25 · PR 12 opened as #29, stacked on #28: the standalone Studio. For PR 13: take export still opens the take editor on the host's dev server (`export/take.ts`); point it at the daemon-served Studio (`?clipmunk=1&clipmunk-take=<id>` on the daemon's origin, with `studioDir` found as in `daemon/server.ts`).
 
 ## Environment notes for whoever picks this up
 
 - FFmpeg: tests set `CLIPMUNK_FFMPEG` themselves. By hand, use an absolute path, for example `CLIPMUNK_FFMPEG=$PWD/node_modules/ffmpeg-static/ffmpeg`.
 - `npm run test:recorder` needs a display and wraps `xvfb-run`.
+- `npm run test:studio` builds the Studio app into a temporary folder first, which takes a few seconds.
 - On a machine without a GPU, depth-blur scenes take seconds per frame. Run long suites in the background with a log file.
 - `scripts/check-installed.mjs` uses ports 5311 and 3111; an interrupted run can leave a server there that fails the next run with a misleading "scene did not open".
 - `clipmunk export --url` stores that URL in `.clipmunk/project.json`. Restore it after testing against another port.

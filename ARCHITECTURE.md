@@ -572,6 +572,10 @@ One hook, `useClipSession`, owns the cursor: `timeMs`, `playing`, `seek`, `toggl
 ---
 
 
+### 10.3a The standalone Studio
+
+`src/studio-app` is a static single-page app, built by `scripts/studio-app.mjs` into `dist/studio-app/` and served by the daemon at its own address (`http://127.0.0.1:4747/`). `clipmunk dev` prints its link with the daemon link in the fragment. It reuses the studio's components: the library (scenes from `GET /v1/scenes?detail=1`, refreshed through `/v1/events`), the take editor, the sequence builder and the export panel, which all talk only to the daemon, so they work while the host app is not running. The scene player frames the host's frame page (10.4) at the `devUrl` from `GET /v1/status`, hands it the daemon link, and drives it with the frame protocol; the controls (play, scrub, variant, narration, music, export) live in the Studio. When no `ready` arrives, it says the host's dev server is not answering and how to start it. An export started from the Studio renders from the project's `devUrl`. The in-app studio keeps working beside it until the switch-over.
+
 ### 10.4 The frame page
 
 `ClipmunkFrame` renders one scene alone, fitted to the window, with no controls: the scene player in its bare mode. It installs the capture bridge, so export opens it (12.1), and it runs the Studio's message protocol (`studio/frame-agent.ts`), so the standalone Studio (19.1) can show the scene in an iframe and drive it. Every message carries `cm: 1`. Messages are accepted only from a loopback origin on the daemon's port (from the daemon link in the frame's address), and replies go only there.
@@ -599,12 +603,14 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 - The `Origin` must be a loopback origin and the `Host` header must be the daemon's own address, which blocks cross-site requests and DNS rebinding.
 - All paths are resolved inside the project root; traversal, absolute paths and symlinks that leave the root are rejected.
 - The daemon never executes project code.
+- The standalone Studio's own files (any `GET` outside `/v1`) need no token: they hold no project data. They still need the daemon's `Host`, and carry `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`, so no other page can frame the Studio. A path outside the app's folder serves the app's page, never another file.
 
 ### 11.2 API
 
 | Method and path | Purpose |
 |---|---|
-| `GET /v1/status` | Version, project id, capabilities (FFmpeg and Chromium present) |
+| `GET /v1/status` | Version, project id, capabilities (FFmpeg and Chromium present), and the host's `devUrl` and `studioPath` from `project.json` |
+| `GET /v1/events` | One server-sent-events stream for the Studio: `take` (recorded), `edit` (a take, scene or sequence changed through the daemon), `config` (the config file changed on disk), `job` (progress and outcome of any job) |
 | `GET /v1/config` | The validated `clipmunk.config.json` and whether it exists, or its issues |
 | `GET /v1/presets`, `POST /v1/presets` | List presets with a one-line summary; save one (`{ name, preset }` or `{ name, fromTake, fields }`, `replace` to overwrite) |
 | `POST /v1/takes/:id/preset`, `POST /v1/scenes/:id/preset` | Apply a preset by `{ name }` to a take's edit, or a preset's music to a scene |
@@ -616,7 +622,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `PATCH /v1/takes/:id` | Save `edit` and `title` to `edit.json`; requires the revision hash it was read at |
 | `DELETE /v1/takes/:id` | Delete a take and its media |
 | `GET /v1/takes/:id/files/:name` | Serve media with range requests |
-| `GET /v1/scenes` | List validated scenes |
+| `GET /v1/scenes` | List validated scenes; `?detail=1` adds each recipe (definition, snapshot, music, sounds) for the Studio |
 | `PUT /v1/scenes/:id/music` | Set or clear a scene's generated music in its recipe |
 | `PUT /v1/scenes/:id/narration?offset=ms` | Store a narration recording and point the scene's recipe at it |
 | `DELETE /v1/scenes/:id/narration` | Remove a scene's narration and its file |

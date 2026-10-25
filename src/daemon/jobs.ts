@@ -17,12 +17,13 @@ type Job = {
   controller: AbortController;
 };
 
-export function createJobs() {
+export function createJobs(onEvent?: (job: { id: string; kind: string }, event: JobEvent) => void) {
   const jobs = new Map<string, Job>();
   const emit = (job: Job, event: JobEvent) => {
     job.last = event;
     if (event.type !== "progress") job.finished = true;
     for (const listener of [...job.listeners]) listener(event);
+    onEvent?.(job, event);
   };
   return {
     start<T>(

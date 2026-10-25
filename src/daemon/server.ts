@@ -1,12 +1,17 @@
 import { randomBytes } from "node:crypto";
+import { existsSync, type FSWatcher, watch } from "node:fs";
 import { chmod, rm } from "node:fs/promises";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
-import { DAEMON_FILE, type DaemonFile, DEFAULT_DAEMON_PORT } from "../core";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { CONFIG_FILE, DAEMON_FILE, type DaemonFile, DEFAULT_DAEMON_PORT } from "../core";
 import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
+import { createEvents } from "./events";
 import { admit } from "./guard";
 import { deny, STATUS, send } from "./http";
 import { createJobs } from "./jobs";
 import { ROUTES } from "./routes";
+import { serveStudio } from "./studio";
 
 /** The local daemon: a thin HTTP adapter over the same operations the CLI calls.
  * It listens on 127.0.0.1 only. Every request needs the session token, a loopback
@@ -21,7 +26,17 @@ export type DaemonOptions = {
   log?: (line: string) => void;
   /** Write .clipmunk/daemon.json. Off for a second daemon on a project that may already have one (tests). */
   announce?: boolean;
+  /** The built Studio app (dist/studio-app). Found beside the package's own code when not given. */
+  studioDir?: string;
 };
+
+/** The Studio app shipped with the package: dist/studio-app, beside dist/cli.js or its chunks. */
+function packagedStudio(): string | undefined {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  return [path.join(here, "studio-app"), path.join(here, "..", "studio-app")].find((dir) =>
+    existsSync(path.join(dir, "index.html")),
+  );
+}
 
 /** Listen on the given port, or, when none was asked for, on the well-known one with any free port as a fallback. */
 async function listen(server: http.Server, requested: number | undefined): Promise<number> {
@@ -45,10 +60,15 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   const { root } = options;
   const token = randomBytes(24).toString("base64url");
   const tokenBytes = Buffer.from(token);
-  const jobs = createJobs();
+  const events = createEvents();
+  const jobs = createJobs((job, event) => events.emit({ type: "job", job: job.id, kind: job.kind, event }));
+  const studioDir = options.studioDir ?? packagedStudio();
   let port = 0;
 
   async function route(request: IncomingMessage, response: ServerResponse) {
+    // The Studio's own files are public: they hold no data, and everything under /v1 needs the token.
+    if (!request.url?.startsWith("/v1/") && (request.method === "GET" || request.method === "HEAD"))
+      return serveStudio(request, response, port, studioDir);
     const admitted = admit(request, response, port, tokenBytes);
     if (!admitted) return;
     const [version, resource, id, action, name] = admitted.url.pathname
@@ -67,6 +87,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
       name,
       context: { root },
       jobs,
+      events,
       version: options.version ?? "dev",
       log: (line) => options.log?.(line),
     });
@@ -82,6 +103,19 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   });
   port = await listen(server, options.port);
 
+  // The config can change on disk (an editor, git, an agent); tell the Studio.
+  let watcher: FSWatcher | undefined;
+  let settle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    watcher = watch(root, (_event, file) => {
+      if (file !== CONFIG_FILE) return;
+      clearTimeout(settle);
+      settle = setTimeout(() => events.emit({ type: "config" }), 50);
+    });
+  } catch {
+    // Without a watcher the Studio still sees changes made through the daemon.
+  }
+
   const announce = options.announce ?? true;
   if (announce) {
     const record: DaemonFile = { port, pid: process.pid, token, startedAt: new Date().toISOString() };
@@ -95,6 +129,8 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     origin: `http://127.0.0.1:${port}`,
     async close() {
       jobs.cancelAll();
+      watcher?.close();
+      clearTimeout(settle);
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));
       // Remove the address file only if it is still ours; a newer daemon may have replaced it.
