@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
+  applyBrand,
   CreateTakeSchema,
   defaultEdit,
   EDIT_FILE,
@@ -29,6 +30,7 @@ import {
   exists,
   Fault,
   loadTake,
+  readConfig,
   readText,
   resolveInside,
   saveTakeEdit,
@@ -207,7 +209,11 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
         events: { file: "events.jsonl", count: events.length },
       },
     });
-    const edit: TakeEditFile = { version: 1, edit: defaultEdit(durationMs) };
+    // The brand applies once, here; a later change to the config leaves this take as it is.
+    // A broken config must not lose a recording, so it is ignored (clipmunk doctor reports it).
+    const config = await readConfig(root);
+    const brand = config.ok ? config.data.config.brand : undefined;
+    const edit: TakeEditFile = { version: 1, edit: applyBrand(defaultEdit(durationMs), brand) };
     // The edit first: a take is listed once take.json exists, and must then have its edit.
     await writeText(root, `${dir}/${EDIT_FILE}`, `${JSON.stringify(edit, null, 2)}\n`);
     await writeText(root, `${dir}/${TAKE_FILE}`, `${JSON.stringify(take, null, 2)}\n`);
