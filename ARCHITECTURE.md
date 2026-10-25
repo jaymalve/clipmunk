@@ -636,6 +636,7 @@ Each phase ends with something that runs and is tested.
 | 4. Take compositor | Frame sources, zoom, cursor, camera bubble, take editor, take export with audio | **Complete.** `tests/take` checks the composite pixel by pixel on a synthetic take and exports it; `tests/recorder` edits and exports a real recording. |
 | 5. Sequences and voiceover | Sequence schema and export, narration over scenes | **Complete.** `tests/sequence` narrates a scene through the studio, and exports a scene plus a take as one file with a fade, with a cut, and with music over the whole. |
 | 6. Release | Installed-package tests, docs, publish | `clipmunk` installs and works from the registry |
+| 7. Studio and the next feature set | Standalone Studio, edit sidecars, `clipmunk.config.json` and presets, redaction, captions, reframing, GIF and poster, scene variants, MCP and agent chat, take to scene, stale detection, GitHub Action | Planned. Direction in section 19; the PR-by-PR plan and its progress log are in `studio_implementation.md`. |
 
 ---
 
@@ -646,4 +647,58 @@ Each phase ends with something that runs and is tested.
 - **Depth of field is an approximation.** Gaussian kernels in the DOM; no aperture-shaped bokeh and no occlusion between surfaces.
 - **Not yet verified:** recording on macOS end to end (the recorder is tested on Linux under a virtual display, where the latency measurement returns a value but no real cursor exists); playback smoothness of a retina-resolution take in the editor on a real machine (decoding is verified, speed is not); how voice and picture line up by ear in a real export; `restrictTo` on `body` in macOS Chrome (verified on Linux only); H.264 `VideoEncoder` availability in Playwright's Chromium on macOS (12.2 has the VP9 fallback). Each is checked at the start of its phase.
 - **Deferred:** a virtual-time export mode that advances host CSS animations and timers frame by frame; a visual keyframe editor for scenes; background blur for the camera.
+- **Not planned:** replaying a take by re-driving the live app (section 19.2). Revisit only with evidence of flows that cannot reasonably be written as a scene.
 - **Out of scope:** hosted rendering, accounts, a drag-and-drop builder, React Native.
+
+---
+
+## 19. Direction: the Studio and the next feature set
+
+Agreed on 2026-10-25 from the "Clipmunk Studio" build spec. This section records the decisions; the sections above still describe the code as it is, and each one is rewritten by the PR that changes it. The ordered plan, and a log of what is done, lives in `studio_implementation.md`.
+
+The rules in section 1 still hold, and the spec adds none that conflict: everything binds to `127.0.0.1`, there are no accounts, uploads or telemetry, Clipmunk never calls a model, all state is files in the repo, nothing ships in a production build, and a raw recording is never rewritten.
+
+### 19.1 The Studio moves out of the host app
+
+The Studio becomes its own prebuilt web app, served by the daemon at `http://127.0.0.1:4747/` (the daemon's existing default port). It no longer runs inside the host's React tree.
+
+- **Scenes** still render in the host app, because only the host can run its components. The Studio shows them in an iframe of a dev-only **frame page** on the host's dev server (`?clipmunk-frame=…`), which renders just the scene, installs the capture bridge and listens for messages from the Studio: seek (latest position wins, stale seeks are dropped), play and pause (the frame runs its own clock and reports time), pick an element, and choose a variant. Export opens the same frame page, so preview and export still cannot disagree.
+- **Takes** need nothing from the host: the compositor draws on the Studio's own canvas from media the daemon serves. So a take can be edited, and exported, while the host app is not running.
+- **What stays in the host:** the generated adapter (now thinner: the frame page and the recorder boot) and the recorder HUD, since recording captures the app's own tab.
+- **Why:** the Studio stops depending on the host's React version, bundler and global quirks, keeps working when the host is broken, and can show the same scene in several real viewports side by side (9:16 next to 16:9, light next to dark), which the in-app Studio cannot.
+- **Evidence:** a spike (branch `spike/studio`, `spikes/studio/README.md`) showed the iframe preview pixel-identical to the in-app page at four times on a light and a depth-blur scene; the unmodified take editor running on another origin; export, hot reload and a cross-origin element picker working; and microphone, camera and autoplay allowed in the frame. On an Apple M5 at device pixel ratio 2, the depth-blur scene scrubbed in a median 8.3 ms per seek both in-app and in the iframe, played at 120 fps both ways, and two side-by-side iframes held 120 fps each. Every figure sat at the 120 Hz display cap, so sharing a saturated GPU was not reached; if it ever matters, only the focused frame plays and the others hold their frame.
+- The API stays REST under `/v1` with server-sent events for anything pushed to the Studio. A WebSocket is added only if a feature needs it.
+
+### 19.2 Takes stay recordings; there is no replay
+
+A take remains what it is today: screen video plus an event log, edited by compositing on top. Re-driving the live app from a log ("replay") is not built.
+
+- **Why:** a recording works on any app as it is (real backend, auth, websockets, canvas, third-party widgets). Replay works only on an app made deterministic with a frozen clock and fixtures, and it fails quietly when it goes off course. Almost every feature in the spec works on recordings.
+- **Scenes are the always-fresh clip.** A scene re-renders the host's real components from code at export time, so it shows today's UI, can come in variants, and is safe to re-export in CI. A scene shows a flow by deriving every state from scene time (a puppet), not by running the app's logic.
+- **Consequences for the spec:** theme and locale variants are a scene feature. A take gets aspect-ratio variants only, by reframing (a crop that follows the action). Stale detection re-exports stale scenes and flags stale takes to be recorded again. The spec's frozen clock and fixtures are dropped, because only replay needed them; scenes are deterministic through the scene clock.
+- **Take to scene.** The bridge between the two kinds: the developer's agent reads a take (its event summary and still frames from the video) and writes a scene that reproduces it, then checks its preview against the take's frames. Clipmunk provides the tools and the guide; the agent does the writing.
+
+### 19.3 Configuration is JSON
+
+Project-wide settings live in `clipmunk.config.json` at the project root, validated by a schema in `core`: brand (backdrop, padding, corner radius, logo, outro), redaction selectors, presets, and scene variants. It is JSON, not TypeScript, so the daemon still never executes project code, and "Save current as preset" can write the file directly. A preset is a partial edit plus export options, merged over a clip's own edit.
+
+### 19.4 Edits live beside the recording
+
+A take's edit moves out of `take.json` into `edit.json` in the same folder. `take.json` is written once at ingest and never again. Older takes, whose `take.json` still holds an edit, are read as before; their first save writes `edit.json`, which then takes precedence.
+
+### 19.5 The event log learns what was touched
+
+To write captions ("Click New invoice"), redact by selector, map clips to source files and turn takes into scenes, the recorder logs the identity of the elements the user interacts with: a selector, the role and accessible name, and the route.
+
+- This changes the promise in section 5.4. The log will contain the accessible names of clicked and focused controls, and the route. It still never contains typed text or attribute values, and elements matching a redaction selector are never named.
+- Elements matching a redaction selector have their boxes logged on every frame they move, so the compositor can blur or block them wherever they go.
+- Key combinations with a modifier (such as ⌘K) are logged for the keystroke overlay. Plain typing still records only that a key was pressed, and nothing at all in password fields.
+
+### 19.6 The agent works through MCP
+
+`clipmunk mcp` is a stdio MCP server that the developer's agent (Claude Code, Cursor, Codex) connects to. It proxies tool calls to the daemon: list and read clips, edit a take with a JSON merge patch, apply a preset, render a preview frame, export. Agent chat in the Studio is a queue in the daemon: the panel posts messages, the agent waits on a blocking tool call for the next one, and proposed edits come back as a diff the developer keeps or undoes. MCP cannot push into an agent session, so chat works while the agent is waiting on that call; the guide tells it how.
+
+### 19.7 Stale detection and the GitHub Action
+
+Each export records the source files its clip depends on, with content hashes, in `.clipmunk/manifest.json`. For a scene, the files come from the import graph of its component, found by scanning imports, not by running code. For a take, a dev-only build plugin tags rendered elements with their source file and the recorder logs it. A clip is stale when a recorded file's content has changed. The GitHub Action checks a pull request for stale clips, re-exports the stale scenes, and comments with what changed. GitHub's API cannot attach a video to a comment, so how the files reach the comment is decided in that PR.
+
