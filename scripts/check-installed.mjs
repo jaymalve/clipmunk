@@ -110,13 +110,16 @@ const HOSTS = {
         },
         include: ["src"],
       }),
-      "vite.config.ts": `import react from "@vitejs/plugin-react";\nimport { defineConfig } from "vite";\nexport default defineConfig({ plugins: [react()] });\n`,
+      // clipmunk/vite marks elements with their source file in dev only; the build check below proves it.
+      "vite.config.ts": `import react from "@vitejs/plugin-react";\nimport { clipmunk } from "clipmunk/vite";\nimport { defineConfig } from "vite";\nexport default defineConfig({ plugins: [react(), clipmunk()] });\n`,
       "index.html": `<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`,
       "src/main.tsx": `import { StrictMode } from "react";\nimport { createRoot } from "react-dom/client";\nimport { App } from "./App";\n\ncreateRoot(document.getElementById("root")!).render(\n  <StrictMode>\n    <App />\n  </StrictMode>,\n);\n`,
       "src/App.tsx": `import { Card } from "./Card";\nexport function App() { return <main><h1>Host app</h1><Card /></main>; }\n`,
       "src/Card.tsx": CARD,
     },
     cardImport: "../../Card",
+    // A module as the dev server sends it, with its host elements marked.
+    tagged: { url: "/src/Card.tsx", file: "src/Card.tsx" },
     dev: ["npx", ["vite", "--host", "127.0.0.1", "--port", "5311", "--strictPort"]],
     build: ["npx", ["vite", "build"]],
     output: "dist",
@@ -150,6 +153,7 @@ const HOSTS = {
       "app/layout.tsx": `export default function RootLayout({ children }: { children: React.ReactNode }) {\n  return <html lang="en"><body>{children}</body></html>;\n}\n`,
       "app/page.tsx": `import { Card } from "../components/Card";\nexport default function Home() { return <main><h1>Host app</h1><Card /></main>; }\n`,
       "components/Card.tsx": CARD,
+      "next.config.mjs": `import { withClipmunk } from "clipmunk/next";\nexport default withClipmunk({});\n`,
     },
     cardImport: "../../../components/Card",
     dev: ["npx", ["next", "dev", "--hostname", "127.0.0.1", "--port", "3111"]],
@@ -274,6 +278,14 @@ async function checkHost(name, tarball) {
       !/clipmunk/i.test(home.replace(/host-\w+/g, "")) || name === "next",
       "the normal page is served without the studio",
     );
+    // Next 16's dev server is Turbopack, which clipmunk/next leaves alone (webpack dev is tagged).
+    if (host.tagged) {
+      const module = await fetch(`${origin}${host.tagged.url}`).then((response) => response.text());
+      check(
+        module.includes(`"data-clipmunk-src": ${JSON.stringify(host.tagged.file)}`),
+        "in development, elements carry the file that rendered them",
+      );
+    }
 
     const snapshot = JSON.parse(clipmunk("snapshot", "--scene", "card-pass", "--url", origin, "--json"));
     check(snapshot.ok, `snapshot saves a thumbnail${snapshot.ok ? "" : `: ${JSON.stringify(snapshot.issues)}`}`);
@@ -287,6 +299,12 @@ async function checkHost(name, tarball) {
     check(exported.ok, `export renders an MP4${exported.ok ? "" : `: ${JSON.stringify(exported.issues)}`}`);
     const stderr = spawnSyncStderr(root, exported.data.output);
     check(/frame=\s*30\b/.test(stderr) && /700x420/.test(stderr), "the MP4 has 30 frames at 700x420");
+    const manifest = JSON.parse(readFileSync(path.join(root, ".clipmunk/manifest.json"), "utf8"));
+    const sources = Object.keys(manifest.clips["scene:card-pass"]?.files ?? {});
+    check(
+      sources.includes("src/clipmunk/scenes/card-pass.scene.json") && sources.some((file) => file.endsWith("Card.tsx")),
+      "the export manifest lists the scene's files and the component it imports",
+    );
 
     // The daemon starts from the installed binary, answers with its token, and cleans up when stopped.
     // Started directly so the interrupt reaches it, as Ctrl+C in a terminal does.

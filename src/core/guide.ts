@@ -213,6 +213,8 @@ export function getGuide() {
       component:
         "<id>.tsx or <id>.jsx (one, not both): default-exports a component returning Surface elements. Surface props: id, transform?, content?, children, className?, style?. Give each Surface an explicit size through style when its content would otherwise stretch.",
       helpers: `Keep helper modules outside ${SCENES_DIR}; every .tsx there is treated as a scene component.`,
+      manifest:
+        ".clipmunk/manifest.json (commit it): every export records the clip's source files with their hashes: a scene's recipe and everything its component imports, a take's edit and the files its elements came from. In development clipmunk/vite (and clipmunk/next with webpack) mark each element with data-clipmunk-src, so a take knows those files.",
       sync: "Vite discovers new scene files automatically. In Next.js and other hosts run clipmunk sync after adding or removing a scene.",
     },
     config: {

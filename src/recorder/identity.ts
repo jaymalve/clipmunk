@@ -1,4 +1,4 @@
-import type { ElementIdentity } from "../core";
+import { type ElementIdentity, SOURCE_ATTR } from "../core";
 
 /** Which element an interaction touched, in a form that is useful later and safe to keep:
  * a short CSS selector that matches only that element, its role, and for controls its
@@ -34,6 +34,9 @@ export function identify(element: Element, redact: readonly string[] = []): Elem
   if (role) identity.role = role;
   const testId = TEST_IDS.map((name) => element.getAttribute(name)).find(Boolean);
   if (testId && !hidden) identity.testId = testId.slice(0, 120);
+  // The file that rendered it, when clipmunk/vite or clipmunk/next marked it in development.
+  const src = element.closest(`[${SOURCE_ATTR}]`)?.getAttribute(SOURCE_ATTR);
+  if (src) identity.src = src.slice(0, 300);
   if (!hidden && element.matches(INTERACTIVE)) {
     const name = accessibleName(element);
     if (name) identity.name = name;

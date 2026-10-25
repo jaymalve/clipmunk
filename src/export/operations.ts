@@ -32,6 +32,7 @@ import {
   cancellation,
   claimOutput,
   even,
+  noteExport,
   publish,
   removeDirectory,
   workDirectory,
@@ -40,7 +41,12 @@ import {
 /** Rendering operations. A scene is sampled at exact frame times through the same
  * bridge the studio uses, so the file matches the preview frame for frame.
  */
-export type ExportContext = Context & { signal?: AbortSignal; onProgress?: (done: number, total: number) => void };
+export type ExportContext = Context & {
+  signal?: AbortSignal;
+  onProgress?: (done: number, total: number) => void;
+  /** False for a render that is part of a larger export (a job's video, a sequence's clip), which records it instead. */
+  manifest?: false;
+};
 type SceneRequest = ReturnType<typeof ExportSceneSchema.parse>;
 type Browser = Awaited<ReturnType<typeof launchBrowser>>;
 type RenderPlan = { durationMs: number; width: number; height: number; frames: number; workers: number };
@@ -224,6 +230,7 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
       });
     }
     await publish(finished, claim);
+    await noteExport(context, { kind: "scene", id: request.sceneId }, [claim.output]);
     return ok({
       output: claim.output,
       fps: request.fps,

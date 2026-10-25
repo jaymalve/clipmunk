@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 // @ts-expect-error: a plain script that builds the app the daemon serves
 import { buildStudioApp } from "../../scripts/studio-app.mjs";
@@ -13,8 +13,13 @@ const newest = (dir: string): number =>
     return Math.max(latest, entry.isDirectory() ? newest(full) : statSync(full).mtimeMs);
   }, 0);
 
+/** Exports in the tests write the example's manifest; it is put back as it was afterwards. */
+const MANIFEST = path.resolve("examples/vite-app/.clipmunk/manifest.json");
+
 export default async function setup() {
-  if (process.env.CLIPMUNK_STUDIO_DIR) return;
+  const manifest = existsSync(MANIFEST) ? readFileSync(MANIFEST) : undefined;
+  const teardown = () => (manifest ? writeFileSync(MANIFEST, manifest) : rmSync(MANIFEST, { force: true }));
+  if (process.env.CLIPMUNK_STUDIO_DIR) return teardown;
   const out = path.resolve("node_modules/.cache/clipmunk/studio-app");
   const built = (() => {
     try {
@@ -29,4 +34,5 @@ export default async function setup() {
   );
   if (changed > built) await buildStudioApp(out);
   process.env.CLIPMUNK_STUDIO_DIR = out;
+  return teardown;
 }

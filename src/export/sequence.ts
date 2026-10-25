@@ -21,6 +21,7 @@ import {
   type Cancellation,
   cancellation,
   claimOutput,
+  noteExport,
   publish,
   removeDirectory,
   workDirectory,
@@ -60,8 +61,8 @@ async function renderClips(
     const result =
       clip.kind === "scene"
         ? // A scene's sound effects are laid over the whole sequence instead, so they never lower its music.
-          await exportScene({ ...shared, sceneId: clip.id, sounds: false }, { ...context, onProgress })
-        : await exportTake({ ...shared, takeId: clip.id }, { ...context, onProgress });
+          await exportScene({ ...shared, sceneId: clip.id, sounds: false }, { ...context, onProgress, manifest: false })
+        : await exportTake({ ...shared, takeId: clip.id }, { ...context, onProgress, manifest: false });
     if (!result.ok)
       return fail(
         result.issues.map((issue: Issue) => ({ ...issue, message: `${clip.kind} "${clip.id}": ${issue.message}` })),
@@ -168,6 +169,7 @@ export async function exportSequence(input: unknown, context: ExportContext): Pr
     });
     cancel.check();
     await publish(joined, claim);
+    await noteExport(context, { kind: "sequence", id: request.sequenceId }, [claim.output]);
     return ok({
       output: claim.output,
       fps: sequence.fps,

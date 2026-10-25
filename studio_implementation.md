@@ -38,7 +38,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 17 | `clipmunk mcp` | Agent | 🔵 [#34](https://github.com/jaymalve/clipmunk/pull/34) |
 | 18 | Agent chat | Agent | 🔵 [#35](https://github.com/jaymalve/clipmunk/pull/35) |
 | 19 | Take to scene | Agent | 🔵 [#36](https://github.com/jaymalve/clipmunk/pull/36) |
-| 20 | Source map and export manifest | Freshness | ⬜ |
+| 20 | Source map and export manifest | Freshness | 🔵 [#37](https://github.com/jaymalve/clipmunk/pull/37) |
 | 21 | Stale detection | Freshness | ⬜ |
 | 22 | GitHub Action and posting to a PR | Freshness | ⬜ |
 
@@ -365,7 +365,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 ## Part 4: Freshness
 
 ### PR 20 · Source map and export manifest
-**Status:** ⬜ · **Branch:** `studio/20-manifest` · **Base:** `studio/19-take-to-scene`
+**Status:** 🔵 [#37](https://github.com/jaymalve/clipmunk/pull/37) · **Branch:** `studio/20-manifest` · **Base:** `studio/19-take-to-scene`
 
 - Scenes: `project/imports.ts` scans the import graph of a scene component (static `import` and `export … from`, resolved like the host's bundler for relative paths and `tsconfig` paths). It uses the same kind of dependency-free scanner as `project/entry.ts`, and never runs code.
 - Takes: `clipmunk/vite` (a Vite plugin) and a Next equivalent add `data-clipmunk-src="<file>"` to host elements in development only, and the recorder logs `el.src`. The production build is checked to contain no attribute.
@@ -373,6 +373,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 
 **Tests:** the import scanner against fixtures (aliases, re-exports, cycles); the plugin in `test:installed`, including the production-build check.
 **Done when:** exporting a scene and a take writes manifest entries listing the right source files.
+**Notes:** the tagger works on compiled modules (`jsxDEV("div", {` and friends), so it needs no parser and one function serves Vite, webpack and every JSX compiler; it is `core/source.ts`, which the plugins import alone (each bundle is under 3 KB). Next 16 dev defaults to Turbopack, where webpack loaders do not see compiled code, so `clipmunk/next` tags only with `next dev --webpack`; it also sets an empty `turbopack` key so Next 16 does not refuse a config with a webpack hook. The installed check covers the Vite plugin in dev, both production builds (no `data-clipmunk`), and the manifest of the installed CLI's export; the example app uses the plugin, and the recorder test sees `el.src`. Takes record their `edit.json` and the import graphs of their elements' files; sequences their file and clips. Tests restore the example's manifest in the Vitest global setup. `init` says how to add the plugin.
 
 ### PR 21 · Stale detection
 **Status:** ⬜ · **Branch:** `studio/21-stale` · **Base:** `studio/20-manifest`
@@ -430,6 +431,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 17 opened as #34, stacked on #33: `clipmunk mcp`. For PR 18: add tools to `clipmunkTools` in `src/mcp/tools.ts`; a blocking `wait_for_chat` should long-poll a daemon route rather than hold state in the MCP process, which can be restarted by the agent's client at any time.
 - 2026-10-25 · PR 18 opened as #35, stacked on #34: the agent chat. For PR 19: "Make a scene from this take" can post through `POST /v1/chat` with a clip chip; new MCP tools go in `clipmunkTools`, and `formatChatMessage` is where chips become text for the agent.
 - 2026-10-25 · PR 19 opened as #36, stacked on #35: take to scene. For PR 20: scenes' sources come from scanning imports (`project/entry.ts` has the scanner style to follow); exports go through `export/job.ts`, which is where the manifest should be written once per job.
+- 2026-10-25 · PR 20 opened as #37, stacked on #36: sources and the manifest. For PR 21: `readManifest`, `clipSources` and `hashFiles` (project/manifest.ts) give what was recorded and what is there now; a clip is stale when any hash differs, a file is gone, or `clipSources` now names a file the entry lacks.
 
 ## Environment notes for whoever picks this up
 

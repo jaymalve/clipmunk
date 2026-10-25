@@ -25,6 +25,8 @@ const RULES = {
   },
   // The MCP server for coding agents: a stdio front for the daemon's HTTP API.
   mcp: { modules: ["core", "project"], packages: [], node: true },
+  // Build plugins for the host (clipmunk/vite, clipmunk/next): node code that only tags sources.
+  plugins: { modules: ["core"], packages: [], node: true },
   daemon: { modules: ["core", ...NODE], packages: [], node: true },
   export: { modules: ["core", ...NODE], packages: ["playwright"], node: true },
   project: { modules: ["core", ...NODE], packages: ["typescript"], node: true },

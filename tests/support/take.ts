@@ -96,7 +96,7 @@ export async function makeTake(
       y: CLICK.y,
       button: 0,
       rect: CLICK.rect,
-      ...(options.named ? { el: { sel: "#go", role: "button", name: "Go" } } : {}),
+      ...(options.named ? { el: { sel: "#go", role: "button", name: "Go", src: "src/App.tsx" } } : {}),
     },
     { t: CLICK.t + 90, k: "up", x: CLICK.x, y: CLICK.y, button: 0 },
   );

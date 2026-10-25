@@ -349,6 +349,13 @@ describe("captions and shortcuts", () => {
     expect(near(at(0.5, CAPTION), DARK, 50), "no caption yet").toBe(false);
     expect(near(at(3.1, PILL), DARK, 50), "pill above the caption").toBe(true);
     expect(near(at(2.0, PILL), DARK, 50), "no pill yet").toBe(false);
+    // The manifest names the take's edit and the files its clicked elements came from.
+    const manifest = JSON.parse(await readFile(path.join(root, ".clipmunk/manifest.json"), "utf8"));
+    const entry = manifest.clips[`take:${NAMED}`];
+    expect(entry.outputs).toEqual([output]);
+    expect(Object.keys(entry.files)).toEqual(
+      expect.arrayContaining([`.clipmunk/takes/${NAMED}/edit.json`, "src/App.tsx", "src/components/dashboard.tsx"]),
+    );
   }, 240_000);
 });
 

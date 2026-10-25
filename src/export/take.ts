@@ -27,6 +27,7 @@ import {
   type Cancellation,
   cancellation,
   claimOutput,
+  noteExport,
   publish,
   removeDirectory,
   workDirectory,
@@ -195,6 +196,7 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
     });
     cancel.check();
     await publish(finished, claim);
+    await noteExport(context, { kind: "take", id: request.takeId }, [claim.output]);
     return ok({
       output: claim.output,
       fps: request.fps,

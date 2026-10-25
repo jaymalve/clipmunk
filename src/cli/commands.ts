@@ -58,6 +58,8 @@ export const init: Command = async ({ values, context, print, usage }) => {
     lines.push("");
     if (data.entry.status === "manual") lines.push(data.entry.instruction!, "");
     if (data.recorder.instruction && data.entry.status !== "manual") lines.push(data.recorder.instruction, "");
+    const plugin = SOURCE_PLUGIN[data.adapter];
+    if (plugin) lines.push(`So takes know which files they show, ${plugin}`, "");
     lines.push(
       "Studio and recording: npx clipmunk dev, then open the Studio link it prints.",
       "",
@@ -129,6 +131,13 @@ export const dev: Command = async ({ io, values, human, usage }) => {
   );
   await daemon.close();
   return 0;
+};
+
+/** How to mark elements with their source file in development, per host. */
+const SOURCE_PLUGIN: Partial<Record<Adapter, string>> = {
+  vite: 'add clipmunk() from "clipmunk/vite" to the plugins in vite.config.',
+  "next-app": 'wrap the config in withClipmunk() from "clipmunk/next" (it works with next dev --webpack).',
+  "next-pages": 'wrap the config in withClipmunk() from "clipmunk/next" (it works with next dev --webpack).',
 };
 
 /** How to add `clipmunk mcp` to the agents developers use. */
