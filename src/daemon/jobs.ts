@@ -64,6 +64,11 @@ export function createJobs(
       job.listeners.add(listener);
       return () => void job.listeners.delete(listener);
     },
+    /** The job's latest event, for a caller that asks rather than listens. */
+    state(id: string): { kind: string; meta: Record<string, unknown>; finished: boolean; last?: JobEvent } | undefined {
+      const job = jobs.get(id);
+      return job && { kind: job.kind, meta: job.meta, finished: job.finished, ...(job.last ? { last: job.last } : {}) };
+    },
     cancel(id: string): boolean {
       const job = jobs.get(id);
       if (!job) return false;

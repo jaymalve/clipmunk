@@ -97,6 +97,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
       context: { root },
       jobs,
       events,
+      self: { origin: `http://127.0.0.1:${port}`, port, token },
       version: options.version ?? "dev",
       log: (line) => options.log?.(line),
     });

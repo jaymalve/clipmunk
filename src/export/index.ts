@@ -12,5 +12,6 @@ export {
 } from "./ffmpeg";
 export { exportJob } from "./job";
 export { type ExportContext, exportScene, snapshotScene } from "./operations";
+export { previewFrame } from "./preview";
 export { exportSequence } from "./sequence";
 export { exportTake } from "./take";

@@ -1,0 +1,312 @@
+import {
+  DAEMON_FILE,
+  DaemonFileSchema,
+  diffJson,
+  formatChanges,
+  type Issue,
+  mergePatch,
+  motionDuration,
+  parseEvents,
+  summarizeEvents,
+  type TakeEvent,
+  TakeEventSchema,
+} from "../core";
+import { readText } from "../project";
+import type { Tool, ToolResult } from "./server";
+
+/** The tools `clipmunk mcp` offers an agent. Each one calls a route of the running daemon and
+ * formats the answer; the logic stays in the daemon, so the Studio, the CLI and the agent agree.
+ */
+type Reply<T> = { ok: true; data: T } | { ok: false; issues: Issue[] };
+type Clip = { kind: "take" | "scene" | "sequence"; id: string; title: string; durationMs?: number };
+
+export function daemonClient(root: string) {
+  async function link() {
+    let parsed: ReturnType<typeof DaemonFileSchema.safeParse> | undefined;
+    try {
+      parsed = DaemonFileSchema.safeParse(JSON.parse((await readText(root, DAEMON_FILE)) ?? "null"));
+    } catch {
+      parsed = undefined;
+    }
+    if (!parsed?.success)
+      throw new Error("The Clipmunk daemon is not running. Start it in this project with: npx clipmunk dev");
+    return parsed.data;
+  }
+  async function request<T>(method: string, route: string, body?: unknown): Promise<Reply<T>> {
+    const { port, token } = await link();
+    let response: Response;
+    try {
+      response = await fetch(`http://127.0.0.1:${port}${route}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    } catch {
+      throw new Error(`Nothing answers at 127.0.0.1:${port}. Start the daemon with: npx clipmunk dev`);
+    }
+    if ((response.headers.get("content-type") ?? "").startsWith("image/"))
+      return {
+        ok: true,
+        data: {
+          png: Buffer.from(await response.arrayBuffer()),
+          atMs: Number(response.headers.get("x-clipmunk-at")),
+        } as T,
+      };
+    if ((response.headers.get("content-type") ?? "").startsWith("application/json"))
+      return (await response.json()) as Reply<T>;
+    return { ok: true, data: (await response.text()) as T };
+  }
+  return {
+    get: <T>(route: string) => request<T>("GET", route),
+    post: <T>(route: string, body: unknown) => request<T>("POST", route, body),
+    patch: <T>(route: string, body: unknown) => request<T>("PATCH", route, body),
+  };
+}
+type Client = ReturnType<typeof daemonClient>;
+
+const text = (value: string): ToolResult => ({ content: [{ type: "text", text: value }] });
+const json = (value: unknown) => JSON.stringify(value, null, 2);
+/** A daemon answer, or the tool's error result with the daemon's own explanation. */
+function unwrap<T>(reply: Reply<T>): T {
+  if (!reply.ok)
+    throw new Error(
+      reply.issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)).join("\n"),
+    );
+  return reply.data;
+}
+const string = (description: string) => ({ type: "string", description });
+const idArg = { id: string("The clip's id, as list_clips shows it.") };
+
+async function listClips(client: Client): Promise<Clip[]> {
+  const takes = unwrap(
+    await client.get<{ takes: { id: string; title: string; durationMs: number }[] }>("/v1/takes"),
+  ).takes;
+  const scenes = unwrap(
+    await client.get<{ scenes: { id: string; title: string; definition: { motion?: never } }[] }>(
+      "/v1/scenes?detail=1",
+    ),
+  ).scenes;
+  const sequences = unwrap(await client.get<{ sequences: { id: string; title: string }[] }>("/v1/sequences")).sequences;
+  return [
+    ...takes.map((take) => ({ kind: "take" as const, id: take.id, title: take.title, durationMs: take.durationMs })),
+    ...scenes.map((scene) => ({
+      kind: "scene" as const,
+      id: scene.id,
+      title: scene.title,
+      durationMs: scene.definition.motion ? motionDuration(scene.definition.motion) : 0,
+    })),
+    ...sequences.map((sequence) => ({ kind: "sequence" as const, id: sequence.id, title: sequence.title })),
+  ];
+}
+async function kindOf(client: Client, id: string, wanted?: unknown): Promise<Clip["kind"]> {
+  if (wanted === "take" || wanted === "scene" || wanted === "sequence") return wanted;
+  const clip = (await listClips(client)).find((candidate) => candidate.id === id);
+  if (!clip) throw new Error(`No clip named "${id}". list_clips shows them all.`);
+  return clip.kind;
+}
+const kindArg = {
+  kind: {
+    type: "string",
+    enum: ["take", "scene", "sequence"],
+    description: "Only needed when a take and a scene share an id.",
+  },
+};
+
+async function readTake(client: Client, id: string) {
+  const data = unwrap(
+    await client.get<{
+      take: { edit: Record<string, unknown>; title: string; source: { durationMs: number; events: { file: string } } };
+      revision: string;
+    }>(`/v1/takes/${id}`),
+  );
+  const log = unwrap(await client.get<string>(`/v1/takes/${id}/files/${data.take.source.events.file}`));
+  const events = parseEvents(typeof log === "string" ? log : "", TakeEventSchema) as TakeEvent[];
+  return { ...data, events };
+}
+
+export function clipmunkTools(root: string): Tool[] {
+  const client = daemonClient(root);
+  return [
+    {
+      name: "list_clips",
+      description: "List every take (recording), scene and sequence in the project, with its id and length.",
+      inputSchema: { type: "object", properties: {} },
+      async call() {
+        const clips = await listClips(client);
+        if (!clips.length) return text("No clips yet. Record a take (Alt+Shift+R in the app) or write a scene.");
+        return text(
+          clips
+            .map(
+              (clip) =>
+                `${clip.kind} ${clip.id}: ${clip.title}${clip.durationMs !== undefined ? ` (${(clip.durationMs / 1000).toFixed(1)} s)` : ""}`,
+            )
+            .join("\n"),
+        );
+      },
+    },
+    {
+      name: "get_take",
+      description:
+        "Read a take: its edit (what edit_take changes), its revision, and a summary of what happened in it (pages, clicks with the element's role, name and selector, typing, shortcuts), with times on the recording's clock.",
+      inputSchema: { type: "object", properties: idArg, required: ["id"] },
+      async call(args) {
+        const take = await readTake(client, String(args.id));
+        return text(
+          [
+            `${take.take.title}: ${(take.take.source.durationMs / 1000).toFixed(2)} s, revision ${take.revision}`,
+            "",
+            "What happened:",
+            ...(summarizeEvents(take.events).map((line) => `  ${line}`) || []),
+            "",
+            "Edit (change it with edit_take and a JSON merge patch):",
+            json(take.take.edit),
+          ].join("\n"),
+        );
+      },
+    },
+    {
+      name: "get_scene",
+      description:
+        "Read a scene: its recipe (camera, nodes, motion, variants, music) and the component file that renders it.",
+      inputSchema: { type: "object", properties: idArg, required: ["id"] },
+      async call(args) {
+        const scenes = unwrap(
+          await client.get<{ scenes: { id: string; binding: string; [key: string]: unknown }[] }>(
+            "/v1/scenes?detail=1",
+          ),
+        ).scenes;
+        const scene = scenes.find((candidate) => candidate.id === args.id);
+        if (!scene) throw new Error(`No scene named "${String(args.id)}".`);
+        const { binding, ...recipe } = scene;
+        return text(`Component: ${binding.replace(/\.scene\.json$/, ".tsx")}\nRecipe:\n${json(recipe)}`);
+      },
+    },
+    {
+      name: "edit_take",
+      description:
+        'Change a take\'s edit with a JSON merge patch (only the parts to change; null removes a key), for example {"trim":{"startMs":1200}} or {"zoom":{"mode":"off"}} or {"captions":{"items":[{"atMs":1500,"durMs":2000,"text":"Open the report","source":"manual"}]}}. It is validated and saved to edit.json against the take\'s revision; returns what changed.',
+      inputSchema: {
+        type: "object",
+        properties: {
+          ...idArg,
+          patch: { type: "object", description: "A JSON merge patch over the edit get_take shows." },
+          note: string("Why, in a few words; returned with the result."),
+          revision: string("The revision from get_take, to refuse the edit if the take changed since. Optional."),
+        },
+        required: ["id", "patch"],
+      },
+      async call(args) {
+        const id = String(args.id);
+        const current = unwrap(await client.get<{ take: { edit: unknown }; revision: string }>(`/v1/takes/${id}`));
+        const edit = mergePatch(current.take.edit, args.patch);
+        const saved = unwrap(
+          await client.patch<{ take: { edit: unknown }; revision: string }>(`/v1/takes/${id}`, {
+            edit,
+            revision: typeof args.revision === "string" ? args.revision : current.revision,
+          }),
+        );
+        return text(
+          [
+            `Saved to .clipmunk/takes/${id}/edit.json${args.note ? ` (${String(args.note)})` : ""}. Revision ${saved.revision}.`,
+            formatChanges(diffJson(current.take.edit, saved.take.edit)),
+          ].join("\n"),
+        );
+      },
+    },
+    {
+      name: "apply_preset",
+      description: "Apply a preset from clipmunk.config.json to a take's edit (or its music to a scene).",
+      inputSchema: {
+        type: "object",
+        properties: { ...idArg, preset: string("The preset's name."), ...kindArg },
+        required: ["id", "preset"],
+      },
+      async call(args) {
+        const id = String(args.id);
+        const kind = await kindOf(client, id, args.kind);
+        if (kind === "sequence") throw new Error("Presets apply to takes and scenes.");
+        unwrap(await client.post(`/v1/${kind}s/${id}/preset`, { name: String(args.preset) }));
+        return text(`Applied ${String(args.preset)} to ${kind} ${id}.`);
+      },
+    },
+    {
+      name: "preview",
+      description:
+        "Render one frame of a take or scene as a PNG, exactly as export would, to check an edit. atMs is the clip's own time (after trim and pacing for takes).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ...idArg,
+          atMs: { type: "number", description: "Clip time in milliseconds." },
+          variant: string('For scenes: "theme:dark,locale:de,ratio:9x16".'),
+          ...kindArg,
+        },
+        required: ["id", "atMs"],
+      },
+      async call(args) {
+        const id = String(args.id);
+        const kind = await kindOf(client, id, args.kind);
+        if (kind === "sequence") throw new Error("Preview a sequence's clips one at a time.");
+        const query = new URLSearchParams({ kind, id, at: String(Number(args.atMs) || 0) });
+        if (typeof args.variant === "string") query.set("variant", args.variant);
+        const frame = unwrap(await client.get<{ png: Buffer; atMs: number }>(`/v1/preview?${query}`));
+        return {
+          content: [
+            { type: "image", data: frame.png.toString("base64"), mimeType: "image/png" },
+            { type: "text", text: `${kind} ${id} at ${Math.round(frame.atMs)} ms.` },
+          ],
+        };
+      },
+    },
+    {
+      name: "export",
+      description:
+        'Start exporting a clip. Options: formats (["mp4","gif","poster"]), ratios (["16:9","9:16","1:1","4:5"]), variants (scene themes or locales), size ("1920x1080"), fps (30 or 60), preset. Returns a job id for get_job; files land in .clipmunk/exports.',
+      inputSchema: {
+        type: "object",
+        properties: { ...idArg, options: { type: "object", description: "Export options, all optional." }, ...kindArg },
+        required: ["id"],
+      },
+      async call(args) {
+        const id = String(args.id);
+        const kind = await kindOf(client, id, args.kind);
+        const started = unwrap(
+          await client.post<{ job: string }>("/v1/exports", {
+            ...((args.options as object) ?? {}),
+            clip: { kind, id },
+          }),
+        );
+        return text(`Export started: job ${started.job}. Check it with get_job.`);
+      },
+    },
+    {
+      name: "get_job",
+      description: "The progress or outcome of an export job.",
+      inputSchema: { type: "object", properties: { id: string("The job id export returned.") }, required: ["id"] },
+      async call(args) {
+        const job = unwrap(
+          await client.get<{
+            finished: boolean;
+            last?: { type: string; done?: number; total?: number; data?: unknown; issues?: Issue[] };
+          }>(`/v1/jobs/${String(args.id)}`),
+        );
+        const last = job.last;
+        if (!last) return text("Starting.");
+        if (last.type === "progress")
+          return text(`Running: ${last.total ? Math.round(((last.done ?? 0) / last.total) * 100) : 0}%.`);
+        if (last.type === "failed")
+          return {
+            content: [{ type: "text", text: `Failed: ${last.issues?.map((issue) => issue.message).join(" ")}` }],
+            isError: true,
+          };
+        return text(`Done:\n${json(last.data)}`);
+      },
+    },
+  ];
+}
+
+export const MCP_INSTRUCTIONS =
+  "Clipmunk makes product videos from this app: takes (screen recordings with an edit) and scenes (the app's components animated in 3D). list_clips first; get_take shows what happened in a take and its edit; change it with edit_take (a JSON merge patch) and check the result with preview before you export. The daemon must be running (npx clipmunk dev).";

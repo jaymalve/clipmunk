@@ -35,7 +35,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 14 | Library screen | Studio | 🔵 [#31](https://github.com/jaymalve/clipmunk/pull/31) |
 | 15 | Editor screen: timeline, inspector, undo | Studio | 🔵 [#32](https://github.com/jaymalve/clipmunk/pull/32) |
 | 16 | Presets in the Studio | Studio | 🔵 [#33](https://github.com/jaymalve/clipmunk/pull/33) |
-| 17 | `clipmunk mcp` | Agent | ⬜ |
+| 17 | `clipmunk mcp` | Agent | 🔵 [#34](https://github.com/jaymalve/clipmunk/pull/34) |
 | 18 | Agent chat | Agent | ⬜ |
 | 19 | Take to scene | Agent | ⬜ |
 | 20 | Source map and export manifest | Freshness | ⬜ |
@@ -317,23 +317,25 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 ## Part 3: Agent
 
 ### PR 17 · `clipmunk mcp`
-**Status:** ⬜ · **Branch:** `studio/17-mcp` · **Base:** `studio/16-studio-presets`
+**Status:** 🔵 [#34](https://github.com/jaymalve/clipmunk/pull/34) · **Branch:** `studio/17-mcp` · **Base:** `studio/16-studio-presets`
 
 **Goal:** the developer's agent can see and change clips with tools (section 19.6).
 
-- `clipmunk mcp` is a stdio MCP server. It reads `.clipmunk/daemon.json` to reach the running daemon, and says how to start it when none is running. Tools:
-  - `list_clips()`: ids, kinds, durations, staleness once PR 21 lands.
-  - `get_take(id)`: the edit, plus a readable event summary (time, route, action, element name, component once PR 20 lands).
+- `clipmunk mcp` is a stdio MCP server (`src/mcp`, a minimal JSON-RPC implementation of initialize, tools/list, tools/call and ping, with no SDK). It reads `.clipmunk/daemon.json` to reach the running daemon, and says how to start it when none is running. Tools:
+  - `list_clips()`: ids, kinds, durations (staleness once PR 21 lands).
+  - `get_take(id)`: the edit and its revision, plus a readable event summary (`core/summary.ts`: time, route, action, element role, name and selector; component once PR 20 lands).
   - `get_scene(id)`: the recipe and the component path.
-  - `edit_take(id, patch, note)`: a JSON merge patch, validated, saved through the revision check; returns the diff.
+  - `edit_take(id, patch, note, revision?)`: a JSON merge patch (`core/patch.ts`; an object that switches its `mode` is replaced), validated, saved through the revision check (and the history); returns the diff.
   - `apply_preset(id, preset)`.
-  - `preview(id, atMs, variant?)`: a PNG of the frame, rendered headless like `clipmunk snapshot`.
-  - `export(id, options)`: a job id. `get_job(id)`: its progress.
-- Every tool calls an existing daemon route. The MCP server has no logic of its own beyond formatting.
+  - `preview(id, atMs, variant?)`: a PNG of the frame, rendered headless (new `GET /v1/preview`).
+  - `export(id, options)`: a job id. `get_job(id)`: its progress (new `GET /v1/jobs/:id`).
+- Every tool calls a daemon route. The MCP server has no logic of its own beyond formatting.
 - `clipmunk init` prints the one-line command to add the server to Claude Code, Cursor and Codex. The guide describes the tools.
 
-**Tests:** an MCP client in-process against a daemon on the example app: every tool, including a patch that fails validation and a stale revision.
+**Tests:** `npm run test:mcp`: an MCP client in-process against a daemon on the example app: every tool, including a patch that fails validation and a stale revision, previews of a take and of a scene variant, a preset, an export followed to the end, and no daemon. Unit tests for merge patches, diffs and the summary.
 **Done when:** an agent can trim, zoom and caption a take and check the result with `preview` without touching files by hand.
+
+**Notes:** an export requested with no browser origin (the MCP server, a script) now renders from the project's dev server, as one from the Studio does.
 
 ### PR 18 · Agent chat
 **Status:** ⬜ · **Branch:** `studio/18-chat` · **Base:** `studio/17-mcp`
@@ -423,11 +425,13 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 14 opened as #31, stacked on #30: the library. For PR 15: listen with `onStudioEvent` (`studio-app/events.ts`), not a new `EventSource`; the take editor is still `studio/TakeEditor.tsx`.
 - 2026-10-25 · PR 15 opened as #32, stacked on #31: the editor. For PR 16: the preset bar sits above the preview in `studio/TakeEditor.tsx`; preview a preset by passing `applyPreset(edit, preset)` as the preview take (like "Preview as"), apply it through `change`, and listen for `config` events with `onStudioEvent`-style handling (the take editor lives in `studio/`, so give it its own `EventSource` or pass a listener in).
 - 2026-10-25 · PR 16 opened as #33, stacked on #32: presets in the Studio. The Studio part is done. For PR 17: the MCP server proxies to the daemon (`daemon.json` gives its port and token); the edit endpoints are `PATCH /v1/takes/:id` (with the revision from `GET`), `POST /v1/takes/:id/preset`, undo and redo, and export jobs on `POST /v1/exports`.
+- 2026-10-25 · PR 17 opened as #34, stacked on #33: `clipmunk mcp`. For PR 18: add tools to `clipmunkTools` in `src/mcp/tools.ts`; a blocking `wait_for_chat` should long-poll a daemon route rather than hold state in the MCP process, which can be restarted by the agent's client at any time.
 
 ## Environment notes for whoever picks this up
 
 - FFmpeg: tests set `CLIPMUNK_FFMPEG` themselves. By hand, use an absolute path, for example `CLIPMUNK_FFMPEG=$PWD/node_modules/ffmpeg-static/ffmpeg`.
 - `npm run test:recorder` needs a display and wraps `xvfb-run`.
+- `npm run test:mcp` writes `.clipmunk/daemon.json` in the example app while it runs (the MCP server finds the daemon that way) and removes it after.
 - `npm run test:studio` builds the Studio app into a temporary folder first, which takes a few seconds. Every other Vitest run builds it once into `node_modules/.cache/clipmunk/studio-app` (only when a source changed) for the daemon to serve; set `CLIPMUNK_STUDIO_DIR` to use another build.
 - On a machine without a GPU, depth-blur scenes take seconds per frame. Run long suites in the background with a log file.
 - `scripts/check-installed.mjs` uses ports 5311 and 3111; an interrupted run can leave a server there that fails the next run with a misleading "scene did not open".
