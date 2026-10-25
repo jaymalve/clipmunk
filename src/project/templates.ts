@@ -1,4 +1,4 @@
-import { type Adapter, PACKAGE_NAME, STUDIO_PARAM } from "../core";
+import { type Adapter, FRAME_PARAM, PACKAGE_NAME, STUDIO_PARAM } from "../core";
 
 /** Source of every file `clipmunk init` and `clipmunk sync` generate.
  * Each adapter keeps Clipmunk out of production: the import of the studio sits behind
@@ -10,11 +10,16 @@ export function viteStudio(typed: boolean): string {
   return `${HEADER}// Development only: a production build renders the app unchanged and contains no Clipmunk code.
 import { lazy, Suspense${typed ? ", type ReactNode" : ""} } from "react";
 
-const active = typeof location !== "undefined" && new URLSearchParams(location.search).has("${STUDIO_PARAM}");
+const params = typeof location !== "undefined" ? new URLSearchParams(location.search) : undefined;
+// ?${FRAME_PARAM} renders one scene alone, for the Studio's preview and for export.
+const frame = !!params?.has("${FRAME_PARAM}");
+const active = frame || !!params?.has("${STUDIO_PARAM}");
 const scenes = import.meta.env.DEV ? import.meta.glob("./scenes/*.{scene.json,tsx,jsx}") : {};
 const Studio =
   import.meta.env.DEV && active
-    ? lazy(() => import("${PACKAGE_NAME}/studio").then((module) => ({ default: module.ClipmunkStudio })))
+    ? lazy(() =>
+        import("${PACKAGE_NAME}/studio").then((module) => ({ default: frame ? module.ClipmunkFrame : module.ClipmunkStudio })),
+      )
     : null;
 
 // The recorder loads in development only: Alt+Shift+R on any page of the app.
@@ -36,12 +41,16 @@ export function reactStudio(typed: boolean): string {
   return `${HEADER}// Development only: the studio import sits behind NODE_ENV so production bundles drop it.
 import { lazy, Suspense${typed ? ", type ReactNode" : ""} } from "react";
 
-const active = typeof location !== "undefined" && new URLSearchParams(location.search).has("${STUDIO_PARAM}");
+const params = typeof location !== "undefined" ? new URLSearchParams(location.search) : undefined;
+// ?${FRAME_PARAM} renders one scene alone, for the Studio's preview and for export.
+const frame = !!params?.has("${FRAME_PARAM}");
+const active = frame || !!params?.has("${STUDIO_PARAM}");
 const Studio =
   process.env.NODE_ENV !== "production" && active
     ? lazy(() =>
         Promise.all([import("${PACKAGE_NAME}/studio"), import("./catalog")]).then(([studio, catalog]) => ({
-          default: () => <studio.ClipmunkStudio scenes={catalog.scenes} />,
+          default: () =>
+            frame ? <studio.ClipmunkFrame scenes={catalog.scenes} /> : <studio.ClipmunkStudio scenes={catalog.scenes} />,
         })),
       )
     : null;
@@ -72,7 +81,9 @@ const Studio =
         () =>
           Promise.all([import("${PACKAGE_NAME}/studio"), import("./catalog")]).then(([studio, catalog]) =>
             function ClipmunkStudioRoute() {
-              return <studio.ClipmunkStudio scenes={catalog.scenes} />;
+              // ?${FRAME_PARAM} renders one scene alone, for the Studio's preview and for export.
+              const frame = new URLSearchParams(location.search).has("${FRAME_PARAM}");
+              return frame ? <studio.ClipmunkFrame scenes={catalog.scenes} /> : <studio.ClipmunkStudio scenes={catalog.scenes} />;
             },
           ),
         { ssr: false },

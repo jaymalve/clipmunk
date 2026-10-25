@@ -7,6 +7,7 @@ import {
   type ExportSceneResult,
   ExportSceneSchema,
   fail,
+  frameUrl,
   MAX_EXPORT_DURATION_MS,
   ok,
   type RenderedSounds,
@@ -190,7 +191,8 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
 
     browser = await launchBrowser();
     cancel.onCancel(() => void browser?.close());
-    const url = new URL(studio.data.url);
+    // The frame page: the scene alone, exactly as the Studio's preview shows it.
+    const url = new URL(frameUrl(new URL(studio.data.url).origin, studio.data.project.studioPath, request.sceneId));
     if (request.variant) url.searchParams.set(VARIANT_PARAM, request.variant);
     const plan = await planRender(browser, url.toString(), request);
     directory = await workDirectory(claim);
@@ -257,7 +259,8 @@ export async function snapshotScene(input: unknown, context: ExportContext): Pro
     const recipe = SceneRecipeSchema.parse(JSON.parse(original));
     const height = Math.max(64, Math.round((SNAPSHOT_WIDTH * recipe.definition.height) / recipe.definition.width));
     browser = await launchBrowser();
-    const clip = await openClip(browser, studio.data.url, { width: SNAPSHOT_WIDTH, height });
+    const page = frameUrl(new URL(studio.data.url).origin, studio.data.project.studioPath, parsed.data.sceneId);
+    const clip = await openClip(browser, page, { width: SNAPSHOT_WIDTH, height });
     const timeMs = parsed.data.timeMs ?? clip.info.durationMs / 2;
     if (timeMs > clip.info.durationMs)
       throw new Fault("invalid-snapshot", `--time must be within the scene (0 to ${clip.info.durationMs} ms).`);

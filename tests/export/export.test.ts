@@ -4,7 +4,9 @@ import path from "node:path";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { validateRecipe } from "../../src/core";
-import { exportJob, exportScene, probeVideo, snapshotScene } from "../../src/export";
+import { exportJob, exportScene, launchBrowser, probeVideo, snapshotScene } from "../../src/export";
+import { openClip } from "../../src/export/browser";
+import { listScenes } from "../../src/project";
 import { colourAt, near } from "../support/media";
 
 /** Real exports of the example app: headless Chromium, the capture bridge and FFmpeg end to end. */
@@ -241,6 +243,35 @@ describe("scene variants", () => {
     expect(near(page(2, "10:10:10:10"), [244, 244, 245], 12)).toBe(true);
     expect(near(page(3, "10:10:10:10"), [24, 24, 27], 12)).toBe(true);
   }, 300_000);
+});
+
+describe("frame page", () => {
+  it("captures every scene byte for byte the same as the studio page did", async () => {
+    const listed = await listScenes({ root });
+    if (!listed.ok) throw new Error(JSON.stringify(listed.issues));
+    const browser = await launchBrowser();
+    try {
+      for (const scene of listed.data.scenes) {
+        const { width, height } = scene.definition;
+        const viewport = { width: Math.round(width), height: Math.round(height) };
+        const studio = await openClip(browser, `${url}/?clipmunk=1&clipmunk-scene=${scene.id}`, viewport);
+        const frame = await openClip(browser, `${url}/?clipmunk-frame=1&clipmunk-scene=${scene.id}`, viewport);
+        try {
+          expect(frame.info, scene.id).toEqual(studio.info);
+          const duration = studio.info.durationMs;
+          for (const at of [0, duration / 2, duration]) {
+            const [a, b] = [await studio.frame(at, "png"), await frame.frame(at, "png")];
+            expect(b.equals(a), `${scene.id} at ${at} ms`).toBe(true);
+          }
+        } finally {
+          await studio.close();
+          await frame.close();
+        }
+      }
+    } finally {
+      await browser.close();
+    }
+  }, 600_000);
 });
 
 describe("snapshot", () => {

@@ -10,6 +10,11 @@ export function useClipSession(clock: Clock, durationMs: number, enabled: boolea
   duration.current = durationMs;
 
   const pause = useCallback(() => setPlaying(false), []);
+  const play = useCallback(() => {
+    if (!enabled || !duration.current) return;
+    if (clock.get() >= duration.current) clock.set(0);
+    setPlaying(true);
+  }, [clock, enabled]);
   const seek = useCallback(
     (timeMs: number) => {
       if (!Number.isFinite(timeMs)) return;
@@ -50,5 +55,5 @@ export function useClipSession(clock: Clock, durationMs: number, enabled: boolea
     return () => document.removeEventListener("visibilitychange", hidden);
   }, []);
 
-  return { playing, toggle, seek, pause };
+  return { playing, toggle, seek, pause, play };
 }

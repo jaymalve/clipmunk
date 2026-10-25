@@ -168,7 +168,9 @@ export const sync: Command = async ({ context, print }) =>
       data.status === "not-needed"
         ? "Vite discovers scenes automatically; nothing to sync."
         : `${data.status === "verified" ? "Up to date" : "Wrote"}: ${data.catalog} (${plural(data.scenes, "scene")}).`;
-    return withIssues([summary], data.issues);
+    const adapter =
+      data.studio && data.studio.status !== "verified" ? [`Updated ${data.studio.path} for the frame page.`] : [];
+    return withIssues([summary, ...adapter], data.issues);
   });
 
 function launch(url: string) {
