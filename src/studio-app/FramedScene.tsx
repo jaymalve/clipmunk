@@ -9,6 +9,7 @@ import {
   type SceneVariant,
   VARIANT_PARAM,
 } from "../core";
+import { type ChatContext, ChatPanel } from "../studio/Chat";
 import { Chrome } from "../studio/Chrome";
 import { type DaemonConnection, ExportPanel } from "../studio/daemon";
 import { studioHref } from "../studio/links";
@@ -51,7 +52,12 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
     else url.searchParams.delete(VARIANT_PARAM);
     return url.toString();
   })();
-  const [picking, setPicking] = useState(false);
+  // Picking an element hides it in recordings, or adds it to the chat message being written.
+  const [picking, setPicking] = useState<false | "hide" | "chat">(false);
+  const pickingRef = useRef(picking);
+  pickingRef.current = picking;
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chips, setChips] = useState<ChatContext[]>([]);
   const [hidden, setHidden] = useState<string>();
   const [ready, setReady] = useState<{ durationMs: number; width: number; height: number }>();
   const [timeMs, setTimeMs] = useState(0);
@@ -89,8 +95,19 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
       if (message.type === "picked") {
         setPicking(false);
         frame.current?.contentWindow?.postMessage({ cm: 1, type: "pick", on: false }, frameOrigin);
-        const selector = (message.el as { sel?: string } | undefined)?.sel;
-        if (selector)
+        const el = message.el as { sel?: string; name?: string; role?: string } | undefined;
+        const selector = el?.sel;
+        if (selector && pickingRef.current === "chat")
+          setChips((current) => [
+            ...current,
+            {
+              kind: "element",
+              sel: selector,
+              ...(el.name ? { name: el.name } : {}),
+              ...(el.role ? { role: el.role } : {}),
+            },
+          ]);
+        else if (selector)
           void client.post<{ selectors: string[] }>("/v1/config/redact", { selector }).then((result) => {
             setHidden(result.ok ? selector : `not added: ${result.issues[0]?.message}`);
           });
@@ -189,6 +206,26 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
           />
         )}
       </div>
+      {chatOpen && (
+        <Chrome style={{ position: "absolute", right: 16, bottom: 76, zIndex: 11 }}>
+          <ChatPanel
+            client={client}
+            clip={{ kind: "scene", id: scene.id }}
+            chips={chips}
+            onChips={setChips}
+            moment={() => timeRef.current}
+            onPickElement={
+              ready
+                ? () => {
+                    setPicking("chat");
+                    post({ type: "pick", on: true }, "first");
+                  }
+                : undefined
+            }
+            onClose={() => setChatOpen(false)}
+          />
+        </Chrome>
+      )}
       <Chrome style={{ position: "absolute", left: 206, right: 16, bottom: 12, zIndex: 10 }}>
         {hidden && (
           <div className="note" role="status">
@@ -285,14 +322,17 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
           )}
           <button
             type="button"
-            aria-pressed={picking}
+            aria-pressed={picking === "hide"}
             disabled={!ready}
             onClick={() => {
-              setPicking(!picking);
+              setPicking(picking ? false : "hide");
               post({ type: "pick", on: !picking }, "first");
             }}
           >
-            {picking ? "Click an element…" : "Pick an element to hide"}
+            {picking === "hide" ? "Click an element…" : "Pick an element to hide"}
+          </button>
+          <button type="button" aria-pressed={chatOpen} onClick={() => setChatOpen((value) => !value)}>
+            Chat
           </button>
           <button type="button" onClick={() => setPanel((value) => (value === "export" ? undefined : "export"))}>
             Export

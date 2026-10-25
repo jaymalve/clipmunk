@@ -639,6 +639,11 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `POST /v1/exports` | Start an export job: `{ clip, formats?, ratios?, size?, fps?, preset?, posterAtMs? }` for several outputs (12.4a), or the single-file `{ sceneId }`, `{ takeId }` or `{ sequenceId }` |
 | `GET /v1/jobs/:id/events` | Server-sent progress events |
 | `DELETE /v1/jobs/:id` | Cancel a job |
+| `GET /v1/chat` | The chat with the agent, and whether an agent is listening |
+| `POST /v1/chat` | A developer's message, with its context chips |
+| `GET /v1/chat/next?timeoutMs=&agent=` | Long poll: the next undelivered message (the agent's `wait_for_chat`) |
+| `POST /v1/chat/reply` | The agent's answer, with an optional proposal (checked to apply) and follow-ups |
+| `POST /v1/chat/:message/keep\|undo` | Apply a proposal through the take's history, or step back |
 
 The daemon is a thin adapter: each route validates input with a `core` schema and calls the same operation the CLI calls.
 
@@ -658,6 +663,14 @@ The daemon is a thin adapter: each route validates input with a `core` schema an
 | `apply_preset(id, preset)` | `POST /v1/takes\|scenes/:id/preset` | |
 | `preview(id, atMs, variant?)` | `/v1/preview` | a PNG image of the frame |
 | `export(id, options)`, `get_job(id)` | `POST /v1/exports`, `/v1/jobs/:id` | a job id; its progress or its outputs |
+| `wait_for_chat(timeoutMs?)` | `GET /v1/chat/next` | the developer's next message and what it is about, or "no message yet" |
+| `reply_chat(text, proposal?, followUps?)` | `POST /v1/chat/reply` | |
+
+### 11.4 The chat
+
+The Studio's take editor and scene player have a Chat panel for talking to the coding agent. MCP cannot push into an agent's session, so the agent waits on a blocking tool (`wait_for_chat`), which long-polls the daemon; the waiting state lives in the daemon, not in `clipmunk mcp`, which the agent's client may restart at any time. A message that reaches an agent whose call was cancelled goes back in line. The conversation is `.clipmunk/chat/messages.json` (`daemon/chat.ts`, ignored by git), so a reload or a daemon restart loses nothing; every change is a `chat` event on `/v1/events`.
+
+Each developer message carries context chips: the clip on screen (always), a moment (the playhead, on the recording's clock for takes), or an element picked in a scene's frame. The agent answers with text, up to four follow-ups (sent with one click) and optionally a proposal: a merge patch over a take's edit, checked against the take's current edit when it is sent. A proposal changes nothing until the developer presses Keep, which saves it through the take's history (`.clipmunk/history`, as the editor's undo does), so Undo is one step back. In the take editor, Preview shows the proposed edit in place (like a preset) and the diff is against the edit on screen; the editor reads the take back after Keep or Undo. When no agent is listening, the panel shows the sentence to give it: "Watch the Clipmunk chat".
 
 ## 12. Export (`export`)
 

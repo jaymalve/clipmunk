@@ -3,11 +3,11 @@ import { type CatalogScene, type Issue, motionDuration, RATIOS, type Sequence, t
 import type { DaemonClient } from "../recorder";
 import { Chrome } from "../studio/Chrome";
 import type { DaemonConnection } from "../studio/daemon";
+import { onStudioEvent } from "../studio/events";
 import { IssueList } from "../studio/IssueList";
 import { NewSequence } from "../studio/Library";
 import { studioHref } from "../studio/links";
 import { ExportQueue } from "./ExportQueue";
-import { onStudioEvent } from "./events";
 
 /** The Studio's home: every clip in the project as a card, filtered by kind and searched by name,
  * with what is rendering right now, an export panel for several files at once, and a way to start

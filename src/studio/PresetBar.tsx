@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PRESET_FIELDS, type Preset, type PresetField } from "../core";
 import type { DaemonClient } from "../recorder";
+import { onStudioEvent } from "./events";
 
 /** The preset bar above the take editor's preview: the config's presets, each with its one-line
  * summary. Choosing one previews it at once; Apply makes it the edit. "Save current as preset"
@@ -39,11 +40,9 @@ export function PresetBar(props: {
   );
   useEffect(() => {
     load();
-    const events = new EventSource(client.url("/v1/events"));
-    events.onmessage = (message) => {
-      if ((JSON.parse(message.data as string) as { type: string }).type === "config") load();
-    };
-    return () => events.close();
+    return onStudioEvent(client, (event) => {
+      if (event.type === "config") load();
+    });
   }, [client, load]);
 
   return (

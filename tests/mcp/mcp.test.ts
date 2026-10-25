@@ -76,6 +76,7 @@ afterAll(async () => {
   await writeFile(configFile, config);
   await rm(path.join(root, ".clipmunk/takes", TAKE), { recursive: true, force: true });
   await rm(path.join(root, ".clipmunk/history", `${TAKE}.json`), { force: true });
+  await rm(path.join(root, ".clipmunk/chat"), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
 });
 
@@ -103,6 +104,8 @@ describe("clipmunk mcp", () => {
       "preview",
       "export",
       "get_job",
+      "wait_for_chat",
+      "reply_chat",
     ]);
     for (const tool of tools) expect(tool.inputSchema.type).toBe("object");
     expect((await mcp.rpc("nonsense")).error.code).toBe(-32601);
@@ -198,6 +201,71 @@ describe("clipmunk mcp", () => {
     made.push(...[...state.matchAll(/"output": "([^"]+)"/g)].map((match) => match[1]!));
     mcp.close();
   }, 180_000);
+
+  it("chats: waits for the developer, proposes an edit, and the developer keeps and undoes it", async () => {
+    const api = (route: string, body?: unknown) =>
+      fetch(`${daemon.origin}${route}`, {
+        method: body === undefined ? "GET" : "POST",
+        headers: { authorization: `Bearer ${daemon.token}`, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }).then((response) => response.json() as Promise<any>);
+    const mcp = session(root);
+    await mcp.rpc("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "Test agent" },
+    });
+    // Nothing yet: the wait ends empty.
+    expect(mcp.textOf(await mcp.call("wait_for_chat", { timeoutMs: 1000 }))).toContain("No message yet");
+    // The agent waits; the Studio's message reaches it while it does.
+    const waiting = mcp.call("wait_for_chat", { timeoutMs: 20_000 });
+    await expect
+      .poll(async () => (await api("/v1/chat")).data.agent, { timeout: 5000 })
+      .toEqual({ name: "Test agent", waiting: true });
+    const sent = await api("/v1/chat", {
+      text: "Start it later",
+      context: [
+        { kind: "clip", clip: { kind: "take", id: TAKE } },
+        { kind: "time", ms: 1250 },
+      ],
+    });
+    expect(sent.ok).toBe(true);
+    const received = mcp.textOf(await waiting);
+    expect(received).toContain("Start it later");
+    expect(received).toContain(`take ${TAKE} (get_take to read it)`);
+    expect(received).toContain("the moment at 1.25 s");
+    // A proposal that would not validate is refused before the developer sees it.
+    const bad = await mcp.call("reply_chat", {
+      text: "Bigger",
+      proposal: { takeId: TAKE, patch: { cursor: { size: 99 } } },
+    });
+    expect(bad.isError).toBe(true);
+    const before = await editOf();
+    const replied = await mcp.call("reply_chat", {
+      text: "Starting at 0.8 s.",
+      proposal: { takeId: TAKE, patch: { trim: { startMs: 800 } }, note: "later start" },
+      followUps: ["Also zoom on Go"],
+    });
+    expect(mcp.textOf(replied)).toContain("keep or undo");
+    // Proposed, not applied.
+    expect((await editOf()).trim.startMs).toBe(before.trim.startMs);
+    const chat = (await api("/v1/chat")).data.messages;
+    const proposal = chat.at(-1);
+    expect(proposal).toMatchObject({ from: "agent", followUps: ["Also zoom on Go"], proposal: { status: "proposed" } });
+    expect(chat.at(-2)).toMatchObject({ from: "developer", delivered: true });
+    expect((await api(`/v1/chat/${proposal.id}/keep`, {})).ok).toBe(true);
+    expect((await editOf()).trim.startMs).toBe(800);
+    expect((await api(`/v1/chat/${proposal.id}/undo`, {})).ok).toBe(true);
+    expect((await editOf()).trim.startMs).toBe(before.trim.startMs);
+    mcp.close();
+
+    // The conversation is on disk, so a new daemon has it.
+    await daemon.close();
+    daemon = await startDaemon({ root, port: 0, announce: true });
+    const again = (await api("/v1/chat")).data.messages;
+    expect(again.map((message: any) => message.text)).toEqual(chat.map((message: any) => message.text));
+    expect(again.at(-1).proposal.status).toBe("undone");
+  }, 60_000);
 
   it("says how to start the daemon when none is running", async () => {
     const empty = await mkdtemp(path.join(os.tmpdir(), "clipmunk-mcp-"));

@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG_FILE, DAEMON_FILE, type DaemonFile, DEFAULT_DAEMON_PORT } from "../core";
 import { Fault, readText, resolveInside, toIssues, writeText } from "../project";
+import { createChat } from "./chat";
 import { createEvents } from "./events";
 import { admit } from "./guard";
 import { deny, STATUS, send } from "./http";
@@ -71,6 +72,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   const jobs = createJobs((job, event) =>
     events.emit({ ...job.meta, type: "job", job: job.id, kind: job.kind, event }),
   );
+  const chat = createChat({ root }, () => events.emit({ type: "chat" }));
   const studioDir = options.studioDir ?? process.env.CLIPMUNK_STUDIO_DIR ?? packagedStudio();
   let port = 0;
 
@@ -97,6 +99,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
       context: { root },
       jobs,
       events,
+      chat,
       self: { origin: `http://127.0.0.1:${port}`, port, token },
       version: options.version ?? "dev",
       log: (line) => options.log?.(line),
@@ -140,6 +143,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     studio: studioDir,
     async close() {
       jobs.cancelAll();
+      chat.close();
       watcher?.close();
       clearTimeout(settle);
       server.closeAllConnections();
