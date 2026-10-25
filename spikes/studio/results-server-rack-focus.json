@@ -1,0 +1,122 @@
+{
+  "scene": "rack-focus",
+  "machine": "mac",
+  "scrub": {
+    "inApp": {
+      "n": 80,
+      "mean": 18.08,
+      "p50": 16.9,
+      "p95": 25.5
+    },
+    "standalone": {
+      "n": 80,
+      "mean": 22.15,
+      "p50": 20.9,
+      "p95": 33.4
+    },
+    "overheadMeanMs": 4.07,
+    "fastDrag": {
+      "finalFrameAfterDragMs": 19.40000009536743,
+      "dropped": 59,
+      "seeks": 60
+    }
+  },
+  "playback": {
+    "inAppFps": 60.3,
+    "standaloneFps": 60.7,
+    "twoFramesFps": [
+      48,
+      48
+    ]
+  },
+  "pixels": [
+    {
+      "atMs": 0,
+      "size": "1000x600",
+      "differingPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "atMs": 495,
+      "size": "1000x600",
+      "differingPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "atMs": 990,
+      "size": "1000x600",
+      "differingPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "atMs": 1500,
+      "size": "1000x600",
+      "differingPixels": 0,
+      "maxChannelDelta": 0
+    }
+  ],
+  "picker": {
+    "index": 0,
+    "cm": 1,
+    "type": "picked",
+    "selector": "div.panel > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(1)",
+    "text": "Juniper & Co",
+    "rect": {
+      "x": 381.9999933242798,
+      "y": 253.49998474121094,
+      "w": 194.390606880188,
+      "h": 39.00001049041748
+    }
+  },
+  "framePermissions": {
+    "index": 0,
+    "cm": 1,
+    "type": "permissions",
+    "microphone": true,
+    "autoplay": true,
+    "camera": true
+  },
+  "take": {
+    "id": "take-20261006-032625",
+    "kind": "take",
+    "durationMs": 9982,
+    "canvas": 1,
+    "frames": [
+      {
+        "t": 500,
+        "colours": 69,
+        "mean": 184
+      },
+      {
+        "t": 4991,
+        "colours": 83,
+        "mean": 194
+      }
+    ],
+    "encode": "function"
+  },
+  "hmr": {
+    "before": 1500,
+    "after": 3000,
+    "seekAfter": "frame",
+    "studioReloaded": false
+  },
+  "dpr": 1,
+  "pair": {
+    "size": "700x490",
+    "inAppFps": 60.5,
+    "oneFrame": {
+      "fps": [
+        60.7
+      ],
+      "allOnScreen": true
+    },
+    "twoFrames": {
+      "fps": [
+        60.7,
+        60.7
+      ],
+      "allOnScreen": true
+    }
+  }
+}
