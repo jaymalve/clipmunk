@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LoopbackOriginSchema } from "./project";
+import { RATIOS, type Ratio } from "./ratio";
 import { ClipIdSchema } from "./recipe";
-import { RATIOS, type Ratio } from "./take";
 
 /** Requests for local rendering. Validated here, executed by the export module. */
 export const EXPORT_FPS = [30, 60, 120] as const;
@@ -37,6 +37,12 @@ export const ExportSceneSchema = z.strictObject({
   music: z.boolean().default(true),
   /** Include the scene's generated sound effects. A sequence lays them over the whole video itself. */
   sounds: z.boolean().default(true),
+  /** The variant to render, as in the scene URL: "theme:dark,locale:de,ratio:9x16" (core/variants.ts). */
+  variant: z
+    .string()
+    .max(200)
+    .regex(/^[A-Za-z0-9:,_-]*$/, "Use a variant such as theme:dark,locale:de,ratio:9x16.")
+    .optional(),
 });
 export type ExportSceneInput = z.input<typeof ExportSceneSchema>;
 export type ExportSceneResult = {

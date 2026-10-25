@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "id": "themed-card",
+  "title": "Themed card",
+  "description": "One card, rendered in each theme and shape from the config's variants.",
+  "definition": {
+    "width": 400,
+    "height": 300,
+    "scene": {
+      "nodes": [{ "id": "card" }]
+    },
+    "motion": {
+      "durationMs": 1000,
+      "tracks": [
+        {
+          "target": { "kind": "surface", "id": "card" },
+          "property": "y",
+          "keyframes": [
+            { "timeMs": 0, "value": 30 },
+            { "timeMs": 1000, "value": 0 }
+          ]
+        }
+      ]
+    },
+    "variants": {
+      "ratios": { "9:16": { "width": 300, "height": 534 } }
+    }
+  }
+}

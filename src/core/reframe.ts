@@ -1,5 +1,6 @@
 import { interpolate, type Keyframe } from "./motion";
-import { RATIOS, type Ratio, type TakeEdit, type TakeEvent } from "./take";
+import { RATIOS, type Ratio } from "./ratio";
+import type { TakeEdit, TakeEvent } from "./take";
 
 /** Reframing a take to a shape narrower than its recording: a crop window, as tall as the
  * recording, that follows the elements the user clicks. It moves with the same easing and lead

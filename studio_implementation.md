@@ -28,7 +28,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 7 | Dead air and steady typing | Engine | 🔵 [#24](https://github.com/jaymalve/clipmunk/pull/24) |
 | 8 | Reframing takes to other aspect ratios | Engine | 🔵 [#25](https://github.com/jaymalve/clipmunk/pull/25) |
 | 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | 🔵 [#26](https://github.com/jaymalve/clipmunk/pull/26) |
-| 10 | Scene variants: theme, locale, ratio | Engine | ⬜ |
+| 10 | Scene variants: theme, locale, ratio | Engine | 🔵 [#27](https://github.com/jaymalve/clipmunk/pull/27) |
 | 11 | The frame page in the host | Studio | ⬜ |
 | 12 | The daemon serves the Studio (parity) | Studio | ⬜ |
 | 13 | Switch over to the standalone Studio | Studio | ⬜ |
@@ -207,18 +207,20 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** `EXPORT_FORMATS` moved from `core/presets.ts` to `core/export.ts`. The studio's export panel still makes one MP4; choosing formats there belongs to the Studio PRs.
 
 ### PR 10 · Scene variants: theme, locale, ratio
-**Status:** ⬜ · **Branch:** `studio/10-scene-variants` · **Base:** `studio/09-outputs`
+**Status:** 🔵 [#27](https://github.com/jaymalve/clipmunk/pull/27) · **Branch:** `studio/10-scene-variants` · **Base:** `studio/09-outputs`
 
 **Goal:** one scene, many files (section 19.2).
 
-- `useSceneVariant()` from `clipmunk` returns `{ theme?, locale?, ratio }`. The scene component passes it to the host's own providers (`<ThemeProvider theme={variant.theme}>`). Clipmunk never knows how the host does theming.
-- The recipe gains optional `variants: { ratios?: { "9:16": { width, height, camera? } } }`. A ratio variant renders at its own frame size, and may move the camera; the component can read `ratio` to lay out differently. A ratio with no entry is fitted, not reflowed.
-- Variant values come from the config's `variants` and reach the page in the scene URL (`clipmunk-variant=theme:dark,locale:de`). Export renders each combination with the existing scene exporter.
-- The guide teaches agents to wire `useSceneVariant` into the host's providers, with a tested example.
-- Minimal control in the current scene player: a variant select.
+- `useSceneVariant()` from `clipmunk` returns `{ theme?, locale?, ratio? }` (`ratio` absent for the authored shape). The scene component passes it to the host's own providers (`<ThemeProvider theme={variant.theme}>`). Clipmunk never knows how the host does theming.
+- The recipe gains optional `variants: { ratios?: { "9:16": { width, height, camera? } } }`. A ratio variant renders at its own frame size, and may move the camera (only the fields given); the component can read `ratio` to lay out differently. A ratio with no entry is fitted, not reflowed (`variantFrame`).
+- Variant values come from the config's `variants` and reach the page in the scene URL (`clipmunk-variant=theme:dark,locale:de,ratio:9x16`). Export renders each combination with the existing scene exporter (`exportScene({ variant })`, and `variants` and `ratios` in export jobs, named `<scene>.<ratio>.<variant>.mp4`). CLI: `--variant light,dark`.
+- The guide teaches agents to wire `useSceneVariant` into the host's providers, with the example app's `themed-card` scene as the tested example.
+- Minimal control in the current scene player: a variant select (themes and locales from the config, times the ratios), kept in the page address.
 
-**Tests:** the example app gets a theme provider; `test:export` renders light and dark and checks the backgrounds differ and the durations match.
+**Tests:** the example app gets a theme provider and a `themed-card` scene; `test:export` renders light and dark in 16:9 and 9:16 and checks the backgrounds differ, the sizes and the frame counts match; `test:browser` checks the URL's variant reaches the scene and the select switches it; unit tests for parsing, frames and the recipe.
 **Done when:** `themes: ["light","dark"]` with `ratios: ["16:9","9:16"]` yields four files with matching timing.
+
+**Notes:** `CameraSchema.partial()` would have filled every camera field with its default, so a ratio's camera overrode the scene's perspective; `partialOf` (moved to `core/partial.ts`) keeps only what is given. `RATIOS` moved to `core/ratio.ts` to break an import cycle (`take` → `recipe` → `variants` → `take`). The `test:browser` library test expected exactly three scenes and failed on the base branch since the launch scenes were added; it now checks for the ones it opens.
 
 ---
 
@@ -402,6 +404,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 7 opened as #24, stacked on #23: pacing and the time map. For PR 8: reframing crops follow the action on take time; build the crop path from the log and look it up at `timeMap.toTake(clipMs)` like every other overlay. For PR 9: GIF and poster frame times are clip times; use the renderer's `timeMap`, never `trim.startMs + t`.
 - 2026-10-25 · PR 8 opened as #25, stacked on #24: reframing. For PR 9: rendering a take "in a ratio" means setting `edit.frame.ratio` (and the canvas from `ratioCanvas`) on a copy of the take for that output; the renderer does the rest.
 - 2026-10-25 · PR 9 opened as #26, stacked on #25: export jobs. For PR 10: `exportJob` refuses `variants` and refuses `ratios` for scenes (`variants-unsupported`, `ratios-unsupported` in `export/job.ts`); lift both there, add the variant to the stem (`<clip>.<ratio>.<variant>`), and pass it to the scene exporter.
+- 2026-10-25 · PR 10 opened as #27, stacked on #26: scene variants. The engine part is done. For PR 11: the frame page must read `clipmunk-variant` from its own URL and wrap the scene in `SceneVariantProvider`, exactly as `ScenePreview` does, and size the frame with `variantFrame`.
 
 ## Environment notes for whoever picks this up
 

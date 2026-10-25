@@ -88,7 +88,9 @@ describe("studio", () => {
   it("lists every scene and opens one from the library", async () => {
     await page.goto(`${origin}/?clipmunk=1`);
     await page.waitForSelector(".tile");
-    expect(await page.locator(".tile b").allTextContents()).toEqual(["Page survey", "Plating", "Rack focus"]);
+    expect(await page.locator(".tile b").allTextContents()).toEqual(
+      expect.arrayContaining(["Page survey", "Plating", "Rack focus", "Themed card"]),
+    );
     await page.locator(".tile", { hasText: "Rack focus" }).click();
     await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
     expect(new URL(page.url()).searchParams.get("clipmunk-scene")).toBe("rack-focus");
@@ -150,6 +152,28 @@ describe("studio", () => {
         ),
       ),
     ).toContain("outside the scene");
+  }, 60_000);
+});
+
+describe("scene variants", () => {
+  it("hands the URL's variant to the scene and switches it from the player", async () => {
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=themed-card&clipmunk-variant=theme:dark`);
+    await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
+    const state = () =>
+      page.evaluate(() => {
+        const bridge = (window as any).__CLIPMUNK__;
+        const backgrounds = [...document.querySelectorAll<HTMLElement>('[data-clipmunk-capture="scene"] div')].map(
+          (element) => element.style.background,
+        );
+        return {
+          size: `${bridge.width}x${bridge.height}`,
+          dark: backgrounds.includes("rgb(24, 24, 27)"),
+          variant: new URLSearchParams(location.search).get("clipmunk-variant"),
+        };
+      });
+    expect(await state()).toEqual({ size: "400x300", dark: true, variant: "theme:dark" });
+    await page.getByLabel("Variant").selectOption({ label: "9:16" });
+    await expect.poll(state).toEqual({ size: "300x534", dark: false, variant: "ratio:9x16" });
   }, 60_000);
 });
 

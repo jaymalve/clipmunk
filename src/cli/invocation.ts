@@ -34,6 +34,7 @@ export const OPTIONS = {
   format: { type: "string" },
   ratio: { type: "string" },
   preset: { type: "string" },
+  variant: { type: "string" },
   "poster-at": { type: "string" },
   port: { type: "string" },
   "no-launch": { type: "boolean" },

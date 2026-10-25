@@ -5,6 +5,7 @@ import { MusicSchema } from "./music";
 import { fail, ok, type Result, zodIssues } from "./result";
 import { SceneSchema } from "./scene";
 import { SoundSchema } from "./sounds";
+import { SceneVariantsSchema } from "./variants";
 
 /** A scene recipe is the JSON half of a scene file pair. The other half is a component
  * that returns Surface elements whose ids match `definition.scene.nodes`.
@@ -19,6 +20,8 @@ export const SceneDefinitionSchema = z
     height: z.number().finite().positive().max(7680).default(980),
     scene: SceneSchema,
     motion: MotionSchema.optional(),
+    /** Frame sizes (and cameras) for ratio variants; a ratio not listed is fitted (core/variants.ts). */
+    variants: SceneVariantsSchema.optional(),
   })
   .superRefine((definition, ctx) => {
     const ids = new Set(definition.scene.nodes.map((node) => node.id));

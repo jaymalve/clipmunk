@@ -18,6 +18,7 @@ import {
   SnapshotSceneSchema,
   sceneMoments,
   seedFor,
+  VARIANT_PARAM,
   zodIssues,
 } from "../core";
 import { type Context, exists, Fault, readText, resolveInside, resolveStudio, toIssues, writeText } from "../project";
@@ -189,11 +190,13 @@ export async function exportScene(input: unknown, context: ExportContext): Promi
 
     browser = await launchBrowser();
     cancel.onCancel(() => void browser?.close());
-    const plan = await planRender(browser, studio.data.url, request);
+    const url = new URL(studio.data.url);
+    if (request.variant) url.searchParams.set(VARIANT_PARAM, request.variant);
+    const plan = await planRender(browser, url.toString(), request);
     directory = await workDirectory(claim);
     const picture = await renderFrames({
       browser,
-      url: studio.data.url,
+      url: url.toString(),
       plan,
       request,
       root,
