@@ -14,6 +14,9 @@ import { FFMPEG, makeTake } from "../support/take";
 /** The standalone Studio, served by the daemon, against the example app. */
 const root = path.resolve("examples/vite-app");
 const TAKE = "zz-studio-take";
+// The editor and preset tests change their takes; each group gets its own.
+const EDITED = "zz-studio-edited";
+const PRESET_TAKE = "zz-studio-preset";
 const projectFile = path.join(root, ".clipmunk/project.json");
 let server: ViteDevServer, daemon: Daemon, browser: Browser, origin: string, studioDir: string, project: string;
 const made: string[] = [];
@@ -27,7 +30,7 @@ beforeAll(async () => {
   project = await readFile(projectFile, "utf8");
   studioDir = await mkdtemp(path.join(os.tmpdir(), "clipmunk-studio-"));
   await buildStudioApp(studioDir);
-  await makeTake(root, TAKE, { cam: false });
+  for (const id of [TAKE, EDITED, PRESET_TAKE]) await makeTake(root, id, { cam: false });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -40,26 +43,39 @@ afterAll(async () => {
   await daemon?.close();
   await server?.close();
   await writeFile(projectFile, project);
-  await rm(path.join(root, ".clipmunk/takes", TAKE), { recursive: true, force: true });
+  for (const id of [TAKE, EDITED, PRESET_TAKE])
+    await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   await rm(studioDir, { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
 });
 
 // A failed test must not leave its page holding connections for the next one.
-afterEach(async () => {
+afterEach(async (context) => {
+  // When a test fails, say what each of its pages was showing, to tell a slow machine from a bug.
+  if (context.task.result?.state === "fail")
+    for (const page of opened) {
+      const frames = await Promise.all(
+        page.frames().map(async (frame) => `${frame.url()} ${(await frame.content().catch(() => "")).length} bytes`),
+      );
+      const text = await page
+        .locator("body")
+        .innerText()
+        .catch(() => "");
+      console.error(`page ${page.url()}\n  frames: ${frames.join(" | ")}\n  shows: ${text.slice(0, 300)}`);
+    }
   for (const page of opened.splice(0)) await page.close().catch(() => {});
 });
 
-const link = () => `${daemon.origin}/#clipmunk-daemon=${daemon.port}.${daemon.token}`;
 const opened: Page[] = [];
 async function openStudio(query = ""): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   opened.push(page);
+  page.on("console", (message) => message.type() === "error" && console.error(`console: ${message.text()}`));
   // Rendering in the background (an earlier export) can make a small machine slow to answer.
   page.setDefaultTimeout(90_000);
   page.on("pageerror", (error) => console.error("pageerror:", error.message));
-  await page.goto(link());
-  if (query) await page.goto(`${daemon.origin}/${query}`);
+  // One navigation, with the daemon link in the fragment, as `clipmunk dev`'s link is opened.
+  await page.goto(`${daemon.origin}/${query}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
   return page;
 }
 
@@ -179,11 +195,11 @@ describe("the library", () => {
 
 describe("the editor", () => {
   const editOf = async () =>
-    JSON.parse(await readFile(path.join(root, ".clipmunk/takes", TAKE, "edit.json"), "utf8")).edit;
+    JSON.parse(await readFile(path.join(root, ".clipmunk/takes", EDITED, "edit.json"), "utf8")).edit;
 
   it("inspects a zoom, a backdrop and the overlays, saving each to edit.json, and undoes and redoes", async () => {
-    const page = await openStudio(`?clipmunk=1&clipmunk-take=${TAKE}`);
-    await page.getByText(`Changes are saved to .clipmunk/takes/${TAKE}/edit.json`).waitFor();
+    const page = await openStudio(`?clipmunk=1&clipmunk-take=${EDITED}`);
+    await page.getByText(`Changes are saved to .clipmunk/takes/${EDITED}/edit.json`).waitFor();
     // The rail lists the other clips.
     await expect.poll(() => page.getByRole("navigation", { name: "Clips" }).textContent()).toContain("Rack focus");
 
@@ -224,7 +240,7 @@ describe("the editor", () => {
   }, 180_000);
 
   it("trims by dragging the ends of the take, and previews another shape without changing it", async () => {
-    const page = await openStudio(`?clipmunk=1&clipmunk-take=${TAKE}`);
+    const page = await openStudio(`?clipmunk=1&clipmunk-take=${EDITED}`);
     const handle = page.getByLabel("Trim start");
     await handle.waitFor();
     const lane = await handle.evaluate((element) => {
@@ -237,7 +253,7 @@ describe("the editor", () => {
     await page.mouse.move(lane.x + lane.width * 0.25, lane.y, { steps: 6 });
     await page.mouse.up();
     await expect.poll(async () => Math.abs((await editOf()).trim.startMs - 1000), { timeout: 10_000 }).toBeLessThan(60);
-    await page.getByRole("button", { name: "Reset" }).click();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
     await expect.poll(async () => (await editOf()).trim.startMs, { timeout: 10_000 }).toBe(0);
 
     await page.getByLabel("Preview as").selectOption("9:16");
@@ -284,6 +300,77 @@ describe("the editor", () => {
           .evaluate(() => `${(window as any).__CLIPMUNK__?.width}x${(window as any).__CLIPMUNK__?.height}`),
       )
       .toBe("300x534");
+  }, 180_000);
+});
+
+describe("presets in the editor", () => {
+  const configFile = path.join(root, "clipmunk.config.json");
+  const editOf = async () =>
+    JSON.parse(await readFile(path.join(root, ".clipmunk/takes", PRESET_TAKE, "edit.json"), "utf8")).edit;
+
+  it("saves the current edit as a preset with a minimal diff of the config", async () => {
+    const config = await readFile(configFile, "utf8");
+    try {
+      const page = await openStudio(`?clipmunk=1&clipmunk-take=${PRESET_TAKE}`);
+      await page.getByRole("button", { name: "Save current as preset" }).click();
+      const dialog = page.getByRole("dialog", { name: "Save current as preset" });
+      await dialog.getByLabel("Preset name").fill("ZZ studio look");
+      await dialog.getByRole("button", { name: "Save to clipmunk.config.json" }).click();
+      await page
+        .getByRole("toolbar", { name: "Presets" })
+        .getByRole("button", { name: /ZZ studio look/ })
+        .waitFor();
+      const written = await readFile(configFile, "utf8");
+      const before = JSON.parse(config),
+        after = JSON.parse(written);
+      // Only the new preset differs, every other key keeps its place, and so does the indentation.
+      expect(Object.keys(after)).toEqual(Object.keys(before));
+      const { presets: oldPresets, ...rest } = before;
+      const { presets: newPresets, ...restNow } = after;
+      expect(restNow).toEqual(rest);
+      expect(Object.keys(newPresets)).toEqual([...Object.keys(oldPresets ?? {}), "zz-studio-look"]);
+      expect(Object.keys(newPresets["zz-studio-look"].edit).sort()).toEqual(["canvas", "cursor", "zoom"].sort());
+      expect(written.split("\n")[1]).toMatch(/^ {2}"/);
+    } finally {
+      await writeFile(configFile, config);
+    }
+  }, 180_000);
+
+  it("shows a preset added on disk, previews it at once, and applies it on confirm", async () => {
+    const config = await readFile(configFile, "utf8");
+    try {
+      const page = await openStudio(`?clipmunk=1&clipmunk-take=${PRESET_TAKE}`);
+      const bar = page.getByRole("toolbar", { name: "Presets" });
+      await bar.waitFor();
+      const json = JSON.parse(config);
+      await writeFile(
+        configFile,
+        `${JSON.stringify({ ...json, presets: { ...json.presets, "zz-red": { title: "ZZ red", edit: { canvas: { background: "#ff0000", padding: 0.2 } } } } }, null, 2)}\n`,
+      );
+      const preset = bar.getByRole("button", { name: /ZZ red/ });
+      await preset.waitFor({ timeout: 15_000 });
+      const corner = () =>
+        page.evaluate(() => {
+          const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
+          return [...canvas.getContext("2d")!.getImageData(4, 4, 1, 1).data.slice(0, 3)];
+        });
+      const backdrop = (await editOf()).canvas.background;
+      await preset.click();
+      const started = Date.now();
+      await expect.poll(corner, { timeout: 5_000 }).toEqual([255, 0, 0]);
+      expect(Date.now() - started).toBeLessThan(1000);
+      // Previewing changes nothing on disk until the preset is applied.
+      expect((await editOf()).canvas.background).toBe(backdrop);
+      await bar.getByRole("button", { name: "Apply zz-red" }).click();
+      await expect
+        .poll(async () => (await editOf()).canvas, { timeout: 10_000 })
+        .toMatchObject({
+          background: "#ff0000",
+          padding: 0.2,
+        });
+    } finally {
+      await writeFile(configFile, config);
+    }
   }, 180_000);
 });
 

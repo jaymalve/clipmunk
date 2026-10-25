@@ -257,7 +257,7 @@ function RedactionControls({ edit, change, drawing, onDraw }: Section & { drawin
   );
 }
 
-function CaptionControls({ edit, change, captions }: Section & { captions: Caption[] }) {
+function CaptionControls({ change, captions }: Section & { captions: Caption[] }) {
   const setText = (caption: Caption, text: string) =>
     change((current) => {
       // Editing a caption stores it as a manual item at its time, which regeneration keeps.

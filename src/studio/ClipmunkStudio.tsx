@@ -1,14 +1,5 @@
 import { type ComponentType, useEffect, useMemo, useState } from "react";
-import {
-  type CatalogScene,
-  DAEMON_HASH,
-  type Issue,
-  loadSceneCatalog,
-  SCENE_PARAM,
-  type SceneCatalog,
-  SEQUENCE_PARAM,
-  TAKE_PARAM,
-} from "../core";
+import { type CatalogScene, DAEMON_HASH, type Issue, loadSceneCatalog, SCENE_PARAM, type SceneCatalog } from "../core";
 import { adoptDaemonLink, createDaemonClient, storedLink } from "../recorder";
 import { Chrome } from "./Chrome";
 import { type DaemonState, useDaemon } from "./daemon";

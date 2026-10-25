@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  type CatalogScene,
-  type Issue,
-  motionDuration,
-  RATIOS,
-  type Ratio,
-  type Sequence,
-  type TakeSummary,
-} from "../core";
+import { type CatalogScene, type Issue, motionDuration, RATIOS, type Sequence, type TakeSummary } from "../core";
 import type { DaemonClient } from "../recorder";
 import { Chrome } from "../studio/Chrome";
 import type { DaemonConnection } from "../studio/daemon";
