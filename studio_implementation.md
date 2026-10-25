@@ -18,7 +18,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 
 | # | PR | Part | Status |
 |---|---|---|---|
-| 0 | Plan: architecture direction and this file | Plan | 🔵 |
+| 0 | Plan: architecture direction and this file | Plan | 🔵 [#17](https://github.com/jaymalve/clipmunk/pull/17) |
 | 1 | Take edits in a sidecar file | Engine | ⬜ |
 | 2 | `clipmunk.config.json` and brand defaults | Engine | ⬜ |
 | 3 | Presets: apply and save | Engine | ⬜ |
@@ -51,7 +51,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 ## Part 0: Plan
 
 ### PR 0 · Plan: architecture direction and this file
-**Status:** 🔵 · **Branch:** `studio/00-plan` · **Base:** `main`
+**Status:** 🔵 [#17](https://github.com/jaymalve/clipmunk/pull/17) · **Branch:** `studio/00-plan` · **Base:** `main`
 
 - `ARCHITECTURE.md`: new section 19 with the agreed direction, a phase 7 row in section 17, replay listed as not planned in section 18.
 - This file.
@@ -378,7 +378,7 @@ Decisions made while working through this plan, with the date. The architecture-
 
 ## Log
 
-- 2026-10-25 · PR 0 opened: plan and architecture direction.
+- 2026-10-25 · PR 0 opened as #17: plan and architecture direction.
 
 ## Environment notes for whoever picks this up
 
