@@ -3,7 +3,7 @@ import { EXPORT_FPS } from "./export";
 import { EASINGS, MotionSchema, SceneTrackSchema } from "./motion";
 import { MUSIC_STYLES } from "./music";
 import { PRESET_FIELDS } from "./presets";
-import { HANDOFF_FILE, PACKAGE_NAME, SCENE_PARAM, SCENES_DIR, STUDIO_PARAM } from "./project";
+import { FRAME_PARAM, HANDOFF_FILE, PACKAGE_NAME, SCENE_PARAM, SCENES_DIR } from "./project";
 import { type SceneRecipe, SceneRecipeSchema } from "./recipe";
 import { DEFAULT_CAMERA, DEFAULT_FOCUS, DEFAULT_TRANSFORM, SCENE_BACKGROUND } from "./scene";
 import { SEQUENCES_DIR, SequenceSchema } from "./sequence";
@@ -76,7 +76,7 @@ const concepts: GuideConcept[] = [
     id: "delivery",
     title: "Look before exporting",
     idea: "A scene is finished when its rendered frames communicate the intended reveal, not when its JSON validates.",
-    how: `Open the studio at ?${STUDIO_PARAM}=1 on the running dev server and select the scene (or add &${SCENE_PARAM}=<id>). Edit the two files; the dev server hot-reloads them and the studio lists any issue with a fix. Save a thumbnail with clipmunk snapshot. Export only when asked.`,
+    how: `Open the Studio (the link clipmunk dev prints, or clipmunk open --scene <id>) with the dev server running and select the scene. It shows the scene from the dev server's frame page (?${FRAME_PARAM}=1&${SCENE_PARAM}=<id>, which you can also open directly). Edit the two files; the dev server hot-reloads them and the frame lists any issue with a fix. Save a thumbnail with clipmunk snapshot. Export only when asked.`,
     avoid: "Reporting success from a typecheck alone. Validation cannot judge framing or readability.",
     check: "No issues listed in the studio, several frames inspected, snapshot saved.",
   },
@@ -146,7 +146,7 @@ export function getGuide() {
       "Decide the shot before writing: the subject, which edge is near, the camera's travel direction, what is in focus, and what gives depth.",
       `Create ${SCENES_DIR}/<id>.scene.json and ${SCENES_DIR}/<id>.tsx. The id is a lowercase slug and equals the file name.`,
       "Run clipmunk scenes to validate. Fix every issue it lists.",
-      `Open the studio (?${STUDIO_PARAM}=1&${SCENE_PARAM}=<id>) on the running dev server and look at the opening frame before tuning motion.`,
+      `Open the scene in the Studio (clipmunk open --scene <id>), or its frame page (?${FRAME_PARAM}=1&${SCENE_PARAM}=<id>) on the running dev server, and look at the opening frame before tuning motion.`,
       "Scrub several times, adjust the source, repeat. Then run clipmunk snapshot --scene <id> to save its thumbnail.",
       "Export with clipmunk export --scene <id> only when the user asks for a video.",
     ],
@@ -193,7 +193,8 @@ export function getGuide() {
     commands: {
       "clipmunk scenes [--json]": "List scenes and every validation issue.",
       "clipmunk sync": "Regenerate the scene catalog (Next.js and generic React hosts).",
-      "clipmunk open [--scene <id>] [--url <origin>]": "Print and open the studio URL.",
+      "clipmunk open [--scene <id>] [--url <origin>]":
+        "Print and open the Studio (the daemon must be running: clipmunk dev).",
       "clipmunk snapshot --scene <id> [--url <origin>] [--time <ms>]":
         "Save a thumbnail into the recipe. The dev server must be running.",
       [`clipmunk export --scene <id> [--url <origin>] [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]`]:
@@ -324,12 +325,12 @@ This app has [Clipmunk](https://www.npmjs.com/package/${PACKAGE_NAME}) installed
 
 1. Run \`npx clipmunk guide\` and read it fully. It is the authoring reference for the installed version.
 2. Scenes live in \`${SCENES_DIR}/\` as a pair: \`<id>.scene.json\` and \`<id>.tsx\`.
-3. Validate with \`npx clipmunk scenes\`, then look at the result in the studio: open the running dev server with \`?${STUDIO_PARAM}=1\`.
+3. Validate with \`npx clipmunk scenes\`, then look at the result in the Studio: with the dev server running, \`npx clipmunk dev\` prints the Studio link (\`npx clipmunk open --scene <id>\` opens a scene in it).
 4. Do not redesign the app's UI for a scene. Import the existing components and providers.
 
 ## Recording the app
 
-\`npx clipmunk dev\` starts a local daemon and prints a link. Open the link once, then press Alt+Shift+R on any page of the running app to record it. Takes are saved in \`.clipmunk/takes/\`.
+\`npx clipmunk dev\` starts a local daemon and prints two links: the Studio, served by the daemon, and a link to open once in the app so it can record. Then press Alt+Shift+R on any page of the running app. Takes are saved in \`.clipmunk/takes/\` and open in the Studio.
 
 ## Example prompt
 

@@ -70,7 +70,8 @@ export const MAX_EXPORT_DURATION_MS = 600_000;
 
 export const ExportTakeSchema = z.strictObject({
   takeId: ClipIdSchema,
-  url: LoopbackOriginSchema,
+  /** Accepted for older callers and ignored: a take renders in the daemon's own Studio. */
+  url: LoopbackOriginSchema.optional(),
   output: relativeFile(".mp4").optional(),
   fps: z.union([z.literal(30), z.literal(60)]).default(60),
   /** Defaults to the canvas size in the take's edit. Give one and the other follows the canvas shape. */
@@ -118,7 +119,8 @@ export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 export const GIF_MAX_BYTES = 5 * 1024 * 1024;
 export const ExportJobSchema = z.strictObject({
   clip: z.strictObject({ kind: z.enum(["scene", "take", "sequence"]), id: ClipIdSchema }),
-  url: LoopbackOriginSchema,
+  /** The host's dev server, for scenes; the project's own when left out. Takes do not need it. */
+  url: LoopbackOriginSchema.optional(),
   formats: z.array(z.enum(EXPORT_FORMATS)).min(1).max(3).optional(),
   ratios: z.array(z.enum(RATIOS)).min(1).max(4).optional(),
   variants: z.array(z.string().min(1).max(60)).min(1).max(32).optional(),

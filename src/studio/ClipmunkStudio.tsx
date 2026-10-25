@@ -1,18 +1,19 @@
 import { type ComponentType, useEffect, useMemo, useState } from "react";
 import {
   type CatalogScene,
+  DAEMON_HASH,
+  type Issue,
   loadSceneCatalog,
   SCENE_PARAM,
   type SceneCatalog,
   SEQUENCE_PARAM,
   TAKE_PARAM,
 } from "../core";
+import { adoptDaemonLink, createDaemonClient, storedLink } from "../recorder";
+import { Chrome } from "./Chrome";
 import { type DaemonState, useDaemon } from "./daemon";
-import { Library } from "./Library";
-import { studioHref } from "./links";
+import { IssueList } from "./IssueList";
 import { ScenePreview } from "./ScenePreview";
-import { SequenceEditor } from "./SequenceEditor";
-import { TakeEditor } from "./TakeEditor";
 
 /** The studio entry the generated host adapter mounts in development.
  * `scenes` maps module paths to lazy loaders for every `<id>.scene.json` and its
@@ -24,27 +25,38 @@ export type ClipmunkStudioProps = { scenes: SceneModules };
 
 const unwrap = (module: unknown) =>
   module && typeof module === "object" && "default" in module ? (module as { default: unknown }).default : module;
-export function ClipmunkStudio({ scenes }: ClipmunkStudioProps) {
-  const sceneId = useMemo(() => new URLSearchParams(location.search).get(SCENE_PARAM) ?? undefined, []);
-  const takeId = useMemo(() => new URLSearchParams(location.search).get(TAKE_PARAM) ?? undefined, []);
-  const sequenceId = useMemo(() => new URLSearchParams(location.search).get(SEQUENCE_PARAM) ?? undefined, []);
-  const daemon = useDaemon();
-  const catalog = useSceneCatalog(scenes, sceneId);
-
-  if (!catalog) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
-  if (takeId) return <TakeEditor id={takeId} daemon={daemon} backHref={studioHref()} />;
-  if (sequenceId)
-    return <SequenceEditor id={sequenceId} daemon={daemon} scenes={catalog.scenes} backHref={studioHref()} />;
-  if (catalog.selected)
-    return (
-      <OpenScene
-        key={catalog.selected.id}
-        scene={catalog.selected}
-        load={scenes[catalog.selected.binding]!}
-        daemon={daemon}
-      />
-    );
-  return <Library catalog={catalog} missing={sceneId} daemon={daemon} />;
+export function ClipmunkStudio(_props: ClipmunkStudioProps) {
+  const [moved, setMoved] = useState<{ studio?: string; checked: boolean }>({ checked: false });
+  useEffect(() => {
+    let current = true;
+    // With a running daemon this page forwards to its Studio, keeping the clip in the address.
+    const link = adoptDaemonLink() ?? storedLink();
+    if (!link) return setMoved({ checked: true });
+    void createDaemonClient(link)
+      .get("/v1/status")
+      .then((status) => {
+        if (!current) return;
+        const studio = `http://127.0.0.1:${link.port}/${location.search}`;
+        if (status.ok) location.replace(`${studio}#${DAEMON_HASH}=${link.port}.${link.token}`);
+        setMoved({ studio: status.ok ? studio : undefined, checked: true });
+      });
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (!moved.checked) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
+  return (
+    <Chrome style={{ position: "fixed", inset: 0, overflow: "auto" }}>
+      <div className="library">
+        <h1>Clipmunk Studio</h1>
+        <p>
+          The Studio runs on its own now, beside your app. Run <code>npx clipmunk dev</code> in your project and open
+          the Studio link it prints{moved.studio ? "" : " (it starts with http://127.0.0.1:4747/)"}.
+        </p>
+        {moved.studio && <a href={moved.studio}>Open the Studio</a>}
+      </div>
+    </Chrome>
+  );
 }
 
 /** The frame page the generated adapter renders for `?clipmunk-frame&clipmunk-scene=<id>`: only the
@@ -58,10 +70,9 @@ export function ClipmunkFrame({ scenes }: ClipmunkStudioProps) {
   if (!catalog) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
   if (!catalog.selected)
     return (
-      <Library
-        catalog={{ scenes: [], issues: catalog.issues }}
-        missing={sceneId ?? "(no clipmunk-scene in the address)"}
-        daemon={daemon}
+      <FrameProblem
+        title={sceneId ? `No valid scene named "${sceneId}".` : "The address names no scene (clipmunk-scene)."}
+        issues={catalog.issues}
       />
     );
   return (
@@ -146,8 +157,9 @@ function OpenScene({
 
   if (state.error)
     return (
-      <Library
-        catalog={{ scenes: [], issues: [{ code: "component-failed", path: scene.binding, message: state.error }] }}
+      <FrameProblem
+        title="A scene component failed to load."
+        issues={[{ code: "component-failed", path: scene.binding, message: state.error }]}
       />
     );
   if (!state.Component) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
@@ -156,7 +168,6 @@ function OpenScene({
       definition={scene.definition}
       title={scene.title}
       sceneId={scene.id}
-      backHref={studioHref()}
       daemon={daemon}
       audio={scene.audio}
       music={scene.music}
@@ -165,5 +176,14 @@ function OpenScene({
     >
       <state.Component />
     </ScenePreview>
+  );
+}
+
+/** What the frame page shows instead of a scene it cannot render. */
+function FrameProblem({ title, issues }: { title: string; issues: Issue[] }) {
+  return (
+    <Chrome style={{ position: "fixed", inset: 0, overflow: "auto", background: "#000", padding: 24 }}>
+      <IssueList issues={issues} title={title} />
+    </Chrome>
   );
 }

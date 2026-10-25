@@ -18,7 +18,14 @@ import { serveStudio } from "./studio";
  * Origin (when a browser sends one) and the daemon's own Host, which together stop
  * other websites and DNS rebinding from reaching it. It never executes project code.
  */
-export type Daemon = { port: number; token: string; origin: string; close(): Promise<void> };
+export type Daemon = {
+  port: number;
+  token: string;
+  origin: string;
+  /** Where the Studio app is served from, when it was found. */
+  studio: string | undefined;
+  close(): Promise<void>;
+};
 export type DaemonOptions = {
   root: string;
   port?: number;
@@ -26,7 +33,7 @@ export type DaemonOptions = {
   log?: (line: string) => void;
   /** Write .clipmunk/daemon.json. Off for a second daemon on a project that may already have one (tests). */
   announce?: boolean;
-  /** The built Studio app (dist/studio-app). Found beside the package's own code when not given. */
+  /** The built Studio app (dist/studio-app). Otherwise CLIPMUNK_STUDIO_DIR, then beside the package's own code. */
   studioDir?: string;
 };
 
@@ -62,7 +69,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   const tokenBytes = Buffer.from(token);
   const events = createEvents();
   const jobs = createJobs((job, event) => events.emit({ type: "job", job: job.id, kind: job.kind, event }));
-  const studioDir = options.studioDir ?? packagedStudio();
+  const studioDir = options.studioDir ?? process.env.CLIPMUNK_STUDIO_DIR ?? packagedStudio();
   let port = 0;
 
   async function route(request: IncomingMessage, response: ServerResponse) {
@@ -127,6 +134,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     port,
     token,
     origin: `http://127.0.0.1:${port}`,
+    studio: studioDir,
     async close() {
       jobs.cancelAll();
       watcher?.close();

@@ -61,6 +61,11 @@ beforeAll(async () => {
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
+  // The Studio frames scenes from the dev server project.json names.
+  await writeFile(
+    path.join(root, ".clipmunk/project.json"),
+    `${JSON.stringify({ ...JSON.parse(projectFile), devUrl: origin }, null, 2)}\n`,
+  );
   daemon = await startDaemon({ root, port: 0, announce: false });
 }, 120_000);
 afterAll(async () => {
@@ -257,8 +262,12 @@ describe("narrating in the studio", () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ["microphone"] });
     const page = await context.newPage();
     page.on("pageerror", (error) => console.error("pageerror:", error.message));
-    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=rack-focus#clipmunk-daemon=${daemon.port}.${daemon.token}`);
-    await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
+    // The Studio's scene player: the scene and its narration run in a frame of the host.
+    await page.goto(
+      `${daemon.origin}/?clipmunk=1&clipmunk-scene=rack-focus#clipmunk-daemon=${daemon.port}.${daemon.token}`,
+    );
+    await page.frameLocator("iframe").locator('[data-clipmunk-scene][data-clipmunk-valid="true"]').waitFor();
+    await page.getByRole("button", { name: "Narrate", exact: true }).waitFor({ timeout: 20_000 });
     const narrated = async () =>
       ((JSON.parse(await readFile(recipePath, "utf8")).audio ?? []) as { file: string }[]).length;
     expect(await narrated()).toBe(0);
@@ -422,7 +431,7 @@ describe("sequence builder in the studio", () => {
     browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.on("pageerror", (error) => console.error("pageerror:", error.message));
-    await page.goto(`${origin}/?clipmunk=1#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+    await page.goto(`${daemon.origin}/?clipmunk=1#clipmunk-daemon=${daemon.port}.${daemon.token}`);
     await page.getByLabel("New sequence name").fill("ZZ built here");
     await page.getByRole("button", { name: "Create" }).click();
     await page.waitForURL(/clipmunk-sequence=zz-built-here/);
@@ -452,7 +461,7 @@ describe("sequence builder in the studio", () => {
     await expect
       .poll(async () => JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8")).items[0].clip.kind)
       .toBe("take");
-    await page.goto(`${origin}/?clipmunk=1`);
+    await page.goto(`${daemon.origin}/?clipmunk=1`);
     await page.locator(".row", { hasText: "ZZ built here" }).waitFor({ timeout: 15_000 });
   }, 120_000);
 });

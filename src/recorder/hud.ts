@@ -1,6 +1,6 @@
-import { STUDIO_PARAM, TAKE_PARAM } from "../core";
+import { FRAME_PARAM, STUDIO_PARAM, TAKE_PARAM } from "../core";
 import { createRecorder, isSupported, type Recorder, type RecorderState } from "./capture";
-import { connectDaemon } from "./daemon";
+import { connectDaemon, storedLink } from "./daemon";
 
 /** The recorder's on-page controls. It is a custom element appended to <html>, outside
  * <body>, so the restricted capture never includes it. Everything is plain DOM in a
@@ -74,8 +74,11 @@ function paintStatus(status: HTMLElement, state: RecorderState): ReturnType<type
     return setInterval(tick, 250);
   }
   if (state.phase === "saved") {
+    // The take opens in the standalone Studio, served by the daemon that saved it.
     const params = new URLSearchParams({ [STUDIO_PARAM]: "1", [TAKE_PARAM]: state.take.id });
-    status.innerHTML = `Saved ${(state.take.source.durationMs / 1000).toFixed(1)} s · <a href="?${params}">Open take</a>`;
+    const link = storedLink();
+    const href = link ? `http://127.0.0.1:${link.port}/?${params}` : `?${params}`;
+    status.innerHTML = `Saved ${(state.take.source.durationMs / 1000).toFixed(1)} s · <a href="${href}" target="_blank" rel="noopener">Open in Studio</a>`;
   } else if (state.phase === "error") status.textContent = state.message;
   else if (state.phase === "starting") status.textContent = state.step;
   else status.textContent = state.phase === "saving" ? "Saving…" : `Ready · ${innerWidth}×${innerHeight}`;
@@ -144,7 +147,8 @@ export function mountRecorderHud(): RecorderHud {
 
   async function connect() {
     // The studio's own pages navigate with full page loads, which would end the capture at the first click.
-    if (new URLSearchParams(location.search).has(STUDIO_PARAM)) {
+    const params = new URLSearchParams(location.search);
+    if (params.has(STUDIO_PARAM) || params.has(FRAME_PARAM)) {
       parts.mic.hidden = parts.camera.hidden = true;
       return paintProblem(
         parts,

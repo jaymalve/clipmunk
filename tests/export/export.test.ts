@@ -246,7 +246,7 @@ describe("scene variants", () => {
 });
 
 describe("frame page", () => {
-  it("captures every scene byte for byte the same as the studio page did", async () => {
+  it("captures every scene byte for byte the same each time it is opened", async () => {
     const listed = await listScenes({ root });
     if (!listed.ok) throw new Error(JSON.stringify(listed.issues));
     const browser = await launchBrowser();
@@ -254,7 +254,9 @@ describe("frame page", () => {
       for (const scene of listed.data.scenes) {
         const { width, height } = scene.definition;
         const viewport = { width: Math.round(width), height: Math.round(height) };
-        const studio = await openClip(browser, `${url}/?clipmunk=1&clipmunk-scene=${scene.id}`, viewport);
+        // Two separate pages: the frame page must not depend on what ran before (the old in-app
+        // studio page, which it replaced, was checked against it the same way in PR 11).
+        const studio = await openClip(browser, `${url}/?clipmunk-frame=1&clipmunk-scene=${scene.id}`, viewport);
         const frame = await openClip(browser, `${url}/?clipmunk-frame=1&clipmunk-scene=${scene.id}`, viewport);
         try {
           expect(frame.info, scene.id).toEqual(studio.info);

@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error: a plain script, used here to build the app the daemon serves
 import { buildStudioApp } from "../../scripts/studio-app.mjs";
 import { type Daemon, startDaemon } from "../../src/daemon";
+import { exportTake, probeVideo } from "../../src/export";
 import { FFMPEG, makeTake } from "../support/take";
 
 /** The standalone Studio, served by the daemon, against the example app. */
@@ -135,6 +136,56 @@ describe("the Studio's flows", () => {
     made.push(output);
     expect(existsSync(path.join(root, output))).toBe(true);
     await page.close();
+  }, 240_000);
+
+  it("plays and pauses a scene from the Studio's controls", async () => {
+    const page = await openStudio("?clipmunk=1&clipmunk-scene=plating");
+    const time = () => page.locator(".time").textContent();
+    await expect.poll(time, { timeout: 45_000 }).toBe("0.00s / 6.00s");
+    await page.getByRole("button", { name: "Play" }).click();
+    await expect.poll(time).not.toBe("0.00s / 6.00s");
+    await page.getByRole("button", { name: "Pause" }).click();
+    await page.getByRole("button", { name: "Play" }).waitFor();
+    const paused = await time();
+    await page.waitForTimeout(400);
+    expect(await time()).toBe(paused);
+    await page.close();
+  }, 90_000);
+
+  it("switches a scene's variant from the Studio without reloading the frame", async () => {
+    const page = await openStudio("?clipmunk=1&clipmunk-scene=themed-card");
+    await expect.poll(() => page.locator(".time").textContent(), { timeout: 45_000 }).toBe("0.00s / 1.00s");
+    const frameSize = () =>
+      page
+        .frameLocator("iframe")
+        .locator("body")
+        .evaluate(() => `${(window as any).__CLIPMUNK__.width}x${(window as any).__CLIPMUNK__.height}`);
+    expect(await frameSize()).toBe("400x300");
+    await page.getByLabel("Variant").selectOption({ label: "dark · 9:16" });
+    await expect.poll(frameSize).toBe("300x534");
+    expect(new URL(page.url()).searchParams.get("clipmunk-variant")).toBe("theme:dark,ratio:9x16");
+    await page.close();
+  }, 90_000);
+
+  it("forwards the app's old studio address to the Studio", async () => {
+    const page = await browser.newPage();
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-take=${TAKE}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+    await page.waitForURL((url) => url.origin === daemon.origin && url.searchParams.get("clipmunk-take") === TAKE);
+    await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+    await page.close();
+  }, 60_000);
+
+  it("exports a take while the host's dev server is stopped", async () => {
+    await setDevUrl("http://127.0.0.1:9");
+    try {
+      const output = ".clipmunk/exports/zz-studio-take.mp4";
+      made.push(output);
+      const result = await exportTake({ takeId: TAKE, output, fps: 30, height: 360 }, { root });
+      if (!result.ok) throw new Error(JSON.stringify(result.issues));
+      expect(await probeVideo(output, root)).toMatchObject({ frames: 120, height: 360 });
+    } finally {
+      await setDevUrl(origin);
+    }
   }, 240_000);
 
   it("edits a take and saves it, without the host", async () => {

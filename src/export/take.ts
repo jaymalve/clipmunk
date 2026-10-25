@@ -9,6 +9,7 @@ import {
   ok,
   parseEvents,
   type Result,
+  STUDIO_PARAM,
   TAKE_PARAM,
   TAKES_DIR,
   type Take,
@@ -16,7 +17,7 @@ import {
   takeMoments,
   zodIssues,
 } from "../core";
-import { Fault, loadTake, readSpeech, readText, resolveInside, resolveStudio, toIssues } from "../project";
+import { Fault, loadTake, readSpeech, readText, resolveInside, toIssues } from "../project";
 import { launchBrowser } from "./browser";
 import { finishTake } from "./ffmpeg";
 import { writeMusic } from "./music";
@@ -78,10 +79,7 @@ async function encodeInPage(options: {
     try {
       await tab.goto(options.editorUrl, { waitUntil: "load", timeout: 30_000 });
     } catch {
-      throw new Fault(
-        "server-unreachable",
-        `Could not open ${options.studioUrl}. Start your dev server, or pass its address with --url.`,
-      );
+      throw new Fault("server-unreachable", `Could not open the Studio at ${options.studioUrl}.`);
     }
     try {
       await tab.waitForFunction(
@@ -93,7 +91,7 @@ async function encodeInPage(options: {
       const shown = await tab.evaluate(
         () => document.querySelector("[data-clipmunk-chrome]")?.shadowRoot?.querySelector(".issues")?.textContent ?? "",
       );
-      const reason = shown || errors[0] || "Check that the app was connected with clipmunk init.";
+      const reason = shown || errors[0] || "The Studio did not load the take.";
       throw new Fault("clip-not-ready", `The take did not open at ${options.studioUrl}. ${reason}`);
     }
     cancel.check();
@@ -149,20 +147,25 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
   const { root } = context;
   const cancel = cancellation(context.signal);
   let browser: Browser | undefined;
-  let daemon: { port: number; token: string; close(): Promise<void> } | undefined;
+  let daemon: import("../daemon").Daemon | undefined;
   let directory: string | undefined;
   try {
     cancel.check();
     const take = await readTake(root, request.takeId);
     if (!take.ok) return take;
     const claim = await claimOutput(root, request.output, request.takeId);
-    const studio = await resolveStudio({ url: request.url }, context);
-    if (!studio.ok) return studio;
     directory = await workDirectory(claim);
 
     // The page reads the take and its media from a daemon; give it a private one for this export.
     daemon = await (await import("../daemon")).startDaemon({ root, port: 0, announce: false });
-    const editor = new URL(studio.data.url);
+    // The take editor runs in the daemon-served Studio, so a take exports without the host app.
+    if (!daemon.studio)
+      throw new Fault(
+        "studio-missing",
+        "The Clipmunk Studio is not built, so takes cannot be rendered. Reinstall clipmunk, or run npm run build in its repository.",
+      );
+    const editor = new URL(`${daemon.origin}/`);
+    editor.searchParams.set(STUDIO_PARAM, "1");
     editor.searchParams.set(TAKE_PARAM, request.takeId);
     editor.hash = `${DAEMON_HASH}=${daemon.port}.${daemon.token}`;
 
@@ -172,7 +175,7 @@ export async function exportTake(input: unknown, context: ExportContext): Promis
     const encoded = await encodeInPage({
       browser,
       editorUrl: editor.toString(),
-      studioUrl: studio.data.url,
+      studioUrl: daemon.origin,
       video,
       request,
       cancel,

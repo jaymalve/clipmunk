@@ -132,9 +132,18 @@ describe("clipmunk cli", () => {
       "names its own",
     );
     expect(await clipmunk(cwd, "open", "--scene", "missing", "--no-launch")).toMatchObject({ code: 1 });
+    // The Studio is the daemon's; with none running, open says how to start it.
+    expect((await clipmunk(cwd, "open", "--url", "http://127.0.0.1:9", "--no-launch")).out).toContain(
+      "npx clipmunk dev",
+    );
+    const token = "t".repeat(24);
+    await writeFile(
+      path.join(cwd, ".clipmunk/daemon.json"),
+      JSON.stringify({ port: 4999, pid: 1, token, startedAt: new Date().toISOString() }),
+    );
     const opened = await clipmunk(cwd, "open", "--url", "http://127.0.0.1:9", "--no-launch");
-    expect(opened.out).toContain("http://127.0.0.1:9/?clipmunk=1");
-    expect(opened.out).toContain("Nothing is answering there yet");
+    expect(opened.out).toContain(`http://127.0.0.1:4999/?clipmunk=1#clipmunk-daemon=4999.${token}`);
+    expect(opened.out).toContain("dev server is not answering");
     expect((await clipmunk(cwd, "sync")).out).toContain("Vite discovers scenes automatically");
   });
 

@@ -24,7 +24,17 @@ import {
   variantToken,
   zodIssues,
 } from "../core";
-import { Fault, loadTake, readConfig, readSpeech, readText, resolveInside, resolveStudio, toIssues } from "../project";
+import {
+  Fault,
+  loadTake,
+  readConfig,
+  readProject,
+  readSpeech,
+  readText,
+  resolveInside,
+  resolveStudio,
+  toIssues,
+} from "../project";
 import { makeGif, posterFrame, probeVideo } from "./ffmpeg";
 import type { ExportContext } from "./operations";
 import { exportScene } from "./operations";
@@ -82,6 +92,8 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
     if (ratios && job.clip.kind === "sequence")
       throw new Fault("ratios-unsupported", "A sequence is rendered in its own shape.", "ratios");
     const configured = config.ok ? config.data.config.variants : undefined;
+    // Scenes render on the host's dev server; takes need nothing from it.
+    const url = job.url ?? (await readProject(root).catch(() => undefined))?.devUrl ?? "http://127.0.0.1:5173";
     const looks = (job.variants ?? [""]).map((text) => lookOf(text, configured));
 
     await mkdir(await resolveInside(root, EXPORTS_DIR), { recursive: true });
@@ -102,12 +114,8 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
       const token = variantToken(look);
       const stem = [job.clip.id, ratio && ratioToken(ratio), token].filter(Boolean).join(".");
       const video = `${relative}/${stem}.mp4`;
-      const rendered = await renderVideo(
-        job.clip,
-        video,
-        { url: job.url, size, fps, ratio, look },
-        context,
-        (done, all) => report(done / Math.max(1, all)),
+      const rendered = await renderVideo(job.clip, video, { url, size, fps, ratio, look }, context, (done, all) =>
+        report(done / Math.max(1, all)),
       );
       if (!rendered.ok) return rendered;
       doneSteps++;
@@ -162,7 +170,7 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
       }
       if (formats.includes("poster")) {
         cancel.check();
-        const wanted = job.posterAtMs ?? (await keyMoment(job.clip, job.url, context));
+        const wanted = job.posterAtMs ?? (await keyMoment(job.clip, url, context));
         const atMs = Math.max(0, Math.min(wanted, rendered.data.durationMs - 1000 / rendered.data.fps));
         const png = path.join(directory, `${stem}.png`);
         await posterFrame(file, png, atMs, { cwd: root, signal: context.signal });

@@ -6,14 +6,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 let server: ViteDevServer, browser: Browser, page: Page, origin: string;
 const errors: string[] = [];
 
-const seek = (ms: number) =>
-  page.locator("input[type=range]").evaluate((element, value) => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, String(value));
-    element.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-  }, ms);
+// The frame page has no controls; it is driven through its capture bridge, as export drives it.
+const seek = (ms: number) => page.evaluate((value) => (window as any).__CLIPMUNK__.seek(value), ms);
 const frame = () => page.locator('[data-clipmunk-capture="scene"]').screenshot();
 const open = async (scene: string) => {
-  await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=${scene}`);
+  await page.goto(`${origin}/?clipmunk-frame=1&clipmunk-scene=${scene}`);
   await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
 };
 
@@ -58,22 +55,7 @@ describe("depth of field", () => {
   }, 60_000);
 });
 
-describe("playback", () => {
-  it("advances the shared clock from the Play button and stops at the end of a seek", async () => {
-    await open("plating");
-    const time = () => page.locator(".time").textContent();
-    expect(await time()).toBe("0.00s / 6.00s");
-    await page.getByRole("button", { name: "Play" }).click();
-    await page.waitForTimeout(700);
-    await page.getByRole("button", { name: "Pause" }).click();
-    const paused = await time();
-    expect(paused).not.toBe("0.00s / 6.00s");
-    await page.waitForTimeout(300);
-    expect(await time()).toBe(paused);
-    await seek(6000);
-    expect(await page.getByRole("button", { name: "Replay" }).count()).toBe(1);
-  }, 60_000);
-
+describe("scene time", () => {
   it("drives host components that read scene time", async () => {
     await open("plating");
     const reveal = () => page.locator("#orbit-reveal rect").getAttribute("width");
@@ -85,19 +67,15 @@ describe("playback", () => {
 });
 
 describe("studio", () => {
-  it("lists every scene and opens one from the library", async () => {
-    await page.goto(`${origin}/?clipmunk=1`);
-    await page.waitForSelector(".tile");
-    expect(await page.locator(".tile b").allTextContents()).toEqual(
-      expect.arrayContaining(["Page survey", "Plating", "Rack focus", "Themed card"]),
-    );
-    await page.locator(".tile", { hasText: "Rack focus" }).click();
-    await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
-    expect(new URL(page.url()).searchParams.get("clipmunk-scene")).toBe("rack-focus");
+  it("hands the old studio address over to the standalone Studio", async () => {
+    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=rack-focus`);
+    await expect.poll(() => page.locator(".library").textContent()).toContain("npx clipmunk dev");
+    // None of the old in-app screens are left in the page.
+    expect(await page.locator(".tile").count()).toBe(0);
   }, 60_000);
 
   it("explains an unknown scene instead of showing a blank page", async () => {
-    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=nope`);
+    await page.goto(`${origin}/?clipmunk-frame=1&clipmunk-scene=nope`);
     await page.waitForSelector(".issues");
     expect(await page.locator(".issues").textContent()).toContain('No valid scene named "nope"');
   }, 60_000);
@@ -143,7 +121,6 @@ describe("studio", () => {
       selector: '[data-clipmunk-capture="scene"]',
     });
     await page.evaluate(() => (window as any).__CLIPMUNK__.seek(750));
-    expect(await page.locator(".time").textContent()).toBe("0.75s / 1.50s");
     expect(
       await page.evaluate(() =>
         (window as any).__CLIPMUNK__.seek(9999).then(
@@ -156,8 +133,8 @@ describe("studio", () => {
 });
 
 describe("scene variants", () => {
-  it("hands the URL's variant to the scene and switches it from the player", async () => {
-    await page.goto(`${origin}/?clipmunk=1&clipmunk-scene=themed-card&clipmunk-variant=theme:dark`);
+  it("hands the URL's variant to the scene", async () => {
+    await page.goto(`${origin}/?clipmunk-frame=1&clipmunk-scene=themed-card&clipmunk-variant=theme:dark`);
     await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
     const state = () =>
       page.evaluate(() => {
@@ -172,8 +149,9 @@ describe("scene variants", () => {
         };
       });
     expect(await state()).toEqual({ size: "400x300", dark: true, variant: "theme:dark" });
-    await page.getByLabel("Variant").selectOption({ label: "9:16" });
-    await expect.poll(state).toEqual({ size: "300x534", dark: false, variant: "ratio:9x16" });
+    await page.goto(`${origin}/?clipmunk-frame=1&clipmunk-scene=themed-card&clipmunk-variant=ratio:9x16`);
+    await page.waitForSelector('[data-clipmunk-scene][data-clipmunk-valid="true"]');
+    expect(await state()).toEqual({ size: "300x534", dark: false, variant: "ratio:9x16" });
   }, 60_000);
 });
 

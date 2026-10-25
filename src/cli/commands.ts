@@ -4,7 +4,9 @@ import {
   ADAPTERS,
   type Adapter,
   CONFIG_FILE,
+  DAEMON_FILE,
   DAEMON_HASH,
+  DaemonFileSchema,
   encodeWav,
   formatGuide,
   getGuide,
@@ -15,6 +17,8 @@ import {
   type PresetField,
   renderMusic,
   resolveZoomTracks,
+  SCENE_PARAM,
+  STUDIO_PARAM,
   studioUrl,
   zoomSegments,
 } from "../core";
@@ -29,6 +33,7 @@ import {
   listSequences,
   readConfig,
   readProject,
+  readText,
   refreshStateFiles,
   resolveInside,
   resolveStudio,
@@ -195,14 +200,35 @@ function launch(url: string) {
 export const open: Command = async ({ values, context, human, print }) => {
   const result = await resolveStudio({ url: values.url, sceneId: values.scene }, context);
   if (!result.ok) return print(result, String);
-  const { url, reachable } = result.data;
-  if (reachable && human && !values["no-launch"]) launch(url);
+  // The Studio is served by the daemon; without one running, say how to start it.
+  const daemon = await readDaemonFile(context.root);
+  if (!daemon)
+    return print(
+      { ok: true, data: { url: undefined, reachable: false } },
+      () => "The Studio runs with the daemon. Start it with npx clipmunk dev, then open the Studio link it prints.",
+    );
+  const studio = new URL(`http://127.0.0.1:${daemon.port}/`);
+  studio.searchParams.set(STUDIO_PARAM, "1");
+  if (values.scene) studio.searchParams.set(SCENE_PARAM, values.scene);
+  studio.hash = `${DAEMON_HASH}=${daemon.port}.${daemon.token}`;
+  const url = studio.toString();
+  const { reachable } = result.data;
+  if (human && !values["no-launch"]) launch(url);
   return print({ ok: true, data: { url, reachable } }, (data) =>
     data.reachable
       ? data.url
-      : `${data.url}\n\nNothing is answering there yet. Start your dev server, or pass its address with --url.`,
+      : `${data.url}\n\nYour app's dev server is not answering, so scenes will not preview until it is running.`,
   );
 };
+
+async function readDaemonFile(root: string) {
+  try {
+    const parsed = DaemonFileSchema.safeParse(JSON.parse((await readText(root, DAEMON_FILE)) ?? "null"));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export const zoom: Command = async ({ values, args, context, print, usage }) => {
   const id = args[0] ?? values.take;

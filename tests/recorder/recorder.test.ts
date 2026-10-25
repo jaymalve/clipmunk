@@ -384,7 +384,7 @@ describe("recorder", () => {
   }, 120_000);
 
   it("does not record the studio itself", async () => {
-    await page.goto(`${origin}/?clipmunk=1&clipmunk-record=1`);
+    await page.goto(`${origin}/?clipmunk-frame=1&clipmunk-scene=rack-focus&clipmunk-record=1`);
     await hud()
       .locator(".status", { hasText: "records your app, not the Clipmunk studio" })
       .waitFor({ timeout: 20_000 });
@@ -393,12 +393,13 @@ describe("recorder", () => {
   }, 60_000);
 
   it("opens a real recording in the editor and exports it with cursor, camera and voice", async () => {
-    await page.goto(`${origin}/?clipmunk=1`);
+    // The standalone Studio, served by the daemon that saved the takes.
+    await page.goto(`${daemon.origin}/?clipmunk=1#clipmunk-daemon=${daemon.port}.${daemon.token}`);
     await page.locator(".row").first().waitFor({ timeout: 20_000 });
     expect(await page.locator(".row").count()).toBeGreaterThanOrEqual(takes.length); // the folder may hold takes recorded by hand
     expect((await page.locator(".row").allTextContents()).some((text) => text.includes("camera + voice"))).toBe(true);
     // A real MediaRecorder file (variable frame rate, remuxed) decodes and composites in the editor.
-    await page.goto(`${origin}/?clipmunk=1&clipmunk-take=${withCamera}`);
+    await page.goto(`${daemon.origin}/?clipmunk=1&clipmunk-take=${withCamera}`);
     await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
     await page.evaluate(() => (window as any).__CLIPMUNK__.seek(1000));
     const drawn = await page.evaluate(() => {
