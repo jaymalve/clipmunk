@@ -215,14 +215,30 @@ A take is stored as two files, and `Take` above is their merged view, which is a
 | `k` | Fields | Notes |
 |---|---|---|
 | `move` | `x y` | Coalesced to one per animation frame |
-| `down`, `up` | `x y button rect` | `rect` is the bounding box of the interacted element |
+| `down` | `x y button rect el?` | `rect` is the bounding box of the interacted element; `el` says which element it was |
+| `up` | `x y button` | |
 | `cursor` | `style` | `default`, `pointer` or `text`, from the computed cursor under the pointer |
 | `scroll` | `x y` | Page scroll offset |
-| `focus` | `rect editable` | Focused element box; `editable` marks text inputs |
+| `focus` | `rect editable el?` | Focused element box; `editable` marks text inputs |
 | `type` | `rect` | A keystroke happened in this element. **The key is not recorded.** |
+| `combo` | `keys` | A key pressed with Meta, Control or Alt held, such as `["Meta", "K"]`, read from the physical key. Never logged in a password field. |
+| `route` | `path` | The page's path at the start and on every change. The query and fragment are left out, because they can carry tokens. |
+| `redact` | `sel rects` | The boxes of every element matching one of the config's redaction selectors, logged on the first frame and whenever they change |
 | `resize` | `width height` | Capture root size changed |
 
-The log never contains typed text, element text or attribute values.
+`el` is `{ sel, role?, name?, testId? }`, made by `recorder/identity.ts`:
+
+- `sel` is a CSS selector that matched only that element when it was logged. It prefers a stable id (React's generated ids are skipped), a test id (`data-testid`, `data-test`, `data-cy`), `aria-label` or a field's `name`. Failing those, it is the shortest path of tags, hand-written classes (hashed CSS-in-JS classes are skipped) and `:nth-of-type` that is unique, stopping at an ancestor that names itself.
+- `role` is the explicit or implicit ARIA role.
+- `name` is the accessible name, at most 80 characters, from `aria-labelledby`, `aria-label`, a field's `<label>`, placeholder or title, or a control's visible text and image alts. A field's value is never used, except for button inputs, whose value is their visible label. Only controls (buttons, links, fields, tabs and the like) are named, so clicking a table cell records no cell text.
+
+Privacy rules, enforced in the recorder and tested on a real recording:
+
+- No typed text, no field values, and no attribute values beyond the ones a selector uses.
+- An element matching a redaction selector, or inside one, gets no `name` and no `testId`, and its selector uses no attribute values.
+- In a password field, only `type` with its `rect` is logged: no shortcut, no name beyond its label.
+
+The recorder fetches the redaction selectors from `GET /v1/config` when a take starts. A selector the page cannot parse is skipped and noted in `recorder.log`; if the config cannot be read, the take records without redaction and says so in the same log. Takes recorded before these fields existed simply lack them, and every consumer treats them as optional.
 
 ### 5.5 Sequence
 
@@ -735,11 +751,7 @@ Done: section 5.3 describes the two files.
 
 ### 19.5 The event log learns what was touched
 
-To write captions ("Click New invoice"), redact by selector, map clips to source files and turn takes into scenes, the recorder logs the identity of the elements the user interacts with: a selector, the role and accessible name, and the route.
-
-- This changes the promise in section 5.4. The log will contain the accessible names of clicked and focused controls, and the route. It still never contains typed text or attribute values, and elements matching a redaction selector are never named.
-- Elements matching a redaction selector have their boxes logged on every frame they move, so the compositor can blur or block them wherever they go.
-- Key combinations with a modifier (such as ⌘K) are logged for the keystroke overlay. Plain typing still records only that a key was pressed, and nothing at all in password fields.
+Done: section 5.4 describes the element identity, the new kinds and the privacy rules. Captions, redaction, take to scene and stale detection build on it. `el.src` (the source file of the element) is added with the source map.
 
 ### 19.6 The agent works through MCP
 

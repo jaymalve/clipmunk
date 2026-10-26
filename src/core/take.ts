@@ -19,19 +19,47 @@ const finite = z.number().finite();
 const ms = finite.nonnegative();
 const rect = z.tuple([finite, finite, finite, finite]); // x, y, width, height in CSS pixels
 
+/** Which element an interaction touched. `sel` is a CSS selector that matched only this
+ * element when it was logged. `name` is its accessible name (a button's label, a field's
+ * label), present only for controls, and never for an element inside a redaction selector.
+ */
+export const ElementSchema = z.strictObject({
+  sel: z.string().min(1).max(300),
+  role: z.string().max(40).optional(),
+  name: z.string().max(80).optional(),
+  testId: z.string().max(120).optional(),
+});
+export type ElementIdentity = z.output<typeof ElementSchema>;
+
 /** One line of events.jsonl. `t` is milliseconds on the take clock; coordinates are CSS
  * pixels in the captured viewport. Typed text is never recorded: `type` only says that a
- * keystroke happened in an element.
+ * keystroke happened in an element, and `combo` names keys only when a modifier other than
+ * Shift is held. `el` and the `route`, `combo` and `redact` kinds are absent from takes
+ * recorded before they existed.
  */
 export const TakeEventSchema = z.discriminatedUnion("k", [
   z.strictObject({ t: ms, k: z.literal("move"), x: finite, y: finite }),
-  z.strictObject({ t: ms, k: z.literal("down"), x: finite, y: finite, button: z.number().int(), rect }),
+  z.strictObject({
+    t: ms,
+    k: z.literal("down"),
+    x: finite,
+    y: finite,
+    button: z.number().int(),
+    rect,
+    el: ElementSchema.optional(),
+  }),
   z.strictObject({ t: ms, k: z.literal("up"), x: finite, y: finite, button: z.number().int() }),
   z.strictObject({ t: ms, k: z.literal("cursor"), style: z.enum(["default", "pointer", "text"]) }),
   z.strictObject({ t: ms, k: z.literal("scroll"), x: finite, y: finite }),
-  z.strictObject({ t: ms, k: z.literal("focus"), rect, editable: z.boolean() }),
+  z.strictObject({ t: ms, k: z.literal("focus"), rect, editable: z.boolean(), el: ElementSchema.optional() }),
   z.strictObject({ t: ms, k: z.literal("type"), rect }),
   z.strictObject({ t: ms, k: z.literal("resize"), width: finite.positive(), height: finite.positive() }),
+  /** The page's path (no query or fragment, which can carry secrets), at the start and on every change. */
+  z.strictObject({ t: ms, k: z.literal("route"), path: z.string().startsWith("/").max(2000) }),
+  /** A key pressed with Meta, Control or Alt held, such as ["Meta", "K"]. */
+  z.strictObject({ t: ms, k: z.literal("combo"), keys: z.array(z.string().min(1).max(20)).min(2).max(5) }),
+  /** The boxes of every element matching one redaction selector, when they change. */
+  z.strictObject({ t: ms, k: z.literal("redact"), sel: z.string().min(1).max(200), rects: z.array(rect).max(200) }),
 ]);
 export type TakeEvent = z.output<typeof TakeEventSchema>;
 

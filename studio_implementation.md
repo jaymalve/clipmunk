@@ -22,7 +22,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 1 | Take edits in a sidecar file | Engine | 🔵 [#18](https://github.com/jaymalve/clipmunk/pull/18) |
 | 2 | `clipmunk.config.json` and brand defaults | Engine | 🔵 [#19](https://github.com/jaymalve/clipmunk/pull/19) |
 | 3 | Presets: apply and save | Engine | 🔵 [#20](https://github.com/jaymalve/clipmunk/pull/20) |
-| 4 | Event log v2: what was touched | Engine | ⬜ |
+| 4 | Event log v2: what was touched | Engine | 🔵 [#21](https://github.com/jaymalve/clipmunk/pull/21) |
 | 5 | Redaction | Engine | ⬜ |
 | 6 | Captions and the keystroke overlay | Engine | ⬜ |
 | 7 | Dead air and steady typing | Engine | ⬜ |
@@ -118,12 +118,12 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Done when:** a preset saved from one take and applied to another changes only the preset's fields, and `git diff` of the config shows only the new preset.
 
 ### PR 4 · Event log v2: what was touched
-**Status:** ⬜ · **Branch:** `studio/04-event-log-v2` · **Base:** `studio/03-presets`
+**Status:** 🔵 [#21](https://github.com/jaymalve/clipmunk/pull/21) · **Branch:** `studio/04-event-log-v2` · **Base:** `studio/03-presets`
 
 **Goal:** the log knows which element was used (section 19.5), which captions, redaction, take to scene and stale detection all need.
 
-- On `down`, `up`, `focus` and `type`, add `el: { sel, role?, name?, testId? }`. `sel` is a short stable selector: id, `data-testid`, or role and name, before falling back to a class path. `name` is the accessible name, truncated to 80 characters. Write one small function for this and unit-test it against a fixture page. The spike's picker selectors (`spikes/studio/frame-agent.ts`) were too crude to reuse.
-- New kinds: `route` (`path`, on load, `pushState`, `replaceState` and `popstate`), `combo` (`keys`, e.g. `["Meta","K"]`, only when a modifier other than Shift is held, never in password fields), and `redact` (`rects: [x,y,w,h][]` for elements matching the config's redaction selectors, logged on the first frame and whenever a box changes, coalesced per animation frame).
+- On `down` and `focus`, add `el: { sel, role?, name?, testId? }`. (`up` follows its `down`, and `type` follows its `focus`, so repeating `el` on every keystroke would only bloat the log.) `sel` is a short stable selector: id, `data-testid`, or role and name, before falling back to a class path. `name` is the accessible name, truncated to 80 characters, and only for controls, so clicking a table cell records no cell text. `recorder/identity.ts` holds this and is unit-tested in jsdom. The spike's picker selectors (`spikes/studio/frame-agent.ts`) were too crude to reuse.
+- New kinds: `route` (`path`, on load, `pushState`, `replaceState` and `popstate`), `combo` (`keys`, e.g. `["Meta","K"]`, only when a modifier other than Shift is held, never in password fields), and `redact` (`sel` plus `rects: [x,y,w,h][]`, one event per selector, for elements matching the config's redaction selectors, logged on the first frame and whenever a box changes; checked once per animation frame). `route` logs the path only: no query or fragment, which can carry tokens.
 - Privacy rules, enforced in the recorder and covered by tests: no typed text, no attribute values, no `name` for an element that matches a redaction selector or sits inside one, and nothing but `type` with `rect` inside password fields.
 - The recorder fetches the redaction selectors from `GET /v1/config` when a take starts.
 - `core/take.ts` event schema extended. Old logs stay valid, because every new field is optional.
@@ -384,6 +384,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 1 opened as #18: take edits in `edit.json`. For PR 2: brand defaults belong in `defaultEdit` at ingest (`daemon/takes.ts`, `finalizeTake`), because ingest now writes the edit file. Tests that touch the example app restore `.clipmunk/project.json` themselves; re-check `git diff` on it after a run.
 - 2026-10-25 · PR 2 opened as #19, stacked on #18: `clipmunk.config.json` and brand at ingest. For PR 3: `presets` is currently `z.record(slug, z.record(string, unknown))` in `core/config.ts`; give it the real preset schema there. Writing the config must keep the developer's other keys and their order.
 - 2026-10-25 · PR 3 opened as #20, stacked on #19: presets. For PR 4: the recorder can fetch the redaction selectors from `GET /v1/config` (`config.redact`); the CLI has no `config` command, `clipmunk doctor` is where config problems show. For PR 9: presets' `export` options (`size`, `fps`, `formats`, `ratios`) are validated but no export reads them yet.
+- 2026-10-25 · PR 4 opened as #21, stacked on #20: event log v2 (`el` on `down` and `focus`, `route`, `combo`, `redact`). For PR 5: `redact` events carry `sel` and `rects` in CSS pixels, one event per selector, logged only when a box changes, so hold each box until the next event for that selector; empty `rects` means nothing to hide. A config the recorder cannot read means a take without redaction, noted in `recorder.log`.
 
 ## Environment notes for whoever picks this up
 

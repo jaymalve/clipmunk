@@ -171,6 +171,13 @@ async function measureLatency(stream: MediaStream): Promise<number> {
 type Note = (text: string) => void;
 type Page = ReturnType<typeof preparePage>;
 
+/** The project's redaction selectors. A config the daemon cannot read means none, noted in the take's log. */
+async function redactionSelectors(client: DaemonClient): Promise<{ selectors: string[]; problem?: string }> {
+  const config = await client.get<{ config: { redact?: string[] } }>("/v1/config");
+  if (config.ok) return { selectors: config.data.config.redact ?? [] };
+  return { selectors: [], problem: config.issues[0]?.message };
+}
+
 /** Saving needs the daemon and FFmpeg on its side. Find out before recording, not after. */
 async function daemonProblem(client: DaemonClient): Promise<string | undefined> {
   const status = await client.get<DaemonStatus>("/v1/status");
@@ -323,6 +330,7 @@ type Capture = {
   voice: MediaStream | undefined;
   latencyMs: number;
   ignore: (event: Event) => boolean;
+  redact: string[];
   /** Something went wrong that recording on cannot fix; the recording should stop. */
   onFault: () => void;
 };
@@ -358,6 +366,8 @@ function beginCapture(capture: Capture) {
     flush: (lines) => uploader.upload("events", new Blob([lines])),
     cursorOf: page.cursorOf,
     ignore: capture.ignore,
+    redact: capture.redact,
+    onIssue: note,
   });
   log.start();
 
@@ -433,6 +443,7 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
     step("Checking the daemon…");
     const problem = await daemonProblem(client);
     if (problem) return set({ phase: "error", message: problem });
+    const redact = await redactionSelectors(client);
     const streams: MediaStream[] = [];
     let page: Page | undefined;
     const cleanup = () => {
@@ -451,9 +462,21 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
       );
       const latencyMs = await measureLatency(display);
       const { takeId, note } = await openTake(client, page.background, options, latencyMs);
+      if (redact.problem) note(`config not read, recording without redaction: ${redact.problem}`);
       // Recording on with nowhere to put it would only lose more; a fault stops the take and says why.
       const onFault = () => void stopActive?.();
-      const capture = beginCapture({ client, takeId, note, page, display, voice, latencyMs, ignore, onFault });
+      const capture = beginCapture({
+        client,
+        takeId,
+        note,
+        page,
+        display,
+        voice,
+        latencyMs,
+        ignore,
+        redact: redact.selectors,
+        onFault,
+      });
       stopActive = async () => {
         stopActive = undefined;
         const payload = capture.halt();
