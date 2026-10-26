@@ -129,7 +129,7 @@
   background: var(--bg);
   font-size: 11px;
   font-style: normal;
-  transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .card:hover .thumb__play {
@@ -761,13 +761,8 @@
   grid-column: span 3;
 }
 
-.rule__num {
-  font-size: 12px;
-  color: var(--munk);
-}
-
 .rule h3 {
-  margin: 14px 0 8px;
+  margin: 0 0 8px;
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -936,6 +931,10 @@
   .rule,
   .rule:nth-child(-n + 2) {
     grid-column: span 3;
+  }
+  /* Five rules two to a row: the last one takes the whole row. */
+  .rule:last-child {
+    grid-column: 1 / -1;
   }
   .faq__in {
     grid-template-columns: 1fr;
