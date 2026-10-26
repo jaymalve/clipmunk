@@ -92,21 +92,28 @@ export const dev: Command = async ({ io, values, human, usage }) => {
     for (const issue of refreshed.data.issues) io.err(`\nNote: ${issue.message}\n`);
   }
   const project = await readProject(io.cwd).catch(() => undefined);
-  const studio = project ? studioUrl(project.devUrl, project.studioPath) : "http://127.0.0.1:5173/?clipmunk=1";
-  const link = `${studio}#${DAEMON_HASH}=${daemon.port}.${daemon.token}`;
+  const hash = `#${DAEMON_HASH}=${daemon.port}.${daemon.token}`;
+  // The standalone Studio, served by the daemon itself, and the app's own pages for recording.
+  const studioLink = `${daemon.origin}/${hash}`;
+  const app = project ? studioUrl(project.devUrl, project.studioPath) : "http://127.0.0.1:5173/?clipmunk=1";
+  const link = `${app}${hash}`;
   if (human)
     io.out(
       [
         `Clipmunk daemon listening on ${daemon.origin}`,
         "",
-        "Open this link once to connect your browser (your dev server must be running):",
+        "Studio:",
+        "",
+        `  ${studioLink}`,
+        "",
+        "To record your app, open this once with your dev server running, then press Alt+Shift+R on any page:",
         "",
         `  ${link}`,
         "",
-        "Then press Alt+Shift+R on any page of your app to record. Ctrl+C stops the daemon.",
+        "Ctrl+C stops the daemon.",
       ].join("\n"),
     );
-  else io.out(JSON.stringify({ ok: true, data: { port: daemon.port, token: daemon.token, link } }));
+  else io.out(JSON.stringify({ ok: true, data: { port: daemon.port, token: daemon.token, studio: studioLink, link } }));
   // Run until interrupted.
   await new Promise<void>((resolve) =>
     io.signal?.aborted ? resolve() : io.signal?.addEventListener("abort", () => resolve(), { once: true }),

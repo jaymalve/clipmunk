@@ -17,6 +17,12 @@ const RULES = {
     packages: ["react", "react-dom"],
     node: false,
   },
+  // The standalone Studio, served by the daemon: browser code that talks to it over HTTP.
+  "studio-app": {
+    modules: ["core", "bridge", "react", "compositor", "recorder", "studio"],
+    packages: ["react", "react-dom"],
+    node: false,
+  },
   daemon: { modules: ["core", ...NODE], packages: [], node: true },
   export: { modules: ["core", ...NODE], packages: ["playwright"], node: true },
   project: { modules: ["core", ...NODE], packages: ["typescript"], node: true },

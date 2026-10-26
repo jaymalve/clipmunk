@@ -51,11 +51,14 @@ export function ExportPanel({
   daemon,
   before,
   frame,
+  url,
 }: {
   clip: ExportClip;
   daemon: DaemonState;
   before?: () => Promise<void>;
   frame?: { width: number; height: number };
+  /** The host app's dev server, when the panel is not itself served from it (the standalone Studio). */
+  url?: string;
 }) {
   const [fps, setFps] = useState<number>(60);
   const [state, setState] = useState<JobState>({ phase: "idle" });
@@ -68,7 +71,7 @@ export function ExportPanel({
       : "takeId" in clip
         ? `--take ${clip.takeId}`
         : `--sequence ${clip.sequenceId}`;
-  const command = `npx clipmunk export ${flag} --url ${location.origin}${size && size.label !== "Original" ? ` --size ${size.width}x${size.height}` : ""}`;
+  const command = `npx clipmunk export ${flag} --url ${url ?? location.origin}${size && size.label !== "Original" ? ` --size ${size.width}x${size.height}` : ""}`;
   // A sequence carries its own frame rate.
   const fpsChoices = "sceneId" in clip ? EXPORT_FPS : "takeId" in clip ? ([30, 60] as const) : [];
   if (!daemon?.client)
@@ -99,6 +102,7 @@ export function ExportPanel({
     await before?.();
     const started = await daemon.client.post<{ job: string }>("/v1/exports", {
       ...clip,
+      ...(url ? { url } : {}),
       ...(fpsChoices.length ? { fps } : {}),
       ...(size ? { width: size.width, height: size.height } : {}),
     });

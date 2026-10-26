@@ -448,7 +448,7 @@ class SceneBoundary extends Component<
 }
 
 /** Every combination of the config's themes and locales with each ratio, as one select. */
-function VariantSelect(props: {
+export function VariantSelect(props: {
   value: SceneVariant;
   options: { themes: string[]; locales: string[] };
   onChange: (variant: SceneVariant) => void;

@@ -8,12 +8,14 @@ import {
   listPresets,
   listSequences,
   readConfig,
+  readProject,
   readSequence,
   type SavePresetInput,
   savePreset,
   writeSequence,
 } from "../project";
 import { applyPresetToScene, audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
+import type { Events, StudioEvent } from "./events";
 import { deny, readBody, readJson, reply, send, serveFile } from "./http";
 import type { Jobs } from "./jobs";
 import {
@@ -45,38 +47,59 @@ export type Call = {
   name: string | undefined;
   context: { root: string };
   jobs: Jobs;
+  events: Events;
   version: string;
   log: (line: string) => void;
 };
 type Handler = (call: Call) => Promise<boolean>;
 const handled = (_sent?: unknown) => true;
+/** The result, after telling the Studio about the change when it succeeded. */
+const announce = <T extends { ok: boolean }>(events: Events, result: T, event: StudioEvent): T => {
+  if (result.ok) events.emit(event);
+  return result;
+};
 
 const status: Handler = async ({ response, method, id, context, version }) => {
   if (method !== "GET") return false;
-  const data = { version, project: path.basename(context.root), ffmpeg: !!(await ffmpegVersion()) };
+  const project = await readProject(context.root).catch(() => undefined);
+  const data = {
+    version,
+    project: path.basename(context.root),
+    ffmpeg: !!(await ffmpegVersion()),
+    // Where the host app runs, for the Studio's scene previews.
+    ...(project ? { devUrl: project.devUrl, studioPath: project.studioPath } : {}),
+  };
   return handled(send(response, 200, { ok: true, data }));
 };
 
-const scenes: Handler = async ({ request, response, url, method, id, action, context }) => {
+const scenes: Handler = async ({ request, response, url, method, id, action, context, events }) => {
   if (!id && method === "GET") {
     const catalog = await discoverScenes(context);
-    const list = catalog.scenes.map(({ id, title, description }) => ({ id, title, description }));
+    // ?detail=1 adds what the Studio shows: the definition, its snapshot, music and sound.
+    const list = url.searchParams.has("detail")
+      ? catalog.scenes
+      : catalog.scenes.map(({ id, title, description }) => ({ id, title, description }));
     return handled(send(response, 200, { ok: true, data: { scenes: list, issues: catalog.issues } }));
   }
   if (!id) return false;
   if (action === "narration" && method === "PUT") {
     const offsetMs = Number(url.searchParams.get("offset")) || 0;
-    return handled(reply(response, await storeNarration(id, await readBody(request), offsetMs, context)));
+    const result = await storeNarration(id, await readBody(request), offsetMs, context);
+    return handled(reply(response, announce(events, result, { type: "edit", kind: "scene", id })));
   }
   if (action === "narration" && method === "DELETE")
-    return handled(reply(response, await removeNarration(id, context)));
+    return handled(
+      reply(response, announce(events, await removeNarration(id, context), { type: "edit", kind: "scene", id })),
+    );
   if (action === "music" && method === "PUT") {
     const body = (await readJson(request)) as { music?: unknown };
-    return handled(reply(response, await setSceneMusic(id, body.music, context)));
+    const result = await setSceneMusic(id, body.music, context);
+    return handled(reply(response, announce(events, result, { type: "edit", kind: "scene", id })));
   }
   if (action === "preset" && method === "POST") {
     const body = (await readJson(request)) as { name?: unknown };
-    return handled(reply(response, await applyPresetToScene(id, String(body.name ?? ""), context)));
+    const result = await applyPresetToScene(id, String(body.name ?? ""), context);
+    return handled(reply(response, announce(events, result, { type: "edit", kind: "scene", id })));
   }
   return false;
 };
@@ -86,15 +109,18 @@ const audio: Handler = async ({ request, response, method, id, context }) => {
   return handled(await serveFile(request, response, await audioFile(id, context)));
 };
 
-const sequences: Handler = async ({ request, response, method, id, context }) => {
+const sequences: Handler = async ({ request, response, method, id, context, events }) => {
   if (!id) return method === "GET" && handled(reply(response, await listSequences(context)));
   if (method === "GET") return handled(reply(response, await readSequence(id, context)));
-  if (method === "PUT") return handled(reply(response, await writeSequence(id, await readJson(request), context)));
+  if (method === "PUT") {
+    const result = await writeSequence(id, await readJson(request), context);
+    return handled(reply(response, announce(events, result, { type: "edit", kind: "sequence", id })));
+  }
   if (method === "DELETE") return handled(reply(response, await deleteSequence(id, context)));
   return false;
 };
 
-const takes: Handler = async ({ request, response, url, method, id, action, name, context, log }) => {
+const takes: Handler = async ({ request, response, url, method, id, action, name, context, log, events }) => {
   if (!id) {
     if (method === "GET") return handled(reply(response, await listTakes(context)));
     if (method === "POST") return handled(reply(response, await createTake(await readJson(request), context), true));
@@ -104,7 +130,8 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
     if (method === "GET") return handled(reply(response, await readTakeForEditor(id, context)));
     if (method === "PATCH") {
       const body = (await readJson(request)) as Record<string, unknown>;
-      return handled(reply(response, await updateTakeEdit(id, body, context)));
+      const result = await updateTakeEdit(id, body, context);
+      return handled(reply(response, announce(events, result, { type: "edit", kind: "take", id })));
     }
     if (method === "DELETE") return handled(reply(response, await deleteTake(id, context)));
     return false;
@@ -121,11 +148,13 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
   }
   if (action === "finalize" && method === "POST") {
     log(`ingesting ${id}`);
-    return handled(reply(response, await finalizeTake(id, await readJson(request), context)));
+    const result = await finalizeTake(id, await readJson(request), context);
+    return handled(reply(response, announce(events, result, { type: "take", id })));
   }
   if (action === "preset" && method === "POST") {
     const body = (await readJson(request)) as { name?: unknown };
-    return handled(reply(response, await applyPresetToTake(context.root, id, String(body.name ?? ""))));
+    const result = await applyPresetToTake(context.root, id, String(body.name ?? ""));
+    return handled(reply(response, announce(events, result, { type: "edit", kind: "take", id })));
   }
   if (action === "files" && name && method === "GET") {
     return handled(await serveFile(request, response, await takeFile(id, name, context)));
@@ -134,11 +163,14 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
 };
 
 /** Start an export as a job. The job's progress is read from `/v1/jobs/<id>/events`. */
-const exports: Handler = async ({ request, response, method, id, origin, context, jobs, log }) => {
+const exports: Handler = async ({ request, response, url, method, id, origin, context, jobs, log }) => {
   if (id || method !== "POST") return false;
   const body = (await readJson(request)) as Record<string, unknown>;
-  // The studio page is the dev server, so its Origin is the address to render from.
-  const target = typeof body.url === "string" ? body.url : origin;
+  // The in-app studio page is the dev server, so its Origin is the address to render from. The
+  // standalone Studio is served by the daemon itself; then the project's own dev server is.
+  const own = origin === `http://${url.host}` || origin === `http://127.0.0.1:${url.port}`;
+  const project = own ? await readProject(context.root).catch(() => undefined) : undefined;
+  const target = typeof body.url === "string" ? body.url : own ? project?.devUrl : origin;
   if (!target) return handled(deny(response, "invalid-request", "Pass the dev server address as url."));
   // A job with several outputs names its clip; the older single-file shape names the clip by kind.
   const work =
@@ -193,7 +225,27 @@ const presets: Handler = async ({ request, response, method, id, context }) => {
   return false;
 };
 
+/** One server-sent-events stream of everything the Studio should hear (events.ts). */
+const eventStream: Handler = async ({ request, response, method, id, events }) => {
+  if (id || method !== "GET") return false;
+  response.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-store",
+    connection: "keep-alive",
+  });
+  response.write(": connected\n\n");
+  const stop = events.subscribe((event) => response.write(`data: ${JSON.stringify(event)}\n\n`));
+  // A comment now and then keeps proxies and the browser from closing an idle stream.
+  const beat = setInterval(() => response.write(": beat\n\n"), 25_000);
+  request.on("close", () => {
+    clearInterval(beat);
+    stop();
+  });
+  return true;
+};
+
 export const ROUTES: Record<string, Handler> = {
+  events: eventStream,
   status,
   config,
   presets,

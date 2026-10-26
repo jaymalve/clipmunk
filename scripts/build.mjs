@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { build } from "vite";
+import { buildStudioApp } from "./studio-app.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -42,6 +43,8 @@ await build({
     rollupOptions: { external: [/^node:/, "playwright", "zod"], output: { chunkFileNames: "chunks/[name]-[hash].js" } },
   },
 });
+// The standalone Studio the daemon serves: a static app with its own copy of React.
+await buildStudioApp(new URL("../dist/studio-app", import.meta.url).pathname, { version });
 const cli = new URL("../dist/cli.js", import.meta.url);
 writeFileSync(cli, `#!/usr/bin/env node\n${readFileSync(cli, "utf8")}`);
 chmodSync(cli, 0o755);
