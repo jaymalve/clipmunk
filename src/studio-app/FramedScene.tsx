@@ -201,6 +201,11 @@ export function FramedScene({ scene, daemon }: { scene: CatalogScene; daemon: Da
                   : "Narrate"}
             </button>
           )}
+          {narration?.hasNarration && narration.phase === "idle" && (
+            <button type="button" disabled={playing} onClick={() => post({ type: "narrate", action: "remove" })}>
+              Remove narration
+            </button>
+          )}
           <button type="button" onClick={() => setPanel((value) => (value === "music" ? undefined : "music"))}>
             {music ? "Music ♪" : "Music"}
           </button>

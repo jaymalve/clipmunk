@@ -31,7 +31,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 10 | Scene variants: theme, locale, ratio | Engine | 🔵 [#27](https://github.com/jaymalve/clipmunk/pull/27) |
 | 11 | The frame page in the host | Studio | 🔵 [#28](https://github.com/jaymalve/clipmunk/pull/28) |
 | 12 | The daemon serves the Studio (parity) | Studio | 🔵 [#29](https://github.com/jaymalve/clipmunk/pull/29) |
-| 13 | Switch over to the standalone Studio | Studio | ⬜ |
+| 13 | Switch over to the standalone Studio | Studio | 🔵 [#30](https://github.com/jaymalve/clipmunk/pull/30) |
 | 14 | Library screen | Studio | ⬜ |
 | 15 | Editor screen: timeline, inspector, undo | Studio | ⬜ |
 | 16 | Presets in the Studio | Studio | ⬜ |
@@ -258,15 +258,17 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** Vitest sets `NODE_ENV=test`, which made the React plugin emit development JSX into the production bundle; `buildStudioApp` forces production while it builds.
 
 ### PR 13 · Switch over to the standalone Studio
-**Status:** ⬜ · **Branch:** `studio/13-switch-over` · **Base:** `studio/12-studio-app`
+**Status:** 🔵 [#30](https://github.com/jaymalve/clipmunk/pull/30) · **Branch:** `studio/13-switch-over` · **Base:** `studio/12-studio-app`
 
-- `?clipmunk=1` in the host shows a one-line page linking to the standalone Studio, or opens it when the daemon is known. The in-app screens are removed from the host bundle; the adapter keeps only the frame page and the recorder boot.
-- Take export opens the take editor in the daemon-served Studio, not on the host's dev server (section 12.2), so takes export without the host running.
-- The recorder HUD gains "Open in Studio" after a take is saved.
-- `CLIPMUNK.md`, the guide, the README and `ARCHITECTURE.md` sections 10, 12.2 and 13 describe the new arrangement.
+- `?clipmunk=1` in the host shows a one-line page linking to the standalone Studio, or forwards to it (keeping the clip in the address) when a running daemon is known. The in-app screens are removed from the host bundle: `clipmunk/studio` no longer reaches the library, take editor or sequence builder; the adapter keeps only the frame page, the hand-off and the recorder boot.
+- Take export opens the take editor in the private daemon's own Studio, not on the host's dev server (section 12.2), so takes export without the host running. The take request's `url`, and the job's, are optional now.
+- The recorder HUD says "Open in Studio" after a take is saved, linking to the daemon's Studio; it also declines to record on the frame page. `clipmunk open` opens the daemon's Studio.
+- `CLIPMUNK.md`, the guide, the README and `ARCHITECTURE.md` sections 10, 12.2, 13 and 14 describe the new arrangement.
 
-**Tests:** `test:installed` (Vite, Next, plain React): `init`, the frame page loads, the production build still contains no Clipmunk code, and the Studio opens from `clipmunk dev`; take export with the host dev server stopped.
+**Tests:** `test:installed` (Vite and Next): `init`, scene export through the frame page, the production build still contains no Clipmunk code, and the Studio opens from `clipmunk dev`; take export with the host dev server stopped (`test:studio`). The take, sequence and recorder suites now drive the daemon-served Studio, and the browser suite the frame page; a Vitest global setup builds the Studio once (cached until a source changes) and points the daemon at it with `CLIPMUNK_STUDIO_DIR`.
 **Done when:** a fresh install goes from `init` to an exported scene and an exported take using only the standalone Studio.
+
+**Notes:** the plain-React host is covered by the project unit tests, not `test:installed`, which only has Vite and Next hosts. The PR 11 comparison against the in-app page cannot run once that page is gone; the export suite now checks that two separately opened frame pages capture identically.
 
 ### PR 14 · Library screen
 **Status:** ⬜ · **Branch:** `studio/14-library` · **Base:** `studio/13-switch-over`
@@ -411,12 +413,13 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 10 opened as #27, stacked on #26: scene variants. The engine part is done. For PR 11: the frame page must read `clipmunk-variant` from its own URL and wrap the scene in `SceneVariantProvider`, exactly as `ScenePreview` does, and size the frame with `variantFrame`.
 - 2026-10-25 · PR 11 opened as #28, stacked on #27: the frame page. For PR 12: frame the host page at `frameUrl(devUrl, studioPath, id)` plus the daemon link hash (`#clipmunk-daemon=<port>.<token>`); the frame trusts only loopback origins on that port. Post `{ cm: 1, type, … }` messages; the frame answers with `ready`, `frame`, `tick`, `stopped`, `picked` and `narration`.
 - 2026-10-25 · PR 12 opened as #29, stacked on #28: the standalone Studio. For PR 13: take export still opens the take editor on the host's dev server (`export/take.ts`); point it at the daemon-served Studio (`?clipmunk=1&clipmunk-take=<id>` on the daemon's origin, with `studioDir` found as in `daemon/server.ts`).
+- 2026-10-25 · PR 13 opened as #30, stacked on #29: switch-over. For PR 14: the library is `studio/Library.tsx`, used now only by `studio-app/StudioApp.tsx`; job progress for badges comes from `GET /v1/events` (`job` events), and multi-output exports go through `POST /v1/exports` with `{ clip, formats, ratios, variants }`.
 
 ## Environment notes for whoever picks this up
 
 - FFmpeg: tests set `CLIPMUNK_FFMPEG` themselves. By hand, use an absolute path, for example `CLIPMUNK_FFMPEG=$PWD/node_modules/ffmpeg-static/ffmpeg`.
 - `npm run test:recorder` needs a display and wraps `xvfb-run`.
-- `npm run test:studio` builds the Studio app into a temporary folder first, which takes a few seconds.
+- `npm run test:studio` builds the Studio app into a temporary folder first, which takes a few seconds. Every other Vitest run builds it once into `node_modules/.cache/clipmunk/studio-app` (only when a source changed) for the daemon to serve; set `CLIPMUNK_STUDIO_DIR` to use another build.
 - On a machine without a GPU, depth-blur scenes take seconds per frame. Run long suites in the background with a log file.
 - `scripts/check-installed.mjs` uses ports 5311 and 3111; an interrupted run can leave a server there that fails the next run with a misleading "scene did not open".
 - `clipmunk export --url` stores that URL in `.clipmunk/project.json`. Restore it after testing against another port.

@@ -5,7 +5,7 @@
   "devUrl": "http://127.0.0.1:35443",
   "files": {
     ".clipmunk/.gitignore": "2e5e19628a1cc7b5abf9421b14a46bd411c398e6436e4db8d9333f417ead52df",
-    "CLIPMUNK.md": "6dc98d9912067ecf7e9c5067188be80f59557feb392357a78f4ebed54cd97d5f",
+    "CLIPMUNK.md": "f9bdc0dc4e45c9ab3f0fb2a603fdd28f92969f9fbfc13f0919c09d1f3cdd757d",
     "src/clipmunk/Studio.tsx": "6a6f984154e25e0eecd5fa07cb4a93de6186ed7b1dc892806022c9de8c0f2b22"
   },
   "entry": "src/main.tsx"

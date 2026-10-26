@@ -55,7 +55,9 @@ beforeAll(async () => {
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on("pageerror", (error) => console.error("pageerror:", error.message));
-  await page.goto(`${origin}/?clipmunk=1&clipmunk-take=zz-test-edit#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+  await page.goto(
+    `${daemon.origin}/?clipmunk=1&clipmunk-take=zz-test-edit#clipmunk-daemon=${daemon.port}.${daemon.token}`,
+  );
   await page.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
 }, 120_000);
 afterAll(async () => {
@@ -215,7 +217,7 @@ describe("redaction", () => {
   const hidden = (colour: number[]) => !near(colour, WHITE, 60) && !near(colour, BLACK, 60);
   const open = async (id: string) => {
     const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    await tab.goto(`${origin}/?clipmunk=1&clipmunk-take=${id}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+    await tab.goto(`${daemon.origin}/?clipmunk=1&clipmunk-take=${id}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
     await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
     const pixelAt = async (ms: number, [x, y]: readonly [number, number]) => {
       await tab.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
@@ -284,7 +286,9 @@ describe("captions and shortcuts", () => {
   it("captions the named click and shows ⌘K as a pill, and both can be turned off", async () => {
     const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     try {
-      await tab.goto(`${origin}/?clipmunk=1&clipmunk-take=${NAMED}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+      await tab.goto(
+        `${daemon.origin}/?clipmunk=1&clipmunk-take=${NAMED}#clipmunk-daemon=${daemon.port}.${daemon.token}`,
+      );
       await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
       const pixelAt = async (ms: number, [x, y]: readonly [number, number]) => {
         await tab.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);
@@ -380,7 +384,7 @@ describe("pacing", () => {
     const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     try {
       await tab.goto(
-        `${origin}/?clipmunk=1&clipmunk-take=zz-test-paced#clipmunk-daemon=${daemon.port}.${daemon.token}`,
+        `${daemon.origin}/?clipmunk=1&clipmunk-take=zz-test-paced#clipmunk-daemon=${daemon.port}.${daemon.token}`,
       );
       await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
       const duration = () => tab.evaluate(() => (window as any).__CLIPMUNK__.durationMs as number);
@@ -402,7 +406,9 @@ describe("reframing", () => {
   it("crops a 9:16 frame to the clicked element, with the click inside it", async () => {
     const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     try {
-      await tab.goto(`${origin}/?clipmunk=1&clipmunk-take=${REFRAMED}#clipmunk-daemon=${daemon.port}.${daemon.token}`);
+      await tab.goto(
+        `${daemon.origin}/?clipmunk=1&clipmunk-take=${REFRAMED}#clipmunk-daemon=${daemon.port}.${daemon.token}`,
+      );
       await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
       const pixelAt = async (ms: number, x: number, y: number) => {
         await tab.evaluate((time) => (window as any).__CLIPMUNK__.seek(time), ms);

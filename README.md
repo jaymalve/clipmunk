@@ -47,6 +47,8 @@ npx clipmunk dev                          # then press Alt+Shift+R in your app t
 npx clipmunk export --take <id>
 ```
 
+**The Studio** opens from the link `npx clipmunk dev` prints. It runs beside your app, served by the daemon: scenes preview from your dev server, and takes, sequences and export work even when your app is not running.
+
 Run `npx clipmunk --help` for every command. Each one accepts `--json`.
 
 ## Learn more

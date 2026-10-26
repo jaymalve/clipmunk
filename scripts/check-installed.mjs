@@ -306,6 +306,12 @@ async function checkHost(name, tarball) {
       headers: { authorization: `Bearer ${started.data.token}` },
     }).then((response) => response.json());
     check(daemonStatus.ok && daemonStatus.data.ffmpeg, "clipmunk dev starts the daemon and it sees FFmpeg");
+    // The standalone Studio ships in the package and the daemon serves it at its printed link.
+    const studioPage = await fetch(`http://127.0.0.1:${started.data.port}/`);
+    check(
+      studioPage.ok && (await studioPage.text()).includes("<title>Clipmunk Studio</title>") && started.data.studio,
+      "the Studio opens from clipmunk dev",
+    );
     check(
       (await fetch(`http://127.0.0.1:${started.data.port}/v1/status`)).status === 401,
       "the daemon refuses requests without the token",

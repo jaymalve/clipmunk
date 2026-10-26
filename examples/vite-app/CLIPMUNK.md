@@ -6,12 +6,12 @@ This app has [Clipmunk](https://www.npmjs.com/package/clipmunk) installed. Clipm
 
 1. Run `npx clipmunk guide` and read it fully. It is the authoring reference for the installed version.
 2. Scenes live in `src/clipmunk/scenes/` as a pair: `<id>.scene.json` and `<id>.tsx`.
-3. Validate with `npx clipmunk scenes`, then look at the result in the studio: open the running dev server with `?clipmunk=1`.
+3. Validate with `npx clipmunk scenes`, then look at the result in the Studio: with the dev server running, `npx clipmunk dev` prints the Studio link (`npx clipmunk open --scene <id>` opens a scene in it).
 4. Do not redesign the app's UI for a scene. Import the existing components and providers.
 
 ## Recording the app
 
-`npx clipmunk dev` starts a local daemon and prints a link. Open the link once, then press Alt+Shift+R on any page of the running app to record it. Takes are saved in `.clipmunk/takes/`.
+`npx clipmunk dev` starts a local daemon and prints two links: the Studio, served by the daemon, and a link to open once in the app so it can record. Then press Alt+Shift+R on any page of the running app. Takes are saved in `.clipmunk/takes/` and open in the Studio.
 
 ## Example prompt
 
