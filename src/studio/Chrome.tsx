@@ -57,7 +57,7 @@ a { color: inherit; }
 .editor h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #a1a1aa; }
 .field { display: grid; grid-template-columns: 96px minmax(0, 1fr) 44px; gap: 8px; align-items: center; padding: 4px 0; }
 .field output { color: #a1a1aa; font-variant-numeric: tabular-nums; text-align: right; }
-.field select, .field input[type=color] { grid-column: 2 / -1; font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 4px 6px; width: 100%; }
+.field select, .field input[type=color], .field input[type=text] { grid-column: 2 / -1; font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 4px 6px; width: 100%; }
 .field input[type=color] { padding: 2px; height: 28px; } .field input[type=range] { min-width: 0; width: 100%; }
 .field.check { grid-template-columns: auto 1fr; } .field.check input { accent-color: #f4f4f5; }
 .hint { color: #71717a; margin: 4px 0 0; }

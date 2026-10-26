@@ -24,7 +24,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 3 | Presets: apply and save | Engine | 🔵 [#20](https://github.com/jaymalve/clipmunk/pull/20) |
 | 4 | Event log v2: what was touched | Engine | 🔵 [#21](https://github.com/jaymalve/clipmunk/pull/21) |
 | 5 | Redaction | Engine | 🔵 [#22](https://github.com/jaymalve/clipmunk/pull/22) |
-| 6 | Captions and the keystroke overlay | Engine | ⬜ |
+| 6 | Captions and the keystroke overlay | Engine | 🔵 [#23](https://github.com/jaymalve/clipmunk/pull/23) |
 | 7 | Dead air and steady typing | Engine | ⬜ |
 | 8 | Reframing takes to other aspect ratios | Engine | ⬜ |
 | 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | ⬜ |
@@ -149,16 +149,18 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** `redact.live` needed an object in the config, so `redact` is now either the list of selectors (as before) or `{ selectors, mode?, live? }`; `redactionOf` reads both. Presets do not carry redaction: it belongs to what a recording shows, not to a look. `source.screen.latencyMs` is not used for the guard window, because sync does not depend on it (`ARCHITECTURE.md` 8.2). The recorder test that required a take longer than 1500 ms failed on a fast machine (its own steps take about 1.4 s); it now requires the take to be at least as long as the steps took.
 
 ### PR 6 · Captions and the keystroke overlay
-**Status:** ⬜ · **Branch:** `studio/06-captions-keys` · **Base:** `studio/05-redaction`
+**Status:** 🔵 [#23](https://github.com/jaymalve/clipmunk/pull/23) · **Branch:** `studio/06-captions-keys` · **Base:** `studio/05-redaction`
 
-- Edit: `captions: { auto: boolean, items: { atMs, durMs, text, source: "auto" | "manual" }[] }` and `keys: { visible: boolean }`.
-- `core/captions.ts`: auto captions from `down` events with an `el.name`, phrased by role ("Click New invoice", "Open Settings", "Choose Monthly"), one per burst of activity like the zoom segments, never for a redacted element. It is a pure generator emitting ordinary data, like auto-zoom. A user edit to an item flips it to `manual`, and regeneration keeps manual items.
-- `core/keys.ts`: combo pills from `combo` events, shown for 900 ms.
-- Compositor: a caption strip and key pills, styled from the brand, drawn after zoom so they stay readable.
+- Edit: `captions: { auto: boolean, items: { atMs, durMs, text, source: "auto" | "manual" }[] }` and `keys: { visible: boolean }`, both on by default.
+- `core/captions.ts`: auto captions from `down` events with an `el.name`, phrased by role ("Click New invoice", "Open Settings", "Choose Monthly", "Toggle Dark mode", "Type in Search"), one per burst of activity (2.5 s gap), never for a redacted element: unnamed by the recorder, and a click inside a redacted box is skipped too. It is a pure generator emitting ordinary data, like auto-zoom. A user edit to an item stores it as `manual`, regeneration keeps manual items, and a manual item with empty text hides the caption at its time.
+- `core/keys.ts`: combo pills from `combo` events ("⌘ K"), shown for 900 ms, at most three at once.
+- Compositor: a caption strip and key pills along the bottom of the recording, in the edit's backdrop colour (which the brand sets) with black or white text, drawn after zoom so they stay readable.
 - Minimal controls in the current take editor: two checkboxes and editable caption text.
 
-**Tests:** generator unit tests (phrasing, bursts, manual items kept, redacted elements skipped); composite pixels on the synthetic take; one real take in `test:recorder` produces sensible captions.
+**Tests:** generator unit tests (phrasing, bursts, manual items kept, cleared items, redacted elements skipped, pills); composite pixels and the editor controls on the synthetic take, and the caption and pill in its exported MP4; in `test:recorder` a real take gets "Click New report", and the ⌘K recording gets one pill and no pill for typing in a password field.
 **Done when:** a take with no manual edits exports with sensible captions, and ⌘K appears as a pill while plain typing never does.
+
+**Notes:** presets do not carry `captions` or `keys` yet; add them to `PRESET_FIELDS` if a preset should switch them. Caption styling has no settings of its own beyond the backdrop colour.
 
 ### PR 7 · Dead air and steady typing
 **Status:** ⬜ · **Branch:** `studio/07-dead-air` · **Base:** `studio/06-captions-keys`
@@ -389,6 +391,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 3 opened as #20, stacked on #19: presets. For PR 4: the recorder can fetch the redaction selectors from `GET /v1/config` (`config.redact`); the CLI has no `config` command, `clipmunk doctor` is where config problems show. For PR 9: presets' `export` options (`size`, `fps`, `formats`, `ratios`) are validated but no export reads them yet.
 - 2026-10-25 · PR 4 opened as #21, stacked on #20: event log v2 (`el` on `down` and `focus`, `route`, `combo`, `redact`). For PR 5: `redact` events carry `sel` and `rects` in CSS pixels, one event per selector, logged only when a box changes, so hold each box until the next event for that selector; empty `rects` means nothing to hide. A config the recorder cannot read means a take without redaction, noted in `recorder.log`.
 - 2026-10-25 · PR 5 opened as #22, stacked on #21: redaction. For PR 6: captions and the keystroke overlay are drawn in `drawTake`, which now takes `redact` boxes in `TakeFrame`; draw overlays above the redaction layer so captions and keys stay readable. For PR 9: GIF and poster must render through `drawTake` to inherit redaction.
+- 2026-10-25 · PR 6 opened as #23, stacked on #22: captions and key pills. For PR 7: captions and pills are on the take clock (`atMs`), so cutting dead air must shift or drop them through the same time map as the picture; `resolveCaptions` and `keyPills` are the places to apply it.
 
 ## Environment notes for whoever picks this up
 

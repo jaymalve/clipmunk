@@ -10,6 +10,7 @@ import { composeTake, defaultEdit, type Take, type TakeEditFile, type TakeEvent,
  * With `secret`, a striped box (white and black stripes, SECRET.stripe CSS pixels wide) scrolls
  * up from SECRET.from to SECRET.to between 1.0 and 1.5 s, and the log has its `redact` boxes.
  * "redacted" also gives the edit a blur entry for it; both turn zoom off so it stays in view.
+ * With `named`, the click is on a button named "Go" and ⌘K is pressed at 3000 ms.
  */
 export const FFMPEG = path.resolve("node_modules/ffmpeg-static/ffmpeg");
 export const CLICK = { t: 2000, x: 480, y: 270, rect: [450, 255, 60, 30] as [number, number, number, number] };
@@ -22,7 +23,7 @@ export const QUADRANTS = { red: [255, 0, 0], green: [0, 128, 0], blue: [0, 0, 25
 export async function makeTake(
   root: string,
   id: string,
-  options: { durationMs?: number; cam?: boolean; secret?: "redacted" | "visible" } = {},
+  options: { durationMs?: number; cam?: boolean; secret?: "redacted" | "visible"; named?: boolean } = {},
 ): Promise<Take> {
   const durationMs = options.durationMs ?? 4000;
   const dir = path.join(root, ".clipmunk/takes", id);
@@ -81,9 +82,18 @@ export async function makeTake(
     events.push({ t: 600 + i * 30, k: "move", x: 100 + ((CLICK.x - 100) * i) / 40, y: 80 + ((CLICK.y - 80) * i) / 40 });
   events.push(
     { t: 1850, k: "cursor", style: "pointer" },
-    { t: CLICK.t, k: "down", x: CLICK.x, y: CLICK.y, button: 0, rect: CLICK.rect },
+    {
+      t: CLICK.t,
+      k: "down",
+      x: CLICK.x,
+      y: CLICK.y,
+      button: 0,
+      rect: CLICK.rect,
+      ...(options.named ? { el: { sel: "#go", role: "button", name: "Go" } } : {}),
+    },
     { t: CLICK.t + 90, k: "up", x: CLICK.x, y: CLICK.y, button: 0 },
   );
+  if (options.named) events.push({ t: 3000, k: "combo", keys: ["Meta", "k"] });
   if (options.secret) {
     // As the recorder logs them: on the first frame, and on every frame the box moves.
     const box = (t: number) => ({
