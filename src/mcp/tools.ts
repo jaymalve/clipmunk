@@ -152,6 +152,21 @@ export function formatChatMessage(message: ChatMessage): string {
   return lines.join("\n");
 }
 
+/** A take's key moments on the recording's clock: each click in the kept range, a second apart
+ * at least, or its start when nothing was clicked. */
+function keyMoments(events: readonly TakeEvent[], trim: { startMs: number; endMs: number }): number[] {
+  const times: number[] = [];
+  for (const event of events)
+    if (
+      event.k === "down" &&
+      event.t >= trim.startMs &&
+      event.t <= trim.endMs &&
+      !(event.t - (times.at(-1) ?? -Infinity) < 1000)
+    )
+      times.push(event.t);
+  return times.length ? times : [trim.startMs];
+}
+
 export function clipmunkTools(root: string): Tool[] {
   const client = daemonClient(root);
   return [
@@ -331,6 +346,101 @@ export function clipmunkTools(root: string): Tool[] {
       },
     },
     {
+      name: "get_take_frames",
+      description:
+        "Stills of a take's recording itself (the raw screen, before trim, zoom or frame) as PNGs, to see the layout, data and states a scene should reproduce. times are on the recording's clock, like get_take's summary; by default, each click.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ...idArg,
+          times: { type: "array", items: { type: "number" }, description: "Recording times in ms, up to 8." },
+        },
+        required: ["id"],
+      },
+      async call(args) {
+        const id = String(args.id);
+        const take = await readTake(client, id);
+        const { trim } = take.take.edit as { trim: { startMs: number; endMs: number } };
+        const times =
+          Array.isArray(args.times) && args.times.length ? args.times.map(Number) : keyMoments(take.events, trim);
+        const content: ToolResult["content"] = [];
+        for (const atMs of times.slice(0, 8)) {
+          const frame = unwrap(
+            await client.get<{ png: Buffer; atMs: number }>(`/v1/takes/${id}/frame?at=${Math.round(atMs)}`),
+          );
+          content.push(
+            {
+              type: "text",
+              text: `take ${id} at ${(frame.atMs / 1000).toFixed(2)} s (scene time ${Math.max(0, frame.atMs - trim.startMs)} ms):`,
+            },
+            { type: "image", data: frame.png.toString("base64"), mimeType: "image/png" },
+          );
+        }
+        return { content };
+      },
+    },
+    {
+      name: "check_scene",
+      description:
+        "Check a scene: the issues its files have (fix all of them), and frames rendered as export would at the given scene times, to compare with get_take_frames. The host's dev server must be running for frames.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ...idArg,
+          times: {
+            type: "array",
+            items: { type: "number" },
+            description: "Scene times in ms, up to 8. Default: start, two thirds and end.",
+          },
+          variant: string('Optional: "theme:dark,ratio:9x16".'),
+        },
+        required: ["id"],
+      },
+      async call(args) {
+        const id = String(args.id);
+        const catalog = unwrap(
+          await client.get<{ scenes: { id: string; definition: { motion?: never } }[]; issues: Issue[] }>(
+            "/v1/scenes?detail=1",
+          ),
+        );
+        const issues = catalog.issues.filter((issue) => JSON.stringify(issue).includes(id));
+        const scene = catalog.scenes.find((candidate) => candidate.id === id);
+        const lines = issues.length
+          ? ["Issues:", ...issues.map((issue) => `  ${issue.path ? `${issue.path}: ` : ""}${issue.message}`)]
+          : ["No issues."];
+        if (!scene)
+          return {
+            content: [{ type: "text", text: [`No valid scene named "${id}".`, ...lines].join("\n") }],
+            isError: true,
+          };
+        const durationMs = scene.definition.motion ? motionDuration(scene.definition.motion) : 0;
+        const times =
+          Array.isArray(args.times) && args.times.length
+            ? args.times.map(Number)
+            : [...new Set([0, Math.round((durationMs * 2) / 3), Math.max(0, durationMs - 1)])];
+        const content: ToolResult["content"] = [
+          { type: "text", text: `scene ${id}, ${(durationMs / 1000).toFixed(2)} s. ${lines.join("\n")}` },
+        ];
+        for (const atMs of times.slice(0, 8)) {
+          const query = new URLSearchParams({ kind: "scene", id, at: String(Math.round(atMs)) });
+          if (typeof args.variant === "string") query.set("variant", args.variant);
+          const reply = await client.get<{ png: Buffer; atMs: number }>(`/v1/preview?${query}`);
+          if (!reply.ok) {
+            content.push({
+              type: "text",
+              text: `No frame at ${Math.round(atMs)} ms: ${reply.issues.map((issue) => issue.message).join(" ")}`,
+            });
+            break;
+          }
+          content.push(
+            { type: "text", text: `at ${Math.round(reply.data.atMs)} ms:` },
+            { type: "image", data: reply.data.png.toString("base64"), mimeType: "image/png" },
+          );
+        }
+        return content.length === 1 && issues.length ? { content, isError: true } : { content };
+      },
+    },
+    {
       name: "wait_for_chat",
       description:
         "Wait for the developer's next message in the Clipmunk Studio chat. Blocks until one arrives or timeoutMs passes (then call it again). The message comes with what they pointed at: a clip, a moment, an element. Answer with reply_chat. When asked to watch the Clipmunk chat, keep calling this in a loop.",
@@ -387,4 +497,4 @@ export function clipmunkTools(root: string): Tool[] {
 }
 
 export const MCP_INSTRUCTIONS =
-  "Clipmunk makes product videos from this app: takes (screen recordings with an edit) and scenes (the app's components animated in 3D). list_clips first; get_take shows what happened in a take and its edit; change it with edit_take (a JSON merge patch) and check the result with preview before you export. The daemon must be running (npx clipmunk dev). When asked to watch the Clipmunk chat, loop on wait_for_chat and answer each message with reply_chat; propose edits there rather than applying them.";
+  "Clipmunk makes product videos from this app: takes (screen recordings with an edit) and scenes (the app's components animated in 3D). list_clips first; get_take shows what happened in a take and its edit; change it with edit_take (a JSON merge patch) and check the result with preview before you export. To make a scene from a take, follow the guide's 'From a take' section (npx clipmunk guide), with get_take_frames and check_scene. The daemon must be running (npx clipmunk dev). When asked to watch the Clipmunk chat, loop on wait_for_chat and answer each message with reply_chat; propose edits there rather than applying them.";

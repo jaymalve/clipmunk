@@ -77,6 +77,7 @@ afterAll(async () => {
   await rm(path.join(root, ".clipmunk/takes", TAKE), { recursive: true, force: true });
   await rm(path.join(root, ".clipmunk/history", `${TAKE}.json`), { force: true });
   await rm(path.join(root, ".clipmunk/chat"), { recursive: true, force: true });
+  await rm(path.join(root, ".clipmunk/cache/frames", TAKE), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
 });
 
@@ -104,6 +105,8 @@ describe("clipmunk mcp", () => {
       "preview",
       "export",
       "get_job",
+      "get_take_frames",
+      "check_scene",
       "wait_for_chat",
       "reply_chat",
     ]);
@@ -173,6 +176,30 @@ describe("clipmunk mcp", () => {
     const scenePng = Buffer.from(scene.content.find((item: any) => item.type === "image").data, "base64");
     expect([scenePng.readUInt32BE(16), scenePng.readUInt32BE(20)]).toEqual([300, 534]);
     expect(mcp.textOf(scene)).toContain("scene themed-card at 500 ms");
+    mcp.close();
+  }, 120_000);
+
+  it("shows a take's own frames and checks a scene against them", async () => {
+    const mcp = session(root);
+    const frames = await mcp.call("get_take_frames", { id: TAKE });
+    expect(frames.isError).toBeUndefined();
+    const images = frames.content.filter((item: any) => item.type === "image");
+    expect(images.length).toBeGreaterThan(0);
+    const png = Buffer.from(images[0].data, "base64");
+    expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
+    // The default is each click: the synthetic take clicks Go at 2 s.
+    expect(mcp.textOf(frames)).toContain("at 2.00 s");
+    const chosen = await mcp.call("get_take_frames", { id: TAKE, times: [100, 99_999] });
+    expect(chosen.content.filter((item: any) => item.type === "image")).toHaveLength(2);
+    expect(mcp.textOf(chosen)).toContain("at 0.10 s");
+
+    const scene = await mcp.call("check_scene", { id: "rack-focus", times: [0, 750] });
+    expect(scene.isError).toBeUndefined();
+    expect(mcp.textOf(scene)).toContain("No issues.");
+    expect(scene.content.filter((item: any) => item.type === "image")).toHaveLength(2);
+    const missing = await mcp.call("check_scene", { id: "zz-no-such-scene" });
+    expect(missing.isError).toBe(true);
+    expect(mcp.textOf(missing)).toContain('No valid scene named "zz-no-such-scene"');
     mcp.close();
   }, 120_000);
 

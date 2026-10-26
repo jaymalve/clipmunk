@@ -27,6 +27,9 @@ type ChatMessage = {
 type ChatState = { messages: ChatMessage[]; agent?: { name: string; waiting: boolean } };
 
 export const WATCH_PROMPT = "Watch the Clipmunk chat";
+/** What "Make a scene from this take" sends, with the take attached. */
+export const MAKE_SCENE_PROMPT =
+  "Make a scene from this take: rebuild it with the app's own components, following the guide's From a take section, compare it with the take's frames, and tell me what could not be reproduced.";
 
 const chipLabel = (chip: ChatContext) =>
   chip.kind === "clip"
