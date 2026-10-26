@@ -186,7 +186,7 @@ export function getGuide() {
         "Render an MP4. Needs FFmpeg and Playwright's Chromium. Never overwrites a file.",
       "clipmunk takes": "List recorded takes.",
       "clipmunk zoom <take> [--write]":
-        "Show a take's automatic zooms, or store them as editable keyframes in take.json.",
+        "Show a take's automatic zooms, or store them as editable keyframes in the take's edit.json.",
       "clipmunk export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]":
         "Render a take with cursor, zoom, camera and voice.",
       "clipmunk sequences": "List sequences and every validation issue.",

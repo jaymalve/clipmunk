@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   CreateTakeSchema,
   defaultEdit,
+  EDIT_FILE,
   FinalizeTakeSchema,
   fail,
   type Issue,
@@ -10,23 +11,34 @@ import {
   parseEvents,
   type Result,
   summarizeTake,
+  TAKE_FILE,
   TAKE_TRACKS,
   TAKES_DIR,
   type Take,
-  TakeEditSchema,
+  type TakeEditFile,
   type TakeEvent,
   TakeEventSchema,
-  TakeSchema,
+  TakeFileSchema,
   type TakeSummary,
   type TakeTrack,
   takeId,
   zodIssues,
 } from "../core";
 import { extractAudio, probeMedia, remux } from "../export";
-import { exists, Fault, readText, resolveInside, sha256, toIssues, writeText } from "../project";
+import {
+  exists,
+  Fault,
+  loadTake,
+  readText,
+  resolveInside,
+  saveTakeEdit,
+  takeDir,
+  toIssues,
+  writeText,
+} from "../project";
 
 /** Take storage under .clipmunk/takes/<id>/. Uploads append to raw files while recording;
- * finalising remuxes them, extracts the voice track and writes take.json.
+ * finalising remuxes them, extracts the voice track and writes take.json and edit.json.
  */
 export type Context = { root: string };
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -39,10 +51,7 @@ const RAW: Record<TakeTrack, string> = {
 const MAX_CHUNK = 64 * 1024 * 1024;
 const PENDING = "recording.json";
 
-const dirOf = (id: string) => {
-  if (!ID.test(id)) throw new Fault("invalid-take", `"${id}" is not a take id.`);
-  return `${TAKES_DIR}/${id}`;
-};
+const dirOf = takeDir;
 // Chunks must arrive in order. The expected sequence number lives in memory: a recording
 // does not survive a daemon restart, and the recorder is told so by the rejected upload.
 const expected = new Map<string, number>();
@@ -164,7 +173,7 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
     await writeText(root, `${dir}/events.jsonl`, events.length ? `${events.join("\n")}\n` : "");
 
     const durationMs = Math.round(parsed.data.durationMs);
-    const take = TakeSchema.parse({
+    const take = TakeFileSchema.parse({
       version: 1,
       id,
       title: pending.title ?? `Take ${pending.createdAt.slice(0, 16).replace("T", " ")}`,
@@ -197,34 +206,20 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
         ...(voice ? { audio: { file: "audio.wav", offsetMs: voice.offsetMs } } : {}),
         events: { file: "events.jsonl", count: events.length },
       },
-      edit: defaultEdit(durationMs),
     });
-    await writeText(root, `${dir}/take.json`, `${JSON.stringify(take, null, 2)}\n`);
+    const edit: TakeEditFile = { version: 1, edit: defaultEdit(durationMs) };
+    // The edit first: a take is listed once take.json exists, and must then have its edit.
+    await writeText(root, `${dir}/${EDIT_FILE}`, `${JSON.stringify(edit, null, 2)}\n`);
+    await writeText(root, `${dir}/${TAKE_FILE}`, `${JSON.stringify(take, null, 2)}\n`);
     await rm(path.join(absolute, PENDING), { force: true });
     for (const track of TAKE_TRACKS) expected.delete(`${id}/${track}`);
-    return ok(take);
+    return ok({ ...take, edit: edit.edit });
   } catch (error) {
     return fail(toIssues(error, "ingest-failed"));
   }
 }
 
-export async function readTake(id: string, context: Context): Promise<Result<{ take: Take; revision: string }>> {
-  try {
-    const text = await readText(context.root, `${dirOf(id)}/take.json`);
-    if (text === undefined) throw new Fault("unknown-take", `No take named "${id}".`);
-    const parsed = TakeSchema.safeParse(JSON.parse(text));
-    if (!parsed.success)
-      return fail(
-        zodIssues(parsed.error, "invalid-take").map((issue) => ({
-          ...issue,
-          path: `${dirOf(id)}/take.json: ${issue.path}`,
-        })),
-      );
-    return ok({ take: parsed.data, revision: sha256(text) });
-  } catch (error) {
-    return fail(toIssues(error, "invalid-take"));
-  }
-}
+export const readTake = (id: string, context: Context) => loadTake(context.root, id);
 
 export async function listTakes(context: Context): Promise<Result<{ takes: TakeSummary[]; issues: Issue[] }>> {
   try {
@@ -236,7 +231,7 @@ export async function listTakes(context: Context): Promise<Result<{ takes: TakeS
     const takes: TakeSummary[] = [];
     const issues: Issue[] = [];
     for (const name of names.sort().reverse()) {
-      if (!(await exists(context.root, `${TAKES_DIR}/${name}/take.json`))) continue; // still recording, or abandoned
+      if (!(await exists(context.root, `${TAKES_DIR}/${name}/${TAKE_FILE}`))) continue; // still recording, or abandoned
       const result = await readTake(name, context);
       if (result.ok) takes.push(summarizeTake(result.data.take));
       else issues.push(...result.issues);
@@ -247,36 +242,12 @@ export async function listTakes(context: Context): Promise<Result<{ takes: TakeS
   }
 }
 
-/** Save an edit. `revision` is the hash the editor read; a mismatch means someone else changed the file. */
-export async function updateTakeEdit(
+/** Save an edit to edit.json. `revision` is the one the editor read; a mismatch means someone else changed the take. */
+export const updateTakeEdit = (
   id: string,
   input: { edit?: unknown; title?: unknown; revision?: unknown },
   context: Context,
-): Promise<Result<{ take: Take; revision: string }>> {
-  const current = await readTake(id, context);
-  if (!current.ok) return current;
-  if (input.revision !== current.data.revision)
-    return fail([
-      {
-        code: "stale-revision",
-        message: "take.json changed since it was loaded. Reload the take and apply the edit again.",
-      },
-    ]);
-  const edit =
-    input.edit === undefined
-      ? { success: true as const, data: current.data.take.edit }
-      : TakeEditSchema.safeParse(input.edit);
-  if (!edit.success) return fail(zodIssues(edit.error, "invalid-take"));
-  const next = TakeSchema.safeParse({
-    ...current.data.take,
-    edit: edit.data,
-    ...(typeof input.title === "string" ? { title: input.title } : {}),
-  });
-  if (!next.success) return fail(zodIssues(next.error, "invalid-take"));
-  const text = `${JSON.stringify(next.data, null, 2)}\n`;
-  await writeText(context.root, `${dirOf(id)}/take.json`, text);
-  return ok({ take: next.data, revision: sha256(text) });
-}
+) => saveTakeEdit(context.root, id, input);
 
 export async function deleteTake(id: string, context: Context): Promise<Result<{ id: string }>> {
   try {

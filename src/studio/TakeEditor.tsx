@@ -23,7 +23,7 @@ import { Time, Timeline } from "./Timeline";
 import { usePreview, useTakeBridge, useTakeRenderer, useVoice } from "./take-hooks";
 
 /** The take editor: a live preview of the composited take, a timeline, and the controls
- * for everything in `take.edit`. Edits are saved to take.json through the daemon, so the
+ * for everything in `take.edit`. Edits are saved to edit.json through the daemon, so the
  * file stays the source of truth and a coding agent can edit the same take.
  */
 
@@ -101,7 +101,7 @@ function Editor(props: {
     [edit.zoom, events, source],
   );
 
-  // The revision detects a take.json that was edited elsewhere since it was read.
+  // The revision detects a take that was edited elsewhere since it was read.
   const revision = useRef(props.revision);
   const save = useAutosave(take, async (next) => {
     const body = { edit: next.edit, title: next.title, revision: revision.current };

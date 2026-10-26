@@ -22,6 +22,7 @@ import {
   listScenes,
   listSequences,
   readProject,
+  refreshStateFiles,
   resolveInside,
   resolveStudio,
   syncProject,
@@ -76,6 +77,12 @@ export const dev: Command = async ({ io, values, human, usage }) => {
     io.err(
       `\nWarning: ${MISSING_FFMPEG}\nRecordings cannot be saved until it is available. Restart clipmunk dev afterwards.\n`,
     );
+  // Keep Clipmunk's own state files current, so an older project commits new kinds of file.
+  const refreshed = await refreshStateFiles({ root: io.cwd });
+  if (human && refreshed.ok) {
+    for (const file of refreshed.data.updated) io.err(`  Updated ${file}.`);
+    for (const issue of refreshed.data.issues) io.err(`\nNote: ${issue.message}\n`);
+  }
   const project = await readProject(io.cwd).catch(() => undefined);
   const studio = project ? studioUrl(project.devUrl, project.studioPath) : "http://127.0.0.1:5173/?clipmunk=1";
   const link = `${studio}#${DAEMON_HASH}=${daemon.port}.${daemon.token}`;
@@ -196,7 +203,7 @@ export const zoom: Command = async ({ values, args, context, print, usage }) => 
     );
     return print(
       saved,
-      () => `Stored ${plural(segments.length, "zoom")} as manual keyframes in .clipmunk/takes/${id}/take.json.`,
+      () => `Stored ${plural(segments.length, "zoom")} as manual keyframes in .clipmunk/takes/${id}/edit.json.`,
     );
   }
   const seconds = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
@@ -209,7 +216,7 @@ export const zoom: Command = async ({ values, args, context, print, usage }) => 
           )
         : ["  No zooms: this take has no clicks or typing."]),
       "",
-      "Run with --write to store these as editable keyframes in take.json.",
+      "Run with --write to store these as editable keyframes in edit.json.",
     ].join("\n"),
   );
 };

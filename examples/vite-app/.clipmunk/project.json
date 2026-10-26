@@ -4,7 +4,7 @@
   "studioPath": "/",
   "devUrl": "http://127.0.0.1:35443",
   "files": {
-    ".clipmunk/.gitignore": "ecc0d5de56deee4a7edd406056a4d948dbfc7c618dd154594ad9ba90b8d0da19",
+    ".clipmunk/.gitignore": "2e5e19628a1cc7b5abf9421b14a46bd411c398e6436e4db8d9333f417ead52df",
     "CLIPMUNK.md": "6dc98d9912067ecf7e9c5067188be80f59557feb392357a78f4ebed54cd97d5f",
     "src/clipmunk/Studio.tsx": "e30a853eb6d6fad9318f0f98f880865ea0788a27b41beb130471a42a81bac99f"
   },

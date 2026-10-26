@@ -5,10 +5,10 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { validateTake } from "../../src/core";
 import { type Daemon, startDaemon } from "../../src/daemon";
+import { readTakeFiles } from "../support/take";
 
-/** The daemon over real HTTP: its security rules, then a whole recording from first chunk to take.json. */
+/** The daemon over real HTTP: its security rules, then a whole recording from first chunk to take.json and edit.json. */
 const ffmpeg = path.resolve("node_modules/ffmpeg-static/ffmpeg");
 let root: string, daemon: Daemon, screen: Buffer, cam: Buffer;
 const ORIGIN = "http://localhost:5173";
@@ -189,8 +189,12 @@ describe("recording a take", () => {
       body: { durationMs: 2000, screen: { latencyMs: 35 }, cam: { offsetMs: 12, hasAudio: true } },
     });
     expect(done.json.issues).toBeUndefined();
-    const take = validateTake(JSON.parse(await readFile(path.join(root, `.clipmunk/takes/${id}/take.json`), "utf8")));
+    const take = await readTakeFiles(path.join(root, `.clipmunk/takes/${id}`));
     if (!take.ok) throw new Error(JSON.stringify(take.issues));
+    // The recording and its edit are separate files; the recording carries no edit.
+    expect(JSON.parse(await readFile(path.join(root, `.clipmunk/takes/${id}/take.json`), "utf8"))).not.toHaveProperty(
+      "edit",
+    );
     expect(take.data.source).toMatchObject({
       width: 1280,
       height: 720,
@@ -237,6 +241,7 @@ describe("recording a take", () => {
     expect((await call(`/v1/takes/${id}/files/take.txt`)).status).toBe(404);
 
     const read = await call(`/v1/takes/${id}`);
+    const record = await readFile(path.join(root, `.clipmunk/takes/${id}/take.json`), "utf8");
     const edit = { ...read.json.data.take.edit, trim: { startMs: 200, endMs: 1500 }, cursor: { size: 2 } };
     expect((await call(`/v1/takes/${id}`, { method: "PATCH", body: { edit, revision: "stale" } })).status).toBe(409);
     const saved = await call(`/v1/takes/${id}`, { method: "PATCH", body: { edit, revision: read.json.data.revision } });
@@ -245,6 +250,10 @@ describe("recording a take", () => {
       cursor: { size: 2, visible: true },
     });
     expect(saved.json.data.revision).not.toBe(read.json.data.revision);
+    expect(await readFile(path.join(root, `.clipmunk/takes/${id}/take.json`), "utf8")).toBe(record);
+    expect(JSON.parse(await readFile(path.join(root, `.clipmunk/takes/${id}/edit.json`), "utf8")).edit).toMatchObject({
+      trim: { startMs: 200, endMs: 1500 },
+    });
     const invalid = await call(`/v1/takes/${id}`, {
       method: "PATCH",
       body: { edit: { ...edit, trim: { startMs: 0, endMs: 99999 } }, revision: saved.json.data.revision },

@@ -139,13 +139,14 @@ ${entries.join("\n")}
 `;
 }
 
-export const STATE_GITIGNORE = `# Clipmunk: media, caches and local state stay out of git. Take edits (take.json) are kept.
+export const STATE_GITIGNORE = `# Clipmunk: media, caches and local state stay out of git. Each take's record (take.json) and edit (edit.json) are kept.
 exports/
 audio/
 cache/
 daemon.json
 takes/*/*
 !takes/*/take.json
+!takes/*/edit.json
 `;
 
 export function wiringInstruction(adapter: Adapter, studioImport: string): string {

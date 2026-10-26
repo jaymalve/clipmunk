@@ -73,7 +73,7 @@ function ZoomControls({ edit, change, zooms }: Section & { zooms: number }) {
           </p>
         </>
       )}
-      {zoom.mode === "manual" && <p className="hint">Zoom keyframes are hand-written in take.json.</p>}
+      {zoom.mode === "manual" && <p className="hint">Zoom keyframes are hand-written in the take's edit.json.</p>}
     </Group>
   );
 }
