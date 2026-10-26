@@ -9,6 +9,7 @@ export {
   probeVideo,
   remux,
 } from "./ffmpeg";
+export { exportJob } from "./job";
 export { type ExportContext, exportScene, snapshotScene } from "./operations";
 export { exportSequence } from "./sequence";
 export { exportTake } from "./take";

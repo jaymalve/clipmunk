@@ -6,7 +6,7 @@ import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/run";
 import { type Daemon, startDaemon } from "../../src/daemon";
-import { exportTake, probeMedia, probeVideo } from "../../src/export";
+import { exportJob, exportTake, probeMedia, probeVideo } from "../../src/export";
 import { colourAt, near } from "../support/media";
 import { FFMPEG, makeTake, QUADRANTS, SECRET, secretTop } from "../support/take";
 
@@ -16,6 +16,7 @@ const IDS = ["zz-test-edit", "zz-test-export", "zz-test-zoom"];
 const SECRETS = { "zz-test-redact": "redacted", "zz-test-plain": "visible" } as const;
 const NAMED = "zz-test-captions";
 const REFRAMED = "zz-test-reframe";
+const LONG = "zz-test-long";
 const PACED = { "zz-test-paced": false, "zz-test-paced-voice": true } as const;
 const made: string[] = [];
 let server: ViteDevServer, daemon: Daemon, browser: Browser, page: Page, origin: string, projectFile: string;
@@ -46,6 +47,7 @@ beforeAll(async () => {
   await makeTake(root, NAMED, { named: true, cam: false });
   for (const [id, cam] of Object.entries(PACED)) await makeTake(root, id, { paced: true, cam });
   await makeTake(root, REFRAMED, { cam: false });
+  await makeTake(root, LONG, { durationMs: 10_000 });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -60,7 +62,7 @@ afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED, ...Object.keys(PACED), REFRAMED])
+  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED, ...Object.keys(PACED), REFRAMED, LONG])
     await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
   await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
@@ -442,6 +444,58 @@ describe("reframing", () => {
       await tab.close();
     }
   }, 120_000);
+});
+
+describe("export jobs", () => {
+  it("renders a take in two ratios with the same timing", async () => {
+    const result = await exportJob(
+      { clip: { kind: "take", id: "zz-test-export" }, url: origin, ratios: ["16:9", "9:16"], size: "640x360", fps: 30 },
+      { root },
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    for (const item of result.data.outputs) made.push(item.output);
+    expect(result.data.outputs.map((item) => item.output)).toEqual([
+      ".clipmunk/exports/zz-test-export.16x9.mp4",
+      ".clipmunk/exports/zz-test-export.9x16.mp4",
+    ]);
+    const [wide, tall] = await Promise.all(result.data.outputs.map((item) => probeVideo(item.output, root)));
+    expect(wide).toMatchObject({ width: 640, height: 360, frames: 120 });
+    expect(tall).toMatchObject({ width: 360, height: 640, frames: 120 });
+    // The take itself is left in its own shape.
+    expect(JSON.parse(await readFile(editFile("zz-test-export"), "utf8")).edit.frame).toBeUndefined();
+  }, 240_000);
+
+  it("exports a 10 s take as an MP4, a GIF under 5 MB and a poster at the click, in one job, through the daemon", async () => {
+    const headers = { authorization: `Bearer ${daemon.token}`, "content-type": "application/json" };
+    const started = await fetch(`http://127.0.0.1:${daemon.port}/v1/exports`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        clip: { kind: "take", id: LONG },
+        url: origin,
+        formats: ["mp4", "gif", "poster"],
+        fps: 30,
+      }),
+    }).then((response) => response.json());
+    expect(started).toMatchObject({ ok: true, data: { job: expect.any(String) } });
+    const events = await fetch(`http://127.0.0.1:${daemon.port}/v1/jobs/${started.data.job}/events`, { headers }).then(
+      (response) => response.text(),
+    );
+    const last = JSON.parse(
+      events
+        .trim()
+        .split("\n\n")
+        .at(-1)!
+        .replace(/^data: /, ""),
+    );
+    expect(last.type, JSON.stringify(last)).toBe("done");
+    const outputs = last.data.outputs as { output: string; format: string; bytes: number; atMs?: number }[];
+    for (const item of outputs) made.push(item.output);
+    expect(outputs.map((item) => item.format)).toEqual(["mp4", "gif", "poster"]);
+    expect(outputs[1]!.bytes).toBeLessThan(5 * 1024 * 1024);
+    expect(outputs[2]!.atMs).toBe(2000); // the click
+    expect(await probeVideo(outputs[0]!.output, root)).toMatchObject({ frames: 300, durationMs: 10_000 });
+  }, 300_000);
 });
 
 describe("take export", () => {

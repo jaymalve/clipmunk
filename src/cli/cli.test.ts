@@ -128,6 +128,9 @@ describe("clipmunk cli", () => {
     expect((await clipmunk(cwd, "snapshot", "--scene", "a")).err).toContain("npx clipmunk init");
     await clipmunk(cwd, "init");
     expect((await clipmunk(cwd, "export", "--scene", "a", "--size", "big")).err).toContain("--size must look like");
+    expect((await clipmunk(cwd, "export", "--scene", "a", "--format", "gif", "--output", "a.gif")).err).toContain(
+      "names its own",
+    );
     expect(await clipmunk(cwd, "open", "--scene", "missing", "--no-launch")).toMatchObject({ code: 1 });
     const opened = await clipmunk(cwd, "open", "--url", "http://127.0.0.1:9", "--no-launch");
     expect(opened.out).toContain("http://127.0.0.1:9/?clipmunk=1");

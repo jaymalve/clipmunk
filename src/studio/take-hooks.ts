@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useState } from "react";
 import { installBridge, PROGRESS_BINDING, WRITE_BINDING } from "../bridge";
 import { createTakeRenderer, type TakeRenderer } from "../compositor";
-import type { Span, Take, TakeEvent, TimeMap } from "../core";
+import { isRatio, type Span, type Take, type TakeEvent, type TimeMap, withRatio } from "../core";
 import type { Clock } from "../react";
 
 /** The moving parts behind the take editor, one concern per hook. */
@@ -118,15 +118,26 @@ export function useTakeBridge(
         const write = bindings[WRITE_BINDING],
           progress = bindings[PROGRESS_BINDING];
         if (!write) throw new Error("No writer is attached to this page.");
-        // One dimension given: the other follows the canvas's shape.
-        const scale = job.height ? job.height / height : job.width ? job.width / width : 1;
-        const size = { width: job.width ?? even(width * scale), height: job.height ?? even(height * scale) };
-        return renderer.encode(
-          { fps: job.fps, ...size },
-          async (data, position) => void (await write(toBase64(data), position)),
-          (done, total) => void progress?.(done, total),
-        );
+        // Another ratio renders a reframed copy of the take, then puts the take back.
+        const shaped = isRatio(job.ratio) ? { ...take, edit: withRatio(take.edit, job.ratio) } : take;
+        if (shaped !== take) renderer.update(shaped);
+        try {
+          const frame = shaped.edit.canvas;
+          // One dimension given: the other follows the canvas's shape.
+          const scale = job.height ? job.height / frame.height : job.width ? job.width / frame.width : 1;
+          const size = {
+            width: job.width ?? even(frame.width * scale),
+            height: job.height ?? even(frame.height * scale),
+          };
+          return await renderer.encode(
+            { fps: job.fps, ...size },
+            async (data, position) => void (await write(toBase64(data), position)),
+            (done, total) => void progress?.(done, total),
+          );
+        } finally {
+          if (shaped !== take) renderer.update(take);
+        }
       },
     });
-  }, [renderer, width, height, durationMs, clock, seek]);
+  }, [renderer, take, width, height, durationMs, clock, seek]);
 }

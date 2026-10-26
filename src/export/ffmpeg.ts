@@ -112,9 +112,19 @@ export function startEncoder(options: {
   };
 }
 
-function run(args: string[], cwd: string): Promise<{ code: number | null; stderr: string; child: ChildProcess }> {
+function run(
+  args: string[],
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<{ code: number | null; stderr: string; child: ChildProcess }> {
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpegPath(), args, { cwd, stdio: ["ignore", "ignore", "pipe"] });
+    if (signal) {
+      const kill = () => child.kill("SIGKILL");
+      if (signal.aborted) kill();
+      signal.addEventListener("abort", kill, { once: true });
+      child.once("close", () => signal.removeEventListener("abort", kill));
+    }
     let stderr = "";
     child.stderr!.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
     child.once("error", (error: NodeJS.ErrnoException) =>
@@ -509,4 +519,65 @@ export async function joinClips(options: {
   if (code !== 0)
     throw new Fault("encoding-failed", `FFmpeg could not join the sequence: ${stderr.trim().slice(-900)}`);
   return { audio: !!heard };
+}
+
+/** A GIF made from a finished video with a palette built for it: `fps` frames a second, scaled
+ * so its short side is `shortSide` pixels (never enlarged).
+ */
+export async function makeGif(
+  input: string,
+  output: string,
+  options: { fps: number; shortSide: number; cwd: string; signal?: AbortSignal },
+): Promise<void> {
+  const side = Math.max(2, Math.round(options.shortSide / 2) * 2);
+  const scale = `scale='if(gt(iw,ih),-2,min(${side},iw))':'if(gt(iw,ih),min(${side},ih),-2)':flags=lanczos`;
+  const filter = `fps=${options.fps},${scale},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`;
+  const { code, stderr } = await run(
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-nostdin",
+      "-y",
+      "-i",
+      input,
+      "-filter_complex",
+      filter,
+      "-loop",
+      "0",
+      output,
+    ],
+    options.cwd,
+    options.signal,
+  );
+  if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not make the GIF: ${stderr.trim().slice(-600)}`);
+}
+
+/** One frame of a finished video as a PNG. */
+export async function posterFrame(
+  input: string,
+  output: string,
+  atMs: number,
+  options: { cwd: string; signal?: AbortSignal },
+): Promise<void> {
+  const { code, stderr } = await run(
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-nostdin",
+      "-y",
+      "-ss",
+      (atMs / 1000).toFixed(3),
+      "-i",
+      input,
+      "-frames:v",
+      "1",
+      output,
+    ],
+    options.cwd,
+    options.signal,
+  );
+  if (code !== 0)
+    throw new Fault("encoding-failed", `FFmpeg could not take the poster frame: ${stderr.trim().slice(-600)}`);
 }

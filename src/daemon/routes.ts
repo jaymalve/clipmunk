@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
+import { exportJob, exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
 import {
   applyPresetToTake,
   deleteSequence,
@@ -140,7 +140,9 @@ const exports: Handler = async ({ request, response, method, id, origin, context
   // The studio page is the dev server, so its Origin is the address to render from.
   const target = typeof body.url === "string" ? body.url : origin;
   if (!target) return handled(deny(response, "invalid-request", "Pass the dev server address as url."));
-  const work = "sequenceId" in body ? exportSequence : "takeId" in body ? exportTake : exportScene;
+  // A job with several outputs names its clip; the older single-file shape names the clip by kind.
+  const work =
+    "clip" in body ? exportJob : "sequenceId" in body ? exportSequence : "takeId" in body ? exportTake : exportScene;
   const job = jobs.start<unknown>("export", (signal, onProgress) =>
     work({ ...body, url: target }, { root: context.root, signal, onProgress }),
   );

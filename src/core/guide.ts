@@ -203,6 +203,8 @@ export function getGuide() {
         "List, apply or save the presets in clipmunk.config.json.",
       "clipmunk zoom <take> [--write]":
         "Show a take's automatic zooms, or store them as editable keyframes in the take's edit.json.",
+      "clipmunk export --scene|--take|--sequence <id> --format mp4,gif,poster [--ratio 16:9,9:16,1:1,4:5] [--preset <name>] [--poster-at <ms>]":
+        "One job, one file per format and ratio, named <clip>[.<ratio>].<ext> in .clipmunk/exports (never overwriting). A GIF is 720p at 15 fps and steps down until it is under 5 MB; a poster is a PNG at the first click or key moment. Ratios reframe takes. A preset's export options fill in what is not given.",
       "clipmunk export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]":
         "Render a take with cursor, zoom, camera, voice, redaction, captions and shortcut pills.",
       "clipmunk sequences": "List sequences and every validation issue.",

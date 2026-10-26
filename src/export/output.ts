@@ -12,8 +12,13 @@ export const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
 
 export type Claim = { output: string; target: string };
 
-/** The requested output if it is free, otherwise `.clipmunk/exports/<stem>.mp4`, then `-2`, `-3`, … */
-export async function claimOutput(root: string, requested: string | undefined, stem: string): Promise<Claim> {
+/** The requested output if it is free, otherwise `.clipmunk/exports/<stem><extension>`, then `-2`, `-3`, … */
+export async function claimOutput(
+  root: string,
+  requested: string | undefined,
+  stem: string,
+  extension = ".mp4",
+): Promise<Claim> {
   if (requested && (await exists(root, requested)))
     throw new Fault(
       "output-exists",
@@ -22,7 +27,7 @@ export async function claimOutput(root: string, requested: string | undefined, s
     );
   let output = requested;
   for (let n = 1; !output; n++) {
-    const candidate = `${EXPORTS_DIR}/${stem}${n === 1 ? "" : `-${n}`}.mp4`;
+    const candidate = `${EXPORTS_DIR}/${stem}${n === 1 ? "" : `-${n}`}${extension}`;
     if (!(await exists(root, candidate))) output = candidate;
   }
   const target = await resolveInside(root, output);

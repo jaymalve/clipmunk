@@ -20,6 +20,7 @@ const HELP = `clipmunk <command> [options]
   snapshot --scene <id> [--time <ms>]      Save a thumbnail into the recipe
   export --scene <id> [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]
   export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]
+  export --scene|--take|--sequence <id> --format mp4,gif,poster [--ratio 16:9,9:16] [--preset name] [--poster-at ms]
   export --sequence <id> [--output file.mp4]
   sequences                                List sequences (scenes and takes joined into one video)
   music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n] [--output file.wav]

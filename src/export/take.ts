@@ -101,7 +101,7 @@ async function encodeInPage(options: {
       return await tab.evaluate(
         (job) =>
           (window as unknown as { __CLIPMUNK__: { encode(job: unknown): Promise<Encoded> } }).__CLIPMUNK__.encode(job),
-        { fps: request.fps, width: request.width, height: request.height },
+        { fps: request.fps, width: request.width, height: request.height, ratio: request.ratio },
       );
     } catch (error) {
       cancel.check();
