@@ -1,5 +1,6 @@
 import type { SceneDefinition } from "./recipe";
-import type { Take, TakeEvent } from "./take";
+import type { TakeEvent } from "./take";
+import type { TimeMap } from "./timemap";
 
 /** The moments in a clip that music can be lined up with: when something arrives on screen
  * in a scene, and when the action happens in a take. Times are in clip milliseconds, the
@@ -32,11 +33,12 @@ export function sceneMoments(definition: Pick<SceneDefinition, "motion">): numbe
   );
 }
 
-/** The first click of each burst of activity, on the trimmed clip's clock. */
-export function takeMoments(trim: Take["edit"]["trim"], events: readonly TakeEvent[]): number[] {
-  const { startMs, endMs } = trim;
+/** The first click of each burst of activity, on the clip's clock (after trim and pacing). */
+export function takeMoments(map: TimeMap, events: readonly TakeEvent[]): number[] {
+  const first = map.segments[0]!.fromMs,
+    last = map.segments.at(-1)!.toMs;
   const clicks = events
-    .filter((event) => event.k === "down" && event.t >= startMs && event.t <= endMs)
-    .map((event) => event.t - startMs);
+    .filter((event) => event.k === "down" && event.t >= first && event.t <= last)
+    .map((event) => map.toClip(event.t));
   return merge(clicks, 1200);
 }

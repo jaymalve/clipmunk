@@ -274,6 +274,25 @@ function CaptionControls({ edit, change, captions }: Section & { captions: Capti
   );
 }
 
+function PaceControls({ edit, change }: Section) {
+  const { deadAir, typing } = edit.pace;
+  return (
+    <Group title="Pace">
+      <Check
+        label={`Speed up idle time (${deadAir.speed}×)`}
+        value={deadAir.on}
+        onChange={(on) => change((current) => ({ ...current, pace: { ...current.pace, deadAir: { ...deadAir, on } } }))}
+      />
+      <Check
+        label={`Speed up typing (${typing.speed}×)`}
+        value={typing.on}
+        onChange={(on) => change((current) => ({ ...current, pace: { ...current.pace, typing: { ...typing, on } } }))}
+      />
+      <p className="hint">Never while you speak. The timeline shows the fast parts striped.</p>
+    </Group>
+  );
+}
+
 function VoiceControls({ edit, change }: Section) {
   const update = set(change, "audio");
   return (
@@ -314,6 +333,7 @@ export function TakeControls({
   const section = { edit, change };
   return (
     <aside>
+      <PaceControls {...section} />
       <ZoomControls {...section} zooms={zooms} />
       <CursorControls {...section} />
       {source.cam && <CameraControls {...section} />}

@@ -225,9 +225,9 @@ export async function extractAudio(input: string, output: string, cwd: string): 
     throw new Fault("ingest-failed", `FFmpeg could not extract audio from ${input}: ${stderr.trim().slice(-600)}`);
 }
 
-/** Turn the page-encoded video into the final MP4: add the voice track, trimmed and levelled,
- * put generated music under it, and move the index to the front. The picture is copied
- * untouched when it is already H.264.
+/** Turn the page-encoded video into the final MP4: add the voice track, cut to the take's time
+ * map and levelled, put generated music under it, and move the index to the front. The picture
+ * is copied untouched when it is already H.264.
  */
 export async function finishTake(options: {
   video: string;
@@ -235,7 +235,14 @@ export async function finishTake(options: {
   cwd: string;
   durationMs: number;
   copyVideo: boolean;
-  audio?: { file: string; startMs: number; gain: number; normalize: boolean };
+  /** `segments` are on the take clock; `offsetMs` places the file on it. */
+  audio?: {
+    file: string;
+    offsetMs: number;
+    segments: readonly { fromMs: number; toMs: number; speed: number }[];
+    gain: number;
+    normalize: boolean;
+  };
   music?: MusicInput;
 }): Promise<void> {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-i", options.video];
@@ -243,14 +250,12 @@ export async function finishTake(options: {
   let sound: string | undefined;
   let inputs = 1;
   if (options.audio) {
-    // startMs is where the clip begins inside the audio file; negative means the voice starts later.
-    if (options.audio.startMs > 0) args.push("-ss", (options.audio.startMs / 1000).toFixed(3));
     args.push("-i", options.audio.file);
-    const chain = ["aresample=48000"];
-    if (options.audio.startMs < 0) chain.push(`adelay=${Math.round(-options.audio.startMs)}:all=1`);
+    graph.push(...voiceLines(`[${inputs}:a:0]`, options.audio));
+    const chain: string[] = [];
     if (options.audio.gain !== 1) chain.push(`volume=${options.audio.gain.toFixed(3)}`);
     if (options.audio.normalize) chain.push("loudnorm=I=-16:TP=-1.5:LRA=11");
-    graph.push(`[${inputs}:a:0]${chain.join(",")}[voice]`);
+    graph.push(`[paced]${chain.length ? chain.join(",") : "anull"}[voice]`);
     sound = "voice";
     inputs++;
   }
@@ -273,6 +278,42 @@ export async function finishTake(options: {
   args.push("-t", (options.durationMs / 1000).toFixed(3), "-movflags", "+faststart", "-n", options.output);
   const { code, stderr } = await run(args, options.cwd);
   if (code !== 0) throw new Fault("encoding-failed", `FFmpeg could not finish the video: ${stderr.trim().slice(-800)}`);
+}
+
+/** Filter lines that lay the voice on the take clock and play it through the time map, ending at
+ * [paced]. Normal-speed segments keep their sound; sped-up ones become silence of their new
+ * length. The voice is never time-stretched, so it is never pitch-shifted, and pacing never
+ * speeds up a stretch with speech in it.
+ */
+function voiceLines(
+  input: string,
+  audio: { offsetMs: number; segments: readonly { fromMs: number; toMs: number; speed: number }[] },
+): string[] {
+  const s = (ms: number) => (Math.max(0, ms) / 1000).toFixed(3);
+  const shift =
+    audio.offsetMs >= 0
+      ? `adelay=${Math.round(audio.offsetMs)}:all=1`
+      : `atrim=start=${s(-audio.offsetMs)},asetpts=PTS-STARTPTS`;
+  const kept = audio.segments.filter((segment) => segment.speed === 1);
+  const lines = [
+    `${input}aresample=48000,aformat=channel_layouts=mono,${shift},apad${kept.length > 1 ? `,asplit=${kept.length}${kept.map((_, index) => `[v${index}]`).join("")}` : kept.length ? "[v0]" : "[unused]"}`,
+  ];
+  const parts: string[] = [];
+  let next = 0;
+  audio.segments.forEach((segment, index) => {
+    if (segment.speed === 1) {
+      lines.push(
+        `[v${next++}]atrim=start=${s(segment.fromMs)}:end=${s(segment.toMs)},asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp[p${index}]`,
+      );
+    } else {
+      const length = (segment.toMs - segment.fromMs) / segment.speed;
+      lines.push(`anullsrc=r=48000:cl=mono,atrim=0:${s(length)},aformat=sample_fmts=fltp[p${index}]`);
+    }
+    parts.push(`[p${index}]`);
+  });
+  if (!kept.length) lines.push("[unused]anullsink");
+  lines.push(`${parts.join("")}concat=n=${parts.length}:v=0:a=1[paced]`);
+  return lines;
 }
 
 export type MusicInput = { file: string; gain: number; duck: boolean };

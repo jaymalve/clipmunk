@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  buildTimeMap,
   type Issue,
   parseEvents,
   resolveCaptions,
   resolveZoomTracks,
+  type Span,
   type Take,
   type TakeEdit,
   type TakeEvent,
@@ -29,21 +31,22 @@ import { usePreview, useTakeBridge, useTakeRenderer, useVoice } from "./take-hoo
  */
 
 export function TakeEditor({ id, daemon, backHref }: { id: string; daemon: DaemonState; backHref: string }) {
-  const [loaded, setLoaded] = useState<{ take: Take; revision: string; events: TakeEvent[] }>();
+  const [loaded, setLoaded] = useState<{ take: Take; revision: string; events: TakeEvent[]; speech: Span[] }>();
   const [issues, setIssues] = useState<Issue[]>();
   const client = daemon?.client;
   useEffect(() => {
     if (!client) return;
     let current = true;
     void (async () => {
-      const result = await client.get<{ take: Take; revision: string }>(`/v1/takes/${id}`);
+      const result = await client.get<{ take: Take; revision: string; speech?: Span[] }>(`/v1/takes/${id}`);
       if (!current) return;
       if (!result.ok) return setIssues(result.issues);
       const log = await fetch(client.url(`/v1/takes/${id}/files/${result.data.take.source.events.file}`)).then(
         (response) => (response.ok ? response.text() : ""),
         () => "",
       );
-      if (current) setLoaded({ ...result.data, events: parseEvents(log, TakeEventSchema) });
+      if (current)
+        setLoaded({ ...result.data, speech: result.data.speech ?? [], events: parseEvents(log, TakeEventSchema) });
     })();
     return () => {
       current = false;
@@ -69,11 +72,12 @@ function Editor(props: {
   take: Take;
   revision: string;
   events: TakeEvent[];
+  speech: Span[];
   client: DaemonClient;
   daemon: DaemonState;
   backHref: string;
 }) {
-  const { client, events } = props;
+  const { client, events, speech } = props;
   const [take, setTake] = useState(props.take);
   const [exporting, setExporting] = useState(false);
   // The canvas lives inside the studio's shadow root, which mounts a render later than this component.
@@ -81,22 +85,23 @@ function Editor(props: {
   const audio = useRef<HTMLAudioElement>(null);
   const [clock] = useState(() => createClock());
   const { edit, source } = take;
-  const durationMs = Math.max(0, edit.trim.endMs - edit.trim.startMs);
+  // Derived here, not read back from the renderer, which only learns of an edit after this render.
+  const timeMap = useMemo(() => buildTimeMap(edit, events, speech), [edit, events, speech]);
+  const { durationMs } = timeMap;
   const file = useCallback((name: string) => client.url(`/v1/takes/${take.id}/files/${name}`), [client, take.id]);
 
-  const { renderer, failure } = useTakeRenderer(canvas, props.take, events, file);
+  const { renderer, failure } = useTakeRenderer(canvas, props.take, events, file, speech);
   const session = useClipSession(clock, durationMs, !!renderer);
   usePreview(renderer, take, clock);
-  useVoice(audio, take, clock, session.playing);
-  useTakeBridge(renderer, take, clock, session.seek);
-  const moments = useMemo(() => takeMoments(edit.trim, events), [edit.trim, events]);
+  useVoice(audio, take, timeMap, clock, session.playing);
+  useTakeBridge(renderer, take, durationMs, clock, session.seek);
+  const moments = useMemo(() => takeMoments(timeMap, events), [timeMap, events]);
   useMusicPreview({
     music: edit.music,
     clip: { key: `take:${take.id}`, durationMs, momentsMs: moments },
     clock,
     playing: session.playing,
   });
-  // Derived here, not read back from the renderer, which only learns of an edit after this render.
   const segments = useMemo(
     () => zoomSegments(resolveZoomTracks({ zoom: edit.zoom }, events, source)),
     [edit.zoom, events, source],
@@ -183,14 +188,14 @@ function Editor(props: {
             <span className="hint">Trim</span>
             <button
               type="button"
-              onClick={() => setTrim(edit.trim.startMs + clock.get(), edit.trim.endMs)}
+              onClick={() => setTrim(timeMap.toTake(clock.get()), edit.trim.endMs)}
               disabled={!renderer}
             >
               Start here
             </button>
             <button
               type="button"
-              onClick={() => setTrim(edit.trim.startMs, edit.trim.startMs + clock.get())}
+              onClick={() => setTrim(edit.trim.startMs, timeMap.toTake(clock.get()))}
               disabled={!renderer}
             >
               End here
@@ -199,7 +204,7 @@ function Editor(props: {
               Reset
             </button>
           </div>
-          <Timeline clock={clock} take={take} segments={segments} onSeek={session.seek} />
+          <Timeline clock={clock} take={take} timeMap={timeMap} segments={segments} onSeek={session.seek} />
         </footer>
         {/* biome-ignore lint/a11y/useMediaCaption: the speaker's own voice, played with the preview; it has no captions */}
         {source.audio && <audio ref={audio} src={file(source.audio.file)} preload="auto" />}

@@ -15,6 +15,7 @@ const root = path.resolve("examples/vite-app");
 const IDS = ["zz-test-edit", "zz-test-export", "zz-test-zoom"];
 const SECRETS = { "zz-test-redact": "redacted", "zz-test-plain": "visible" } as const;
 const NAMED = "zz-test-captions";
+const PACED = { "zz-test-paced": false, "zz-test-paced-voice": true } as const;
 const made: string[] = [];
 let server: ViteDevServer, daemon: Daemon, browser: Browser, page: Page, origin: string, projectFile: string;
 
@@ -42,6 +43,7 @@ beforeAll(async () => {
   for (const id of IDS) await makeTake(root, id);
   for (const [id, secret] of Object.entries(SECRETS)) await makeTake(root, id, { secret, cam: false });
   await makeTake(root, NAMED, { named: true, cam: false });
+  for (const [id, cam] of Object.entries(PACED)) await makeTake(root, id, { paced: true, cam });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -56,7 +58,7 @@ afterAll(async () => {
   await browser?.close();
   await daemon?.close();
   await server?.close();
-  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED])
+  for (const id of [...IDS, ...Object.keys(SECRETS), NAMED, ...Object.keys(PACED)])
     await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
   await writeFile(path.join(root, ".clipmunk/project.json"), projectFile);
@@ -340,6 +342,56 @@ describe("captions and shortcuts", () => {
     expect(near(at(3.1, PILL), DARK, 50), "pill above the caption").toBe(true);
     expect(near(at(2.0, PILL), DARK, 50), "no pill yet").toBe(false);
   }, 240_000);
+});
+
+describe("pacing", () => {
+  it("exports idle time fast, and keeps a take whose voice never stops as it is", async () => {
+    // The synthetic take's input runs from 600 to 2090 ms of 4000. With a 600 ms allowed gap at 4x,
+    // 0-300 and 2390-4000 play fast: 1910 ms of idle time take a quarter as long.
+    const expected = 4000 - 1910 * 0.75;
+    const output = ".clipmunk/exports/zz-test-paced.mp4";
+    made.push(output);
+    const result = await exportTake({ takeId: "zz-test-paced", url: origin, output, fps: 30, height: 360 }, { root });
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.data.frames).toBe(Math.ceil((expected * 30) / 1000));
+    expect(await probeVideo(output, root)).toMatchObject({ frames: Math.ceil((expected * 30) / 1000) });
+    // The click (2000 ms of take time, 2000 - 225 of clip time) is still zoomed into yellow.
+    expect(near(colourAt(path.join(root, output), (2000 - 225) / 1000, "20:20:170:95"), QUADRANTS.yellow, 50)).toBe(
+      true,
+    );
+
+    // The camera's tone is a voice that never stops, so nothing is sped up, and its sound is all there.
+    const voiced = ".clipmunk/exports/zz-test-paced-voice.mp4";
+    made.push(voiced);
+    const kept = await exportTake(
+      { takeId: "zz-test-paced-voice", url: origin, output: voiced, fps: 30, height: 360 },
+      { root },
+    );
+    if (!kept.ok) throw new Error(JSON.stringify(kept.issues));
+    expect(kept.data).toMatchObject({ frames: 120, durationMs: 4000, audio: true });
+    expect(existsSync(path.join(root, ".clipmunk/takes/zz-test-paced-voice/speech.json"))).toBe(true);
+  }, 240_000);
+
+  it("turns off per take in the editor", async () => {
+    const tab = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await tab.goto(
+        `${origin}/?clipmunk=1&clipmunk-take=zz-test-paced#clipmunk-daemon=${daemon.port}.${daemon.token}`,
+      );
+      await tab.waitForFunction(() => (window as any).__CLIPMUNK__?.kind === "take", undefined, { timeout: 45_000 });
+      const duration = () => tab.evaluate(() => (window as any).__CLIPMUNK__.durationMs as number);
+      expect(await duration()).toBe(4000 - 1910 * 0.75);
+      await tab.getByLabel("Speed up idle time (4×)", { exact: true }).click();
+      await expect.poll(duration).toBe(4000);
+      await expect
+        .poll(async () => JSON.parse(await readFile(editFile("zz-test-paced"), "utf8")).edit.pace.deadAir.on, {
+          timeout: 10_000,
+        })
+        .toBe(false);
+    } finally {
+      await tab.close();
+    }
+  }, 120_000);
 });
 
 describe("take export", () => {

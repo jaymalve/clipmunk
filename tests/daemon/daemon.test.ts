@@ -221,6 +221,8 @@ describe("recording a take", () => {
       zoom: { mode: "auto" },
       // From the brand: 108 px on a 1080 px short side.
       canvas: { width: 1920, height: 1080, background: "#2B2117", padding: 0.1, radius: 14 },
+      // New takes are paced.
+      pace: { deadAir: { on: true }, typing: { on: true } },
       // From the config, and from the log.
       redact: [
         { sel: ".client-email", mode: "block" },

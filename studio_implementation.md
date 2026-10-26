@@ -25,7 +25,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 4 | Event log v2: what was touched | Engine | 🔵 [#21](https://github.com/jaymalve/clipmunk/pull/21) |
 | 5 | Redaction | Engine | 🔵 [#22](https://github.com/jaymalve/clipmunk/pull/22) |
 | 6 | Captions and the keystroke overlay | Engine | 🔵 [#23](https://github.com/jaymalve/clipmunk/pull/23) |
-| 7 | Dead air and steady typing | Engine | ⬜ |
+| 7 | Dead air and steady typing | Engine | 🔵 [#24](https://github.com/jaymalve/clipmunk/pull/24) |
 | 8 | Reframing takes to other aspect ratios | Engine | ⬜ |
 | 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | ⬜ |
 | 10 | Scene variants: theme, locale, ratio | Engine | ⬜ |
@@ -163,18 +163,20 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** presets do not carry `captions` or `keys` yet; add them to `PRESET_FIELDS` if a preset should switch them. Caption styling has no settings of its own beyond the backdrop colour.
 
 ### PR 7 · Dead air and steady typing
-**Status:** ⬜ · **Branch:** `studio/07-dead-air` · **Base:** `studio/06-captions-keys`
+**Status:** 🔵 [#24](https://github.com/jaymalve/clipmunk/pull/24) · **Branch:** `studio/07-dead-air` · **Base:** `studio/06-captions-keys`
 
 **Goal:** idle gaps and slow typing play faster without manual cuts.
 
-- Edit: `pace: { deadAir: { on, maxGapMs: 600, speed: 4 }, typing: { on, speed: 2 } }`.
-- `core/timemap.ts`: a piecewise-linear map between presentation time and take time, built from the trim, from gaps longer than `maxGapMs` with no input and no voice, and from typing spans. This is the one place that maps between the two clocks. Trim becomes its simplest case.
-- Voice: a gap with speech in `audio.wav` is not sped up. Find speech with a simple energy detector at ingest and store it as a cache next to the take, not in `take.json`.
-- Everything that reads take time goes through the map: compositor frames, zoom, cursor, captions, keys, redaction, music moments, the timeline, export duration and audio. Muted spans are cut from the audio, which is never pitch-shifted.
-- Minimal control in the current take editor: two checkboxes.
+- Edit: `pace: { deadAir: { on, maxGapMs: 600, speed: 4 }, typing: { on, speed: 2 } }`, off in the schema; ingest turns both on for new takes, so older takes play as before.
+- `core/timemap.ts`: a piecewise-linear map between presentation time and take time, built from the trim, from gaps longer than `maxGapMs` with no input and no voice (keeping half of `maxGapMs` at normal speed at each end), and from typing runs (three or more keystrokes at most a second apart). This is the one place that maps between the two clocks. Trim is its simplest case (`trimMap`).
+- Voice: a stretch with speech in `audio.wav` is not sped up. `detectSpeech` is a simple energy detector; ingest runs it and `project/speech.ts` caches the spans in `speech.json` next to the take (rebuilt when missing), not in `take.json`. The daemon serves them with the take.
+- Everything that reads take time goes through the map: compositor frames, zoom, cursor, captions, keys and redaction (all on take time inside the renderer), music moments, the timeline, the trim buttons, export duration and audio. Sped-up spans become silence in the audio, which is never pitch-shifted; the preview's voice is muted there and kept in step.
+- Minimal control in the current take editor: two checkboxes, and the timeline stripes the fast parts.
 
-**Tests:** time map unit tests (monotonic, inverse, trim equivalence); an export of a take with known gaps has the expected duration and frames; the existing take, recorder and sequence suites pass with pacing off, unchanged.
+**Tests:** time map unit tests (trim equivalence, gaps, edges, typing, speech, monotonic and inverse) and speech detection; an export of a take with known gaps has the expected duration and frames, a take whose voice never stops keeps its length and writes `speech.json`, and the editor checkbox turns pacing off; the existing take, recorder and sequence suites pass, with the synthetic takes unpaced.
 **Done when:** pacing is on by default for new takes, can be switched off per take, and a take with 2.4 s of idle time exports about that much shorter.
+
+**Notes:** a gap at 4x shortens by three quarters of its fast part, so 2.4 s of idle time beyond the kept 600 ms exports 1.8 s shorter; raise `speed` for more. Pacing is not part of presets yet.
 
 ### PR 8 · Reframing takes to other aspect ratios
 **Status:** ⬜ · **Branch:** `studio/08-reframe` · **Base:** `studio/07-dead-air`
@@ -392,6 +394,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 4 opened as #21, stacked on #20: event log v2 (`el` on `down` and `focus`, `route`, `combo`, `redact`). For PR 5: `redact` events carry `sel` and `rects` in CSS pixels, one event per selector, logged only when a box changes, so hold each box until the next event for that selector; empty `rects` means nothing to hide. A config the recorder cannot read means a take without redaction, noted in `recorder.log`.
 - 2026-10-25 · PR 5 opened as #22, stacked on #21: redaction. For PR 6: captions and the keystroke overlay are drawn in `drawTake`, which now takes `redact` boxes in `TakeFrame`; draw overlays above the redaction layer so captions and keys stay readable. For PR 9: GIF and poster must render through `drawTake` to inherit redaction.
 - 2026-10-25 · PR 6 opened as #23, stacked on #22: captions and key pills. For PR 7: captions and pills are on the take clock (`atMs`), so cutting dead air must shift or drop them through the same time map as the picture; `resolveCaptions` and `keyPills` are the places to apply it.
+- 2026-10-25 · PR 7 opened as #24, stacked on #23: pacing and the time map. For PR 8: reframing crops follow the action on take time; build the crop path from the log and look it up at `timeMap.toTake(clipMs)` like every other overlay. For PR 9: GIF and poster frame times are clip times; use the renderer's `timeMap`, never `trim.startMs + t`.
 
 ## Environment notes for whoever picks this up
 
