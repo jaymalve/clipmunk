@@ -32,7 +32,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 11 | The frame page in the host | Studio | 🔵 [#28](https://github.com/jaymalve/clipmunk/pull/28) |
 | 12 | The daemon serves the Studio (parity) | Studio | 🔵 [#29](https://github.com/jaymalve/clipmunk/pull/29) |
 | 13 | Switch over to the standalone Studio | Studio | 🔵 [#30](https://github.com/jaymalve/clipmunk/pull/30) |
-| 14 | Library screen | Studio | ⬜ |
+| 14 | Library screen | Studio | 🔵 [#31](https://github.com/jaymalve/clipmunk/pull/31) |
 | 15 | Editor screen: timeline, inspector, undo | Studio | ⬜ |
 | 16 | Presets in the Studio | Studio | ⬜ |
 | 17 | `clipmunk mcp` | Agent | ⬜ |
@@ -271,17 +271,19 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** the plain-React host is covered by the project unit tests, not `test:installed`, which only has Vite and Next hosts. The PR 11 comparison against the in-app page cannot run once that page is gone; the export suite now checks that two separately opened frame pages capture identically.
 
 ### PR 14 · Library screen
-**Status:** ⬜ · **Branch:** `studio/14-library` · **Base:** `studio/13-switch-over`
+**Status:** 🔵 [#31](https://github.com/jaymalve/clipmunk/pull/31) · **Branch:** `studio/14-library` · **Base:** `studio/13-switch-over`
 
 **Goal:** the "Library, clips and exports" artboard.
 
-- Clip grid with kind filters (all, takes, scenes, sequences), duration, size, ratio and theme summary, live thumbnails for scenes (a small frame page) and posters for takes. Search by name.
-- Status badges: rendering with progress (from `/v1/events`), and "stale" reserved for PR 21. The spec's "In PR #312" and "In changelog v2.4" have no data source and are left out unless one is designed.
-- Export panel: ratios and themes as toggles, formats with checkboxes, the file count ("2 ratios × 2 themes = 4 files"), and a queue of outputs with per-file progress. "Files land in .clipmunk/exports. Nothing is uploaded." "Post to PR" is reserved for PR 22.
+- Clip grid (`studio-app/Library.tsx`) with kind filters (all, takes, scenes, sequences, with counts), duration, size, ratio and theme summary, scene snapshots and posters for takes (`GET /v1/takes/:id/poster`, the screen at the first click, cached beside the take). Search by name.
+- Status badges: rendering with progress (from `/v1/events`, whose `job` events now carry the clip), and "stale" reserved for PR 21. The spec's "In PR #312" and "In changelog v2.4" have no data source and are left out.
+- Export panel (`studio-app/ExportQueue.tsx`): ratios and themes as toggles, formats with checkboxes, the file count ("2 themes × 2 formats = 4 files"), and a queue of outputs with per-file progress. "Files land in .clipmunk/exports. Nothing is uploaded." "Post to PR" is reserved for PR 22.
 - "New scene" opens a short dialog that tells the developer to ask their agent, with a copyable prompt. Clipmunk does not write scenes itself.
 
-**Tests:** `tests/studio`: filters, a multi-output export from the panel, the queue updating.
+**Tests:** `tests/studio`: filters, search and summaries, a multi-output export from the panel (four files, the queue and the rendering badge updating), the new-scene dialog.
 **Done when:** it matches the artboard apart from the reserved parts, with real data.
+
+**Notes:** live scene thumbnails from a small frame page per card were left out in favour of the recipe's snapshot (one iframe per card would load the host app many times over); a scene without a snapshot says so, and `clipmunk snapshot` makes one. The Studio now shares one event stream per page, because browsers allow only a few connections to one address.
 
 ### PR 15 · Editor screen: timeline, inspector, undo
 **Status:** ⬜ · **Branch:** `studio/15-editor` · **Base:** `studio/14-library`
@@ -414,6 +416,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 11 opened as #28, stacked on #27: the frame page. For PR 12: frame the host page at `frameUrl(devUrl, studioPath, id)` plus the daemon link hash (`#clipmunk-daemon=<port>.<token>`); the frame trusts only loopback origins on that port. Post `{ cm: 1, type, … }` messages; the frame answers with `ready`, `frame`, `tick`, `stopped`, `picked` and `narration`.
 - 2026-10-25 · PR 12 opened as #29, stacked on #28: the standalone Studio. For PR 13: take export still opens the take editor on the host's dev server (`export/take.ts`); point it at the daemon-served Studio (`?clipmunk=1&clipmunk-take=<id>` on the daemon's origin, with `studioDir` found as in `daemon/server.ts`).
 - 2026-10-25 · PR 13 opened as #30, stacked on #29: switch-over. For PR 14: the library is `studio/Library.tsx`, used now only by `studio-app/StudioApp.tsx`; job progress for badges comes from `GET /v1/events` (`job` events), and multi-output exports go through `POST /v1/exports` with `{ clip, formats, ratios, variants }`.
+- 2026-10-25 · PR 14 opened as #31, stacked on #30: the library. For PR 15: listen with `onStudioEvent` (`studio-app/events.ts`), not a new `EventSource`; the take editor is still `studio/TakeEditor.tsx`.
 
 ## Environment notes for whoever picks this up
 

@@ -11,13 +11,17 @@ export type JobEvent =
 type Job = {
   id: string;
   kind: string;
+  /** What the job is about, passed on with its events (an export names its clip). */
+  meta: Record<string, unknown>;
   last?: JobEvent;
   finished: boolean;
   listeners: Set<(event: JobEvent) => void>;
   controller: AbortController;
 };
 
-export function createJobs(onEvent?: (job: { id: string; kind: string }, event: JobEvent) => void) {
+export function createJobs(
+  onEvent?: (job: { id: string; kind: string; meta: Record<string, unknown> }, event: JobEvent) => void,
+) {
   const jobs = new Map<string, Job>();
   const emit = (job: Job, event: JobEvent) => {
     job.last = event;
@@ -28,11 +32,13 @@ export function createJobs(onEvent?: (job: { id: string; kind: string }, event: 
   return {
     start<T>(
       kind: string,
+      meta: Record<string, unknown>,
       work: (signal: AbortSignal, progress: (done: number, total: number) => void) => Promise<Result<T>>,
     ): string {
       const job: Job = {
         id: randomBytes(8).toString("hex"),
         kind,
+        meta,
         finished: false,
         listeners: new Set(),
         controller: new AbortController(),

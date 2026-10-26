@@ -462,6 +462,6 @@ describe("sequence builder in the studio", () => {
       .poll(async () => JSON.parse(await readFile(sequenceFile("zz-built-here"), "utf8")).items[0].clip.kind)
       .toBe("take");
     await page.goto(`${daemon.origin}/?clipmunk=1`);
-    await page.locator(".row", { hasText: "ZZ built here" }).waitFor({ timeout: 15_000 });
+    await page.locator(".card", { hasText: "ZZ built here" }).waitFor({ timeout: 15_000 });
   }, 120_000);
 });

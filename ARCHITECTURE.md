@@ -560,7 +560,7 @@ All of these are in the standalone Studio except the recorder HUD, which runs in
 
 | View | What it does |
 |---|---|
-| **Library** | Grid of scenes (cached snapshot thumbnails) and takes. Shows validation issues per item. |
+| **Library** | Every take, scene and sequence as a card (`studio-app/Library.tsx`): thumbnail (a scene's snapshot, a take's poster), length, size, ratio and the scene's theme count, with filters by kind and search by name. A card shows "Rendering n%" while an export job for it runs (from `job` events on `/v1/events`, which name the clip). Its Export button opens the export panel: ratios and themes as toggles, formats as checkboxes, the file count ("2 ratios × 2 themes = 4 files"), and a queue with each planned file's progress; files land in `.clipmunk/exports`. "New scene" gives a prompt to paste to the coding agent; Clipmunk never writes scenes itself. Lists refresh when a take is recorded or a clip or the config changes. |
 | **Scene player** | The host's frame page in an iframe: the authored frame fitted inside the viewport and clipped to its edges, so the preview shows exactly what export renders. Play, scrub, replay and export. Shows diagnostics and hot-reload status. |
 | **Take editor** | The composited preview on a canvas; play and scrub; a timeline showing the kept range, zoom segments and playhead; trim from the playhead; controls for zoom, cursor, camera, frame and voice. Edits apply to the preview at once and are saved to `edit.json` through the daemon half a second later, against a revision hash. |
 | **Recorder HUD** | Record, stop, camera and microphone toggles, elapsed time, viewport size, a stand-in cursor and a live camera preview. A plain-DOM custom element on `<html>`; opened by `Alt+Shift+R` or `?clipmunk-record=1` on any app route. There is no pause. |
@@ -612,7 +612,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | Method and path | Purpose |
 |---|---|
 | `GET /v1/status` | Version, project id, capabilities (FFmpeg and Chromium present), and the host's `devUrl` and `studioPath` from `project.json` |
-| `GET /v1/events` | One server-sent-events stream for the Studio: `take` (recorded), `edit` (a take, scene or sequence changed through the daemon), `config` (the config file changed on disk), `job` (progress and outcome of any job) |
+| `GET /v1/events` | One server-sent-events stream for the Studio: `take` (recorded), `edit` (a take, scene or sequence changed through the daemon), `config` (the config file changed on disk), `job` (progress and outcome of any job, with the `clip` an export is for) |
 | `GET /v1/config` | The validated `clipmunk.config.json` and whether it exists, or its issues |
 | `GET /v1/presets`, `POST /v1/presets` | List presets with a one-line summary; save one (`{ name, preset }` or `{ name, fromTake, fields }`, `replace` to overwrite) |
 | `POST /v1/takes/:id/preset`, `POST /v1/scenes/:id/preset` | Apply a preset by `{ name }` to a take's edit, or a preset's music to a scene |
@@ -624,6 +624,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `PATCH /v1/takes/:id` | Save `edit` and `title` to `edit.json`; requires the revision hash it was read at |
 | `DELETE /v1/takes/:id` | Delete a take and its media |
 | `GET /v1/takes/:id/files/:name` | Serve media with range requests |
+| `GET /v1/takes/:id/poster` | A PNG of the screen at the take's first click, made once and cached as `poster.png` beside it |
 | `GET /v1/scenes` | List validated scenes; `?detail=1` adds each recipe (definition, snapshot, music, sounds) for the Studio |
 | `PUT /v1/scenes/:id/music` | Set or clear a scene's generated music in its recipe |
 | `PUT /v1/scenes/:id/narration?offset=ms` | Store a narration recording and point the scene's recipe at it |
