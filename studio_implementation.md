@@ -29,7 +29,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 8 | Reframing takes to other aspect ratios | Engine | 🔵 [#25](https://github.com/jaymalve/clipmunk/pull/25) |
 | 9 | Export jobs with several outputs: GIF, poster, ratios | Engine | 🔵 [#26](https://github.com/jaymalve/clipmunk/pull/26) |
 | 10 | Scene variants: theme, locale, ratio | Engine | 🔵 [#27](https://github.com/jaymalve/clipmunk/pull/27) |
-| 11 | The frame page in the host | Studio | ⬜ |
+| 11 | The frame page in the host | Studio | 🔵 [#28](https://github.com/jaymalve/clipmunk/pull/28) |
 | 12 | The daemon serves the Studio (parity) | Studio | ⬜ |
 | 13 | Switch over to the standalone Studio | Studio | ⬜ |
 | 14 | Library screen | Studio | ⬜ |
@@ -227,17 +227,19 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 ## Part 2: Studio
 
 ### PR 11 · The frame page in the host
-**Status:** ⬜ · **Branch:** `studio/11-frame-page` · **Base:** `studio/10-scene-variants`
+**Status:** 🔵 [#28](https://github.com/jaymalve/clipmunk/pull/28) · **Branch:** `studio/11-frame-page` · **Base:** `studio/10-scene-variants`
 
 **Goal:** the host renders a bare, drivable scene for the Studio's iframe and for export (section 19.1).
 
-- `clipmunk/studio` gains `ClipmunkFrame`: with `?clipmunk-frame&clipmunk-scene=<id>`, it renders only the scene, fitted to the window, with no chrome, installs the bridge, and runs the message protocol from the spike (`spikes/studio/frame-agent.ts`): `seek` (latest wins, with a reply once the frame is drawn), `play` and `pause` (the frame owns the clock and reports `tick`), `pick` (hover outline, click replies with `el` as in PR 4 plus a rect in scene pixels), `variant`, and `ready`, re-sent after hot reloads. Messages are accepted only from loopback origins on the daemon's port.
-- Generated adapters (`Studio.tsx`, the Next route) render `ClipmunkFrame` for `?clipmunk-frame`. `init` and `sync` upgrade unedited generated files through the existing hash ownership record; edited ones get the usual repair message.
-- Scene export opens the frame page instead of `?clipmunk=1`.
-- Narration and music preview run in the frame. The Studio's iframe needs `allow="autoplay; microphone"`, and the spike showed both are granted.
+- `clipmunk/studio` gains `ClipmunkFrame`: with `?clipmunk-frame&clipmunk-scene=<id>`, it renders only the scene (the scene player's new bare mode), fitted to the window, with no chrome, installs the bridge, and runs the message protocol (`studio/frame-agent.ts`, after the spike's): `seek` (latest wins, with a reply once the frame is drawn), `play` and `pause` (the frame owns the clock and reports `tick`, then `stopped`), `pick` (hover outline, click replies with `el` as in PR 4 plus a rect in scene pixels), `variant`, `narrate`, and `ready`, re-sent after hot reloads and variant changes. Messages are accepted only from loopback origins on the daemon's port, and replies go only there.
+- Generated adapters (`Studio.tsx` for Vite and React, the Next route) render `ClipmunkFrame` for `?clipmunk-frame`. `init` and now `sync` upgrade unedited generated files through the existing hash ownership record; edited ones get a repair message.
+- Scene export and snapshots open the frame page instead of `?clipmunk=1`.
+- Narration and music preview run in the frame (the bare player keeps those hooks). The Studio's iframe will need `allow="autoplay; microphone"` (PR 12).
 
-**Tests:** a Playwright test drives the frame through `postMessage` (seek reply, playback ticks, pick, variant); the export suites pass on the frame page; `test:installed` for Vite and Next.
+**Tests:** a Playwright test drives the frame through `postMessage` from a parent on the daemon's origin (ready, seek replies and the latest-wins burst, playback ticks and pause, pick, variant, and silence towards any other origin); the export suites pass on the frame page; `test:installed` for Vite and Next; `sync` upgrades an old adapter and leaves an edited one alone.
 **Done when:** every existing scene exports identically from the frame page (byte-identical PNG frames at sampled times compared with today's page).
+
+**Notes:** Chrome's local network access checks block a Playwright-fulfilled parent page from framing a loopback page, so the frame test launches Chromium with that check off; the daemon-served Studio is itself on loopback. The example app's `Studio.tsx` is Biome-formatted, so it differs from the template and `sync` reports it as edited there.
 
 ### PR 12 · The daemon serves the Studio (parity)
 **Status:** ⬜ · **Branch:** `studio/12-studio-app` · **Base:** `studio/11-frame-page`
@@ -405,6 +407,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 8 opened as #25, stacked on #24: reframing. For PR 9: rendering a take "in a ratio" means setting `edit.frame.ratio` (and the canvas from `ratioCanvas`) on a copy of the take for that output; the renderer does the rest.
 - 2026-10-25 · PR 9 opened as #26, stacked on #25: export jobs. For PR 10: `exportJob` refuses `variants` and refuses `ratios` for scenes (`variants-unsupported`, `ratios-unsupported` in `export/job.ts`); lift both there, add the variant to the stem (`<clip>.<ratio>.<variant>`), and pass it to the scene exporter.
 - 2026-10-25 · PR 10 opened as #27, stacked on #26: scene variants. The engine part is done. For PR 11: the frame page must read `clipmunk-variant` from its own URL and wrap the scene in `SceneVariantProvider`, exactly as `ScenePreview` does, and size the frame with `variantFrame`.
+- 2026-10-25 · PR 11 opened as #28, stacked on #27: the frame page. For PR 12: frame the host page at `frameUrl(devUrl, studioPath, id)` plus the daemon link hash (`#clipmunk-daemon=<port>.<token>`); the frame trusts only loopback origins on that port. Post `{ cm: 1, type, … }` messages; the frame answers with `ready`, `frame`, `tick`, `stopped`, `picked` and `narration`.
 
 ## Environment notes for whoever picks this up
 

@@ -14,6 +14,7 @@ export {
   storedLink,
 } from "./daemon";
 export { mountRecorderHud, type RecorderHud } from "./hud";
+export { identify } from "./identity";
 
 export const RECORD_PARAM = "clipmunk-record";
 let booted = false;

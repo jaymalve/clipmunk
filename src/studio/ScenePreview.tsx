@@ -29,6 +29,7 @@ import {
 import { createClock, Scene, SceneVariantProvider } from "../react";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
+import { useFrameAgent } from "./frame-agent";
 import { IssueList } from "./IssueList";
 import { MusicControls, useMusicPreview, useSoundsPreview } from "./music";
 import { useNarration } from "./narration";
@@ -53,6 +54,8 @@ export type ScenePreviewProps = {
   music?: Music;
   /** The recipe's generated sound effects. */
   sounds?: readonly Sound[];
+  /** The frame page: only the scene, no controls, driven by the Studio's messages (frame-agent.ts). */
+  bare?: boolean;
   children?: ReactNode;
 };
 
@@ -67,6 +70,7 @@ export function ScenePreview({
   audio,
   music: recipeMusic,
   sounds,
+  bare = false,
   children,
 }: ScenePreviewProps) {
   const result = useMemo(() => validateDefinition(definition), [definition]);
@@ -185,6 +189,31 @@ export function ScenePreview({
     });
   }, [hasScene, durationMs, width, height, session.seek]);
 
+  const daemonPort = daemon?.client ? Number(new URL(daemon.client.url("/")).port) || undefined : undefined;
+  useFrameAgent(bare, daemonPort, {
+    clock,
+    durationMs,
+    width,
+    height,
+    version: definition,
+    ready: valid,
+    seek: session.seek,
+    play: session.play,
+    pause: session.pause,
+    playing: session.playing,
+    variant,
+    setVariant: chooseVariant,
+    narration: narration.available
+      ? {
+          start: narration.start,
+          stop: narration.stop,
+          remove: narration.remove,
+          phase: narration.state.phase,
+          has: narration.hasNarration,
+        }
+      : undefined,
+  });
+
   const viewport = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ scale: 1, left: 0, top: 0 });
   useLayoutEffect(() => {
@@ -252,60 +281,64 @@ export function ScenePreview({
           </div>
         )}
       </div>
-      <Chrome style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 10 }}>
-        {(issues.length > 0 || failure) && (
-          <IssueList
-            issues={issues}
-            title={failure ? "A scene component failed to render." : "This scene needs a correction."}
-          >
-            {failure && <li>{failure.message}</li>}
-          </IssueList>
-        )}
-        {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
-        {exporting && sceneId && (
-          <ExportPanel
-            clip={{ sceneId, ...(formatVariant(variant) ? { variant: formatVariant(variant) } : {}) }}
-            daemon={daemon}
-            frame={{ width, height }}
-          />
-        )}
-        {narration.state.phase === "error" && (
-          <div className="issues" role="alert">
-            {narration.state.message}
-          </div>
-        )}
-        {musicIssue && (
-          <div className="issues" role="alert">
-            {musicIssue}
-          </div>
-        )}
-        {choosingMusic && sceneId && daemon?.client && (
-          <div className="musicbox">
-            <MusicControls
-              value={music}
-              hasVoice={narration.hasNarration}
-              clipKey={`scene:${sceneId}`}
-              moments={moments.length}
-              onChange={changeMusic}
+      {!bare && (
+        <Chrome style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 10 }}>
+          {(issues.length > 0 || failure) && (
+            <IssueList
+              issues={issues}
+              title={failure ? "A scene component failed to render." : "This scene needs a correction."}
+            >
+              {failure && <li>{failure.message}</li>}
+            </IssueList>
+          )}
+          {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
+          {exporting && sceneId && (
+            <ExportPanel
+              clip={{ sceneId, ...(formatVariant(variant) ? { variant: formatVariant(variant) } : {}) }}
+              daemon={daemon}
+              frame={{ width, height }}
             />
-          </div>
-        )}
-        <Controls
-          clock={clock}
-          durationMs={durationMs}
-          title={title}
-          backHref={backHref}
-          disabled={!valid}
-          {...session}
-          onExport={sceneId ? () => setExporting((value) => !value) : undefined}
-          narration={narration}
-          onMusic={sceneId && daemon?.client && durationMs > 0 ? () => setChoosingMusic((value) => !value) : undefined}
-          hasMusic={!!music}
-          variant={variant}
-          variantOptions={variantOptions}
-          onVariant={chooseVariant}
-        />
-      </Chrome>
+          )}
+          {narration.state.phase === "error" && (
+            <div className="issues" role="alert">
+              {narration.state.message}
+            </div>
+          )}
+          {musicIssue && (
+            <div className="issues" role="alert">
+              {musicIssue}
+            </div>
+          )}
+          {choosingMusic && sceneId && daemon?.client && (
+            <div className="musicbox">
+              <MusicControls
+                value={music}
+                hasVoice={narration.hasNarration}
+                clipKey={`scene:${sceneId}`}
+                moments={moments.length}
+                onChange={changeMusic}
+              />
+            </div>
+          )}
+          <Controls
+            clock={clock}
+            durationMs={durationMs}
+            title={title}
+            backHref={backHref}
+            disabled={!valid}
+            {...session}
+            onExport={sceneId ? () => setExporting((value) => !value) : undefined}
+            narration={narration}
+            onMusic={
+              sceneId && daemon?.client && durationMs > 0 ? () => setChoosingMusic((value) => !value) : undefined
+            }
+            hasMusic={!!music}
+            variant={variant}
+            variantOptions={variantOptions}
+            onVariant={chooseVariant}
+          />
+        </Chrome>
+      )}
     </div>
   );
 }

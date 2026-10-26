@@ -2,11 +2,16 @@
 // Development only: a production build renders the app unchanged and contains no Clipmunk code.
 import { lazy, type ReactNode, Suspense } from "react";
 
-const active = typeof location !== "undefined" && new URLSearchParams(location.search).has("clipmunk");
+const params = typeof location !== "undefined" ? new URLSearchParams(location.search) : undefined;
+// ?clipmunk-frame renders one scene alone, for the Studio's preview and for export.
+const frame = !!params?.has("clipmunk-frame");
+const active = frame || !!params?.has("clipmunk");
 const scenes = import.meta.env.DEV ? import.meta.glob("./scenes/*.{scene.json,tsx,jsx}") : {};
 const Studio =
   import.meta.env.DEV && active
-    ? lazy(() => import("clipmunk/studio").then((module) => ({ default: module.ClipmunkStudio })))
+    ? lazy(() =>
+        import("clipmunk/studio").then((module) => ({ default: frame ? module.ClipmunkFrame : module.ClipmunkStudio })),
+      )
     : null;
 
 // The recorder loads in development only: Alt+Shift+R on any page of the app.

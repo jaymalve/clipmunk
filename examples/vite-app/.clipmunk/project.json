@@ -6,7 +6,7 @@
   "files": {
     ".clipmunk/.gitignore": "2e5e19628a1cc7b5abf9421b14a46bd411c398e6436e4db8d9333f417ead52df",
     "CLIPMUNK.md": "6dc98d9912067ecf7e9c5067188be80f59557feb392357a78f4ebed54cd97d5f",
-    "src/clipmunk/Studio.tsx": "e30a853eb6d6fad9318f0f98f880865ea0788a27b41beb130471a42a81bac99f"
+    "src/clipmunk/Studio.tsx": "6a6f984154e25e0eecd5fa07cb4a93de6186ed7b1dc892806022c9de8c0f2b22"
   },
   "entry": "src/main.tsx"
 }

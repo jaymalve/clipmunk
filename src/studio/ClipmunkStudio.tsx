@@ -29,6 +29,54 @@ export function ClipmunkStudio({ scenes }: ClipmunkStudioProps) {
   const takeId = useMemo(() => new URLSearchParams(location.search).get(TAKE_PARAM) ?? undefined, []);
   const sequenceId = useMemo(() => new URLSearchParams(location.search).get(SEQUENCE_PARAM) ?? undefined, []);
   const daemon = useDaemon();
+  const catalog = useSceneCatalog(scenes, sceneId);
+
+  if (!catalog) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
+  if (takeId) return <TakeEditor id={takeId} daemon={daemon} backHref={studioHref()} />;
+  if (sequenceId)
+    return <SequenceEditor id={sequenceId} daemon={daemon} scenes={catalog.scenes} backHref={studioHref()} />;
+  if (catalog.selected)
+    return (
+      <OpenScene
+        key={catalog.selected.id}
+        scene={catalog.selected}
+        load={scenes[catalog.selected.binding]!}
+        daemon={daemon}
+      />
+    );
+  return <Library catalog={catalog} missing={sceneId} daemon={daemon} />;
+}
+
+/** The frame page the generated adapter renders for `?clipmunk-frame&clipmunk-scene=<id>`: only the
+ * scene, fitted to the window, with the capture bridge and the Studio's message protocol. Export
+ * opens this page too, so the Studio's preview and the export cannot disagree.
+ */
+export function ClipmunkFrame({ scenes }: ClipmunkStudioProps) {
+  const sceneId = useMemo(() => new URLSearchParams(location.search).get(SCENE_PARAM) ?? undefined, []);
+  const daemon = useDaemon();
+  const catalog = useSceneCatalog(scenes, sceneId);
+  if (!catalog) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
+  if (!catalog.selected)
+    return (
+      <Library
+        catalog={{ scenes: [], issues: catalog.issues }}
+        missing={sceneId ?? "(no clipmunk-scene in the address)"}
+        daemon={daemon}
+      />
+    );
+  return (
+    <OpenScene
+      key={catalog.selected.id}
+      scene={catalog.selected}
+      load={scenes[catalog.selected.binding]!}
+      daemon={daemon}
+      bare
+    />
+  );
+}
+
+/** Recipes for the library and the selected scene; components load only when a scene opens. */
+function useSceneCatalog(scenes: SceneModules, sceneId: string | undefined) {
   const [catalog, setCatalog] = useState<SceneCatalog | null>(null);
   useEffect(() => {
     let current = true;
@@ -62,31 +110,19 @@ export function ClipmunkStudio({ scenes }: ClipmunkStudioProps) {
       current = false;
     };
   }, [scenes, sceneId]);
-
-  if (!catalog) return <div style={{ position: "fixed", inset: 0, background: "#000" }} />;
-  if (takeId) return <TakeEditor id={takeId} daemon={daemon} backHref={studioHref()} />;
-  if (sequenceId)
-    return <SequenceEditor id={sequenceId} daemon={daemon} scenes={catalog.scenes} backHref={studioHref()} />;
-  if (catalog.selected)
-    return (
-      <OpenScene
-        key={catalog.selected.id}
-        scene={catalog.selected}
-        load={scenes[catalog.selected.binding]!}
-        daemon={daemon}
-      />
-    );
-  return <Library catalog={catalog} missing={sceneId} daemon={daemon} />;
+  return catalog;
 }
 
 function OpenScene({
   scene,
   load,
   daemon,
+  bare = false,
 }: {
   scene: CatalogScene;
   load: () => Promise<unknown>;
   daemon: DaemonState;
+  bare?: boolean;
 }) {
   const [state, setState] = useState<{ Component?: ComponentType; error?: string }>({});
   useEffect(() => {
@@ -125,6 +161,7 @@ function OpenScene({
       audio={scene.audio}
       music={scene.music}
       sounds={scene.sounds}
+      bare={bare}
     >
       <state.Component />
     </ScenePreview>
