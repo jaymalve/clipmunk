@@ -23,10 +23,12 @@ const RULES = {
     packages: ["react", "react-dom"],
     node: false,
   },
+  // The MCP server for coding agents: a stdio front for the daemon's HTTP API.
+  mcp: { modules: ["core", "project"], packages: [], node: true },
   daemon: { modules: ["core", ...NODE], packages: [], node: true },
   export: { modules: ["core", ...NODE], packages: ["playwright"], node: true },
   project: { modules: ["core", ...NODE], packages: ["typescript"], node: true },
-  cli: { modules: ["core", ...NODE], packages: [], node: true },
+  cli: { modules: ["core", "mcp", ...NODE], packages: [], node: true },
 };
 
 const files = (dir) =>

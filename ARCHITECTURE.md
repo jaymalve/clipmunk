@@ -625,6 +625,8 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `DELETE /v1/takes/:id` | Delete a take and its media |
 | `GET /v1/takes/:id/files/:name` | Serve media with range requests |
 | `GET /v1/takes/:id/history`, `POST /v1/takes/:id/undo`, `POST /v1/takes/:id/redo` | Whether there is anything to undo or redo; step back or forward one edit (`{ revision }`), saved through the normal revision check. Every `PATCH` is recorded in `.clipmunk/history/<id>.json` (ignored by git, the last 50) |
+| `GET /v1/preview?kind=take\|scene&id=&at=ms&variant=` | One frame of a clip as a PNG, rendered headless as export renders it |
+| `GET /v1/jobs/:id` | A job's latest event, for a caller that asks rather than listens |
 | `POST /v1/config/redact` | Add a redaction selector (`{ selector }`) to `clipmunk.config.json`, in whichever form the file writes `redact`, keeping everything else as it was |
 | `GET /v1/takes/:id/poster` | A PNG of the screen at the take's first click, made once and cached as `poster.png` beside it |
 | `GET /v1/scenes` | List validated scenes; `?detail=1` adds each recipe (definition, snapshot, music, sounds) for the Studio |
@@ -641,6 +643,21 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 The daemon is a thin adapter: each route validates input with a `core` schema and calls the same operation the CLI calls.
 
 ---
+
+
+### 11.3 The MCP server
+
+`clipmunk mcp` (`src/mcp`) is a Model Context Protocol server on stdio for the developer's coding agent (`claude mcp add clipmunk -- npx clipmunk mcp`; `init` prints the lines for Claude Code, Codex and Cursor). It implements only what tools need (`initialize`, `tools/list`, `tools/call`, `ping`) as newline-delimited JSON-RPC, so it carries no SDK. It finds the running daemon through `.clipmunk/daemon.json`, and says to run `clipmunk dev` when there is none. Every tool calls a daemon route and only formats the answer:
+
+| Tool | Daemon route | Returns |
+|---|---|---|
+| `list_clips` | `/v1/takes`, `/v1/scenes`, `/v1/sequences` | ids, kinds, titles and lengths |
+| `get_take(id)` | `/v1/takes/:id` and its log | the edit, its revision, and the log as readable lines (`summarizeEvents`: pages, clicks with role, name and selector, typing, shortcuts) |
+| `get_scene(id)` | `/v1/scenes?detail=1` | the recipe and its component file |
+| `edit_take(id, patch, note, revision?)` | `PATCH /v1/takes/:id` | a JSON merge patch over the edit (`mergePatch`; an object that switches its `mode` is replaced), validated and saved against the revision through the history; the changes (`diffJson`) |
+| `apply_preset(id, preset)` | `POST /v1/takes\|scenes/:id/preset` | |
+| `preview(id, atMs, variant?)` | `/v1/preview` | a PNG image of the frame |
+| `export(id, options)`, `get_job(id)` | `POST /v1/exports`, `/v1/jobs/:id` | a job id; its progress or its outputs |
 
 ## 12. Export (`export`)
 
@@ -743,6 +760,7 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | Command | Purpose |
 |---|---|
 | `clipmunk init [--adapter vite\|next\|react]` | Connect the host app |
+| `clipmunk mcp` | Serve Clipmunk's tools to a coding agent over MCP on stdio (11.3) |
 | `clipmunk dev [--port]` | Start the daemon and print the Studio link, and the link that connects the app for recording |
 | `clipmunk guide [--json]` | Print the agent authoring guide |
 | `clipmunk scenes [--json]` | List validated scenes |

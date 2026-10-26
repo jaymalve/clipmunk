@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { exportJob, exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
+import { exportJob, exportScene, exportSequence, exportTake, ffmpegVersion, previewFrame } from "../export";
 import {
   addRedactSelector,
   applyPresetToTake,
@@ -52,6 +52,8 @@ export type Call = {
   context: { root: string };
   jobs: Jobs;
   events: Events;
+  /** The daemon's own address and token, for pages it opens on itself (previews of takes). */
+  self: { origin: string; port: number; token: string };
   version: string;
   log: (line: string) => void;
 };
@@ -182,8 +184,9 @@ const exports: Handler = async ({ request, response, url, method, id, origin, co
   // The in-app studio page is the dev server, so its Origin is the address to render from. The
   // standalone Studio is served by the daemon itself; then the project's own dev server is.
   const own = origin === `http://${url.host}` || origin === `http://127.0.0.1:${url.port}`;
-  const project = own ? await readProject(context.root).catch(() => undefined) : undefined;
-  const target = typeof body.url === "string" ? body.url : own ? project?.devUrl : origin;
+  // A caller with no page at all (the MCP server, a script) renders from the project's dev server too.
+  const project = own || !origin ? await readProject(context.root).catch(() => undefined) : undefined;
+  const target = typeof body.url === "string" ? body.url : own || !origin ? project?.devUrl : origin;
   if (!target) return handled(deny(response, "invalid-request", "Pass the dev server address as url."));
   // A job with several outputs names its clip; the older single-file shape names the clip by kind.
   const work =
@@ -206,6 +209,12 @@ const exports: Handler = async ({ request, response, url, method, id, origin, co
 
 const jobRoutes: Handler = async ({ request, response, method, id, action, jobs }) => {
   if (!id) return false;
+  if (method === "GET" && !action) {
+    const state = jobs.state(id);
+    return handled(
+      state ? send(response, 200, { ok: true, data: state }) : deny(response, "unknown-job", "No such job."),
+    );
+  }
   if (method === "DELETE") {
     if (jobs.cancel(id)) return handled(send(response, 200, { ok: true, data: { job: id } }));
     return handled(deny(response, "unknown-job", "No such job."));
@@ -272,7 +281,31 @@ const eventStream: Handler = async ({ request, response, method, id, events }) =
   return true;
 };
 
+/** One frame of a clip as a PNG: `?kind=take|scene&id=&at=ms&variant=`. */
+const preview: Handler = async ({ response, url, method, id, context, self }) => {
+  if (id || method !== "GET") return false;
+  const kind = url.searchParams.get("kind") === "take" ? "take" : "scene";
+  const result = await previewFrame(
+    {
+      kind,
+      id: url.searchParams.get("id") ?? "",
+      atMs: Number(url.searchParams.get("at")) || 0,
+      ...(url.searchParams.get("variant") ? { variant: url.searchParams.get("variant")! } : {}),
+    },
+    { root: context.root, studio: self },
+  );
+  if (!result.ok) return handled(reply(response, result));
+  response.writeHead(200, {
+    "content-type": "image/png",
+    "cache-control": "no-store",
+    "x-clipmunk-at": String(result.data.atMs),
+  });
+  response.end(result.data.png);
+  return true;
+};
+
 export const ROUTES: Record<string, Handler> = {
+  preview,
   events: eventStream,
   status,
   config,

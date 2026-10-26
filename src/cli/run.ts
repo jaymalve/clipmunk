@@ -12,6 +12,7 @@ const HELP = `clipmunk <command> [options]
 
   init [--adapter ${ADAPTERS.join("|")}]   Connect this app to Clipmunk
   dev [--port <n>]                         Start the local daemon for recording and studio exports
+  mcp                                      Serve Clipmunk's tools to a coding agent over MCP (stdio)
   guide                                    Print the scene authoring guide
   scenes                                   List scenes and validation issues
   takes                                    List recorded takes
@@ -37,6 +38,7 @@ const HELP = `clipmunk <command> [options]
 const COMMANDS: Record<string, Command> = {
   init: commands.init,
   dev: commands.dev,
+  mcp: commands.mcp,
   guide: commands.guide,
   scenes: commands.scenes,
   takes: commands.takes,

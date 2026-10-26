@@ -24,6 +24,7 @@ import {
 } from "../core";
 import { applyPresetToScene, listTakes, readTake, readTakeEvents, startDaemon, updateTakeEdit } from "../daemon";
 import { ffmpegVersion, launchBrowser, MISSING_FFMPEG } from "../export";
+import { clipmunkTools, MCP_INSTRUCTIONS, serveMcp } from "../mcp";
 import {
   applyPresetToTake,
   configWarnings,
@@ -58,8 +59,11 @@ export const init: Command = async ({ values, context, print, usage }) => {
     if (data.entry.status === "manual") lines.push(data.entry.instruction!, "");
     if (data.recorder.instruction && data.entry.status !== "manual") lines.push(data.recorder.instruction, "");
     lines.push(
-      `Studio: ${data.studioUrl} (with your dev server running)`,
-      "To record your app: npx clipmunk dev",
+      "Studio and recording: npx clipmunk dev, then open the Studio link it prints.",
+      "",
+      "Connect your coding agent to Clipmunk's tools (edit takes, preview frames, export):",
+      "",
+      ...MCP_SETUP.map((line) => `  ${line}`),
       "",
       "Give your coding agent this prompt:",
       "",
@@ -124,6 +128,26 @@ export const dev: Command = async ({ io, values, human, usage }) => {
     io.signal?.aborted ? resolve() : io.signal?.addEventListener("abort", () => resolve(), { once: true }),
   );
   await daemon.close();
+  return 0;
+};
+
+/** How to add `clipmunk mcp` to the agents developers use. */
+const MCP_SETUP = [
+  "Claude Code: claude mcp add clipmunk -- npx clipmunk mcp",
+  "Codex:       codex mcp add clipmunk -- npx clipmunk mcp",
+  'Cursor:      add {"mcpServers":{"clipmunk":{"command":"npx","args":["clipmunk","mcp"]}}} to .cursor/mcp.json',
+];
+
+/** The MCP server for coding agents, on stdin and stdout. Logs go to stderr, never stdout. */
+export const mcp: Command = async ({ io }) => {
+  await serveMcp({
+    input: process.stdin,
+    output: process.stdout,
+    tools: clipmunkTools(io.cwd),
+    name: "clipmunk",
+    version: io.version,
+    instructions: MCP_INSTRUCTIONS,
+  });
   return 0;
 };
 
