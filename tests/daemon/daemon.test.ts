@@ -47,6 +47,11 @@ beforeAll(async () => {
   process.env.CLIPMUNK_FFMPEG ??= ffmpeg;
   root = await mkdtemp(path.join(os.tmpdir(), "clipmunk-daemon-"));
   await writeFile(path.join(root, "package.json"), "{}");
+  // A brand, which a new take must start from.
+  await writeFile(
+    path.join(root, "clipmunk.config.json"),
+    JSON.stringify({ version: 1, brand: { backdrop: "#2B2117", padding: 108, radius: 14 } }),
+  );
   // Stand-ins for MediaRecorder output: VP8 video, and VP8 + Opus for the camera.
   const make = (name: string, args: string[]) =>
     execFileSync(ffmpeg, ["-y", "-loglevel", "error", ...args, path.join(root, name)]);
@@ -208,8 +213,20 @@ describe("recording a take", () => {
     expect(take.data.edit).toMatchObject({
       trim: { startMs: 0, endMs: 2000 },
       zoom: { mode: "auto" },
-      canvas: { width: 1920, height: 1080 },
+      // From the brand: 108 px on a 1080 px short side.
+      canvas: { width: 1920, height: 1080, background: "#2B2117", padding: 0.1, radius: 14 },
     });
+    // Changing the brand afterwards leaves the take as it was recorded.
+    const config = path.join(root, "clipmunk.config.json");
+    await writeFile(config, JSON.stringify({ version: 1, brand: { backdrop: "#ffffff" } }));
+    const reread = await call(`/v1/takes/${id}`);
+    expect(reread.json.data.take.edit.canvas.background).toBe("#2B2117");
+    expect((await call("/v1/config")).json.data).toEqual({
+      config: { version: 1, brand: { backdrop: "#ffffff" } },
+      exists: true,
+    });
+    await writeFile(config, JSON.stringify({ version: 1, brand: { backdrop: "beige" } }));
+    expect((await call("/v1/config")).json.issues[0].path).toBe("clipmunk.config.json: brand.backdrop");
     const log = await readFile(path.join(root, `.clipmunk/takes/${id}/events.jsonl`), "utf8");
     expect(log).not.toContain('"key"');
     expect(existsSync(path.join(root, `.clipmunk/takes/${id}/screen.raw.webm`))).toBe(false);

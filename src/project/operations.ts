@@ -3,6 +3,7 @@ import {
   type Adapter,
   type CatalogScene,
   CLIPMUNK_DIR,
+  CONFIG_FILE,
   fail,
   HANDOFF_FILE,
   handoffDocument,
@@ -15,6 +16,7 @@ import {
   type Result,
   SCENES_DIR,
   type SceneCatalog,
+  STARTER_CONFIG,
   STATE_DIR,
   studioUrl,
 } from "../core";
@@ -171,6 +173,11 @@ export async function initProject(input: { adapter?: Adapter }, context: Context
     const isNext = host.adapter === "next-app" || host.adapter === "next-pages";
 
     await own(HANDOFF_FILE, handoffDocument());
+    // The config belongs to the developer from the start: written once if absent, never owned.
+    if (!(await exists(root, CONFIG_FILE))) {
+      await writeText(root, CONFIG_FILE, `${JSON.stringify(STARTER_CONFIG, null, 2)}\n`);
+      files.push({ path: CONFIG_FILE, status: "created" });
+    }
     await own(`${STATE_DIR}/.gitignore`, templates.STATE_GITIGNORE);
     if (!(await exists(root, SCENES_DIR))) await writeText(root, `${SCENES_DIR}/.gitkeep`, "");
     if (host.adapter !== "vite") {

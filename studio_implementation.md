@@ -20,7 +20,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 |---|---|---|---|
 | 0 | Plan: architecture direction and this file | Plan | ✅ [#17](https://github.com/jaymalve/clipmunk/pull/17) |
 | 1 | Take edits in a sidecar file | Engine | 🔵 [#18](https://github.com/jaymalve/clipmunk/pull/18) |
-| 2 | `clipmunk.config.json` and brand defaults | Engine | ⬜ |
+| 2 | `clipmunk.config.json` and brand defaults | Engine | 🔵 [#19](https://github.com/jaymalve/clipmunk/pull/19) |
 | 3 | Presets: apply and save | Engine | ⬜ |
 | 4 | Event log v2: what was touched | Engine | ⬜ |
 | 5 | Redaction | Engine | ⬜ |
@@ -79,7 +79,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** `clipmunk zoom --write` goes through the same `saveTakeEdit`, so it is covered by the same guarantee; the take suite checks its output in `edit.json`.
 
 ### PR 2 · `clipmunk.config.json` and brand defaults
-**Status:** ⬜ · **Branch:** `studio/02-config` · **Base:** `studio/01-edit-sidecar`
+**Status:** 🔵 [#19](https://github.com/jaymalve/clipmunk/pull/19) · **Branch:** `studio/02-config` · **Base:** `studio/01-edit-sidecar`
 
 **Goal:** one project-wide settings file (section 19.3), read without executing code.
 
@@ -95,10 +95,10 @@ While the engine PRs land, the current in-app Studio keeps working. New features
   ```
   `presets` is filled in by PR 3 and `variants` is used by PR 10; both are only validated here.
 - `project/config.ts`: `readConfig(root)` returns the validated config or issues with paths into the file; a missing file is the empty config.
-- Brand defaults: a new take's edit starts from the brand (backdrop, padding, radius). An existing edit is never changed by editing the config.
+- Brand defaults: a new take's edit starts from the brand (backdrop, padding, radius). An existing edit is never changed by editing the config. `brand.padding` is pixels on the frame's short side, the unit people and the Studio mockup use, and `applyBrand` converts it to the edit's fraction. A config that does not validate is ignored at ingest, so it can never lose a recording.
 - `logo` and `outro` are validated and stored. Rendering them is out of scope until a PR picks them up; record that in this entry's notes if it is still open after PR 9.
-- `clipmunk init` writes a starter config only when none exists. `clipmunk doctor` reports config issues. `GET /v1/config` returns it. The guide documents it.
-- `ARCHITECTURE.md` sections 4, 11.2, 13 and 14 updated.
+- `clipmunk init` writes a starter config only when none exists, and never records it as a generated file. `clipmunk doctor` reports config issues and a missing logo file. `GET /v1/config` returns it. The guide documents it.
+- `ARCHITECTURE.md` sections 4, 5.5b (new), 8.5, 11.2, 13, 14 and 19.3 updated. The example app gets the starter config.
 
 **Tests:** schema tests (good file, unknown key, bad colour, bad selector); daemon route test; init idempotency.
 **Done when:** a new take in a project with a brand starts with that backdrop, padding and radius, and a bad config is reported with the field's path.
@@ -382,6 +382,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 0 opened as #17: plan and architecture direction.
 - 2026-10-25 · PR 0 merged (#17). PR 1 is based on `main`.
 - 2026-10-25 · PR 1 opened as #18: take edits in `edit.json`. For PR 2: brand defaults belong in `defaultEdit` at ingest (`daemon/takes.ts`, `finalizeTake`), because ingest now writes the edit file. Tests that touch the example app restore `.clipmunk/project.json` themselves; re-check `git diff` on it after a run.
+- 2026-10-25 · PR 2 opened as #19, stacked on #18: `clipmunk.config.json` and brand at ingest. For PR 3: `presets` is currently `z.record(slug, z.record(string, unknown))` in `core/config.ts`; give it the real preset schema there. Writing the config must keep the developer's other keys and their order.
 
 ## Environment notes for whoever picks this up
 

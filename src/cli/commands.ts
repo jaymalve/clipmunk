@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import {
   ADAPTERS,
   type Adapter,
+  CONFIG_FILE,
   DAEMON_HASH,
   encodeWav,
   formatGuide,
@@ -18,9 +19,11 @@ import {
 import { listTakes, readTake, readTakeEvents, startDaemon, updateTakeEdit } from "../daemon";
 import { ffmpegVersion, launchBrowser, MISSING_FFMPEG } from "../export";
 import {
+  configWarnings,
   initProject,
   listScenes,
   listSequences,
+  readConfig,
   readProject,
   refreshStateFiles,
   resolveInside,
@@ -267,6 +270,15 @@ async function checks(root: string): Promise<Check[]> {
       : project
         ? { ok: true, detail: `${project.adapter}, dev server ${project.devUrl}` }
         : { ok: false, detail: `${PROJECT_FILE} not found; run npx clipmunk init` };
+  const config = await readConfig(root);
+  const warnings = config.ok ? await configWarnings(root, config.data.config) : [];
+  const problem = config.ok ? warnings[0] : config.issues[0];
+  const settings = problem
+    ? { ok: false, detail: `${problem.path ? `${problem.path}: ` : ""}${problem.message}` }
+    : {
+        ok: true,
+        detail: config.ok && config.data.exists ? `${CONFIG_FILE} is valid` : `no ${CONFIG_FILE} (optional)`,
+      };
   return [
     {
       name: "Node",
@@ -281,6 +293,7 @@ async function checks(root: string): Promise<Check[]> {
     },
     { name: "Chromium", ...browser },
     { name: "Project", ...connection },
+    { name: "Config", ...settings },
   ];
 }
 

@@ -1,6 +1,7 @@
 export * from "./audio";
 export * from "./autozoom";
 export * from "./catalog";
+export * from "./config";
 export * from "./cursor";
 export * from "./export";
 export * from "./guide";

@@ -1,3 +1,4 @@
+export { configWarnings, readConfig } from "./config";
 export { wrapRootRender } from "./entry";
 export {
   type Context,

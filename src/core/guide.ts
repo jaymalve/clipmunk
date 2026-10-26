@@ -1,3 +1,4 @@
+import { CONFIG_FILE, STARTER_CONFIG } from "./config";
 import { EXPORT_FPS } from "./export";
 import { EASINGS, MotionSchema, SceneTrackSchema } from "./motion";
 import { MUSIC_STYLES } from "./music";
@@ -157,6 +158,15 @@ export function getGuide() {
       helpers: `Keep helper modules outside ${SCENES_DIR}; every .tsx there is treated as a scene component.`,
       sync: "Vite discovers new scene files automatically. In Next.js and other hosts run clipmunk sync after adding or removing a scene.",
     },
+    config: {
+      path: CONFIG_FILE,
+      what: "Project-wide settings in one JSON file at the project root, shared through the repository. Every field is optional. Clipmunk reads it and never runs it.",
+      shape:
+        '{ version: 1, brand?: { backdrop?, padding?, radius?, logo?, outro? }, redact?: ["<css selector>"], presets?: { <name>: {...} }, variants?: { themes?: ["light", "dark"], locales?: ["en", "de"] } }. Unknown keys are rejected.',
+      brand:
+        "backdrop is the colour behind a take's recording, padding the space around it in pixels on the frame's short side, radius its corner radius in pixels. A take gets the brand when it is recorded; changing the brand later leaves existing takes as they are. logo and outro are stored for a later version and not drawn yet.",
+      example: STARTER_CONFIG,
+    },
     defaults: {
       frame: { width: 1400, height: 980 },
       camera: DEFAULT_CAMERA,
@@ -193,7 +203,7 @@ export function getGuide() {
       "clipmunk export --sequence <id> [--output file.mp4]": "Render every clip of a sequence and join them.",
       [`clipmunk music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n]`]:
         "Write a WAV sample of the generated music, to hear a style.",
-      "clipmunk doctor": "Check Node, FFmpeg, Chromium and the project connection.",
+      "clipmunk doctor": `Check Node, FFmpeg, Chromium, the project connection and ${CONFIG_FILE}.`,
     },
     sequences: {
       what: "A sequence joins scenes and takes into one video. It is a JSON file a person, the studio or an agent can write.",
@@ -249,6 +259,15 @@ export function formatGuide(guide: Guide = getGuide()): string {
     );
   lines.push("", "## Files");
   for (const [key, value] of Object.entries(guide.files)) lines.push(`- ${key}: ${value}`);
+  lines.push(
+    "",
+    "## Config",
+    `Path: ${guide.config.path}`,
+    guide.config.what,
+    guide.config.shape,
+    guide.config.brand,
+    JSON.stringify(guide.config.example, null, 2),
+  );
   lines.push("", "## Defaults", JSON.stringify(guide.defaults, null, 2), "", "## Tracks");
   for (const track of guide.tracks)
     lines.push(`- target { kind: "${track.target}"${track.needsId ? ", id" : ""} }: ${track.properties.join(", ")}`);

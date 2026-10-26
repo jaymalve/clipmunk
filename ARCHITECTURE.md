@@ -96,6 +96,7 @@ Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Opti
 
 ```
 CLIPMUNK.md                              Agent handoff. Points at `clipmunk guide`.
+clipmunk.config.json                     Project-wide settings: brand, redaction, presets, variants (committed).
 src/clipmunk/Studio.tsx                  Generated adapter. Dev-only wrapper around the host app.
 src/clipmunk/catalog.ts                  Generated scene catalog (Next.js and generic React hosts only).
 src/clipmunk/scenes/<id>.scene.json      Scene recipe (committed).
@@ -247,6 +248,24 @@ type Music = { style: "upbeat" | "lofi"; seed?: number; gain: number; duck: bool
 
 A scene (`recipe.music`), a take (`edit.music`) and a sequence (`music`) can each carry one. Without a `seed`, each clip gets its own tune, derived from its kind and id, and keeps it across exports; a `seed` picks a specific one. `gain` defaults to 0.5, `duck` (default on) lowers the music while a voice is present, and `sync` (default on) lines the music up with the clip's key moments. When a sequence has music, its clips are exported without their own.
 
+### 5.5b Project configuration
+
+```ts
+type Config = {
+  version: 1;
+  brand?: { backdrop?: string; padding?: number; radius?: number; logo?: string; outro?: boolean };
+  redact?: string[];                                   // CSS selectors
+  presets?: Record<string, object>;                    // named partial edits, filled in by section 19's plan
+  variants?: { themes?: string[]; locales?: string[] };
+};
+```
+
+`clipmunk.config.json` at the project root. It is JSON so Clipmunk reads it without running project code, and so the daemon can write it. Every field is optional and a missing file is the empty config. `core/config.ts` holds the schema; `project/config.ts` reads it, and every issue's path names the file and the field (`clipmunk.config.json: brand.backdrop`).
+
+- **Brand.** `backdrop` is a hex or `rgb()`/`hsl()` colour, `padding` is pixels on the frame's short side, and `radius` is pixels. `applyBrand` turns them into the take edit's `canvas` (padding becomes the edit's fraction of the short side, at most 0.4). Ingest applies the brand once, when it writes `edit.json`, so a later change to the brand never alters an existing take. A config that does not validate is ignored at ingest rather than losing a recording; `clipmunk doctor` reports it. `logo` (a path inside the project) and `outro` are validated and stored but not drawn yet.
+- **Redaction selectors** are checked as far as is possible without a browser: balanced brackets, parentheses and quotes, and no `{`, `}` or `;`.
+- **Presets** are objects keyed by a slug; their contents are checked where they are applied. **Variants** name themes by slug and locales by language tag.
+
 ### 5.6 Results and errors
 
 Every operation returns `{ ok: true, data } | { ok: false, issues: { code, path?, message }[] }`. Codes are stable strings (`invalid-scene`, `output-exists`, `missing-ffmpeg`, …). Messages tell the reader how to fix the problem. Operations do not throw for expected failures.
@@ -373,7 +392,7 @@ Take ids read as a timestamp (`take-20261005-142233`), so listings sort by time.
 
 ### 8.5 Ingest (daemon)
 
-Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit (the edit first, so a listed take always has one). `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
+Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit with the project's brand applied (the edit first, so a listed take always has one). `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
 
 ---
 
@@ -471,6 +490,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | Method and path | Purpose |
 |---|---|
 | `GET /v1/status` | Version, project id, capabilities (FFmpeg and Chromium present) |
+| `GET /v1/config` | The validated `clipmunk.config.json` and whether it exists, or its issues |
 | `GET /v1/takes`, `GET /v1/takes/:id` | List and read takes |
 | `POST /v1/takes` | Create a take, returns its id |
 | `PUT /v1/takes/:id/media/:track?seq=n` | Append an uploaded chunk |
@@ -570,7 +590,7 @@ Outputs are project-relative `.mp4` paths. Existing files are never overwritten.
 
 Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`) that finds the single `.render(...)` call and wraps its JSX argument. It declines anything it cannot read with certainty (several render calls, a non-JSX argument, unbalanced text) and `init` then prints the instruction instead. The TypeScript compiler API is not used: TypeScript 7 no longer ships one, and JavaScript hosts have no TypeScript at all. Every `init` step is idempotent, so re-running it completes an interrupted run; there is no journal.
 
-`init` also writes `CLIPMUNK.md` (a short pointer to `clipmunk guide`), `.clipmunk/project.json` and `.clipmunk/.gitignore`.
+`init` also writes `CLIPMUNK.md` (a short pointer to `clipmunk guide`), `.clipmunk/project.json` and `.clipmunk/.gitignore`. When the project has no `clipmunk.config.json` it writes a starter one; that file belongs to the developer from the start, so it is never recorded as generated and never rewritten. `clipmunk dev` keeps the generated `.clipmunk/.gitignore` current in older projects when it is unedited (`refreshStateFiles`).
 
 ### Agent handoff
 
@@ -594,7 +614,7 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | `clipmunk sequences [--json]` | List sequences and their validation issues |
 | `clipmunk music <style> [--seed] [--seconds] [--output]` | Write a WAV sample of the generated music |
 | `clipmunk export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4. A sequence takes its size and frame rate from its file. |
-| `clipmunk doctor` | Check Node, FFmpeg, Chromium and the project connection |
+| `clipmunk doctor` | Check Node, FFmpeg, Chromium, the project connection and `clipmunk.config.json` (including a logo file that is missing) |
 
 Every command accepts `--json` and then prints only the operation result. Human output is a separate formatter over the same result.
 
@@ -688,7 +708,7 @@ A take remains what it is today: screen video plus an event log, edited by compo
 
 ### 19.3 Configuration is JSON
 
-Project-wide settings live in `clipmunk.config.json` at the project root, validated by a schema in `core`: brand (backdrop, padding, corner radius, logo, outro), redaction selectors, presets, and scene variants. It is JSON, not TypeScript, so the daemon still never executes project code, and "Save current as preset" can write the file directly. A preset is a partial edit plus export options, merged over a clip's own edit.
+The file, its schema and the brand are in section 5.5b. Still to come: presets are applied and saved by the daemon, which writes the file directly ("Save current as preset"); the recorder and compositor use the redaction selectors; scene exports use the variants. A preset is a partial edit plus export options, merged over a clip's own edit.
 
 ### 19.4 Edits live beside the recording
 

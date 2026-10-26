@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
-import { deleteSequence, discoverScenes, listSequences, readSequence, writeSequence } from "../project";
+import { deleteSequence, discoverScenes, listSequences, readConfig, readSequence, writeSequence } from "../project";
 import { audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
 import { deny, readBody, readJson, reply, send, serveFile } from "./http";
 import type { Jobs } from "./jobs";
@@ -154,4 +154,20 @@ const jobRoutes: Handler = async ({ request, response, method, id, action, jobs 
   return true;
 };
 
-export const ROUTES: Record<string, Handler> = { status, scenes, audio, sequences, takes, exports, jobs: jobRoutes };
+/** The project's clipmunk.config.json, validated; the empty config when there is none. */
+const config: Handler = async ({ response, method, id, context }) => {
+  if (method !== "GET" || id) return false;
+  const result = await readConfig(context.root);
+  return handled(reply(response, result.ok ? { ok: true, data: result.data } : result));
+};
+
+export const ROUTES: Record<string, Handler> = {
+  status,
+  config,
+  scenes,
+  audio,
+  sequences,
+  takes,
+  exports,
+  jobs: jobRoutes,
+};
