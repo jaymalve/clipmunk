@@ -124,6 +124,14 @@ describe("names and roles", () => {
   });
 });
 
+describe("sources", () => {
+  it("name the file that rendered an element, from the nearest mark", () => {
+    page(`<div data-clipmunk-src="src/Card.tsx"><span><button id="go">Go</button></span></div><p id="bare">x</p>`);
+    expect(identify($("#go"))).toMatchObject({ sel: "#go", src: "src/Card.tsx" });
+    expect(identify($("#bare")).src).toBeUndefined();
+  });
+});
+
 describe("key combinations", () => {
   const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
   it("are a modifier other than Shift plus a key, read from the physical key", () => {

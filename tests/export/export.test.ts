@@ -152,6 +152,14 @@ describe("export jobs", () => {
     expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([500, 300]);
     expect(poster).toMatchObject({ format: "poster", width: 500, height: 300 });
+    // One manifest entry for the job, with every output and the scene's source files.
+    const manifest = JSON.parse(await readFile(path.join(root, ".clipmunk/manifest.json"), "utf8"));
+    const entry = manifest.clips["scene:rack-focus"];
+    expect(entry.outputs).toEqual(names);
+    expect(Object.keys(entry.files)).toEqual(
+      expect.arrayContaining(["src/clipmunk/scenes/rack-focus.scene.json", "src/clipmunk/scenes/rack-focus.tsx"]),
+    );
+    expect(Object.values(entry.files).every((hash) => /^[0-9a-f]{64}$/.test(hash as string))).toBe(true);
 
     // The same job again gets new names beside the first ones.
     const again = await exportJob(

@@ -29,6 +29,8 @@ export const ElementSchema = z.strictObject({
   role: z.string().max(40).optional(),
   name: z.string().max(80).optional(),
   testId: z.string().max(120).optional(),
+  /** The source file that rendered it, from `data-clipmunk-src` (added in development by clipmunk/vite or clipmunk/next). */
+  src: z.string().max(300).optional(),
 });
 export type ElementIdentity = z.output<typeof ElementSchema>;
 

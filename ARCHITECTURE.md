@@ -86,9 +86,11 @@ Browser modules never import Node modules and the reverse. `scripts/check-bounda
 | `clipmunk/core` | Everything in `core` | Any |
 | `clipmunk/studio` | `ClipmunkStudio`, `ScenePreview` | Browser, dev only |
 | `clipmunk/recorder` | `bootRecorder`, `mountRecorderHud`, `createRecorder`, the daemon client | Browser, dev only |
+| `clipmunk/vite` | `clipmunk()`, a Vite plugin that marks host elements with their source file in `vite dev` (12.6) | Node, dev only |
+| `clipmunk/next` | `withClipmunk(config)`, the same for `next dev --webpack`, through `dist/next-loader.cjs` (12.6) | Node, dev only |
 | `clipmunk` binary | CLI | Node |
 
-Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Optional peer: `playwright` (export, snapshots). System prerequisite for saving recordings and for export: FFmpeg. It is looked up as `CLIPMUNK_FFMPEG`, then the `ffmpeg-static` package if the project has it installed, then `ffmpeg` on `PATH`. `clipmunk dev` warns at startup when none is found, and the recorder refuses to start a recording the daemon could not save.
+The plugins carry only `core/source.ts`, not the rest of core. Dependencies: `zod`, `mediabunny`. Peer: `react`, `react-dom` (>=18.2 <20). Optional peer: `playwright` (export, snapshots). System prerequisite for saving recordings and for export: FFmpeg. It is looked up as `CLIPMUNK_FFMPEG`, then the `ffmpeg-static` package if the project has it installed, then `ffmpeg` on `PATH`. `clipmunk dev` warns at startup when none is found, and the recorder refuses to start a recording the daemon could not save.
 
 ---
 
@@ -750,6 +752,14 @@ The CLI runs a job when `--format`, `--ratio` or `--preset` is given; `POST /v1/
 ### 12.5 Snapshots
 
 `clipmunk snapshot --scene <id>` seeks one frame (default the midpoint) at `full` quality, captures a 320-pixel-wide PNG and writes it into the recipe if the recipe has not changed since it was read.
+
+### 12.6 Sources and the export manifest
+
+Every export records which source files the clip was made from, so a later check can say which videos are out of date. `.clipmunk/manifest.json` (committed; `project/manifest.ts`) holds, per clip (`scene:<id>`, `take:<id>`, `sequence:<id>`), `{ files: { path: sha256 }, exportedAt, outputs }`. It is written once per export: by the scene, take or sequence exporter when called on its own, and by a job (12.4a) for all its outputs, while the renders inside a job or a sequence pass `manifest: false`. A manifest that cannot be written never fails the export.
+
+- **Scenes:** the recipe and the import graph of its component (`project/imports.ts`). The scanner removes comments, reads static `import`s (not `import type`), side-effect imports and `export … from` at statement starts, and resolves them like a bundler: relative paths with extensions and index files (and `./x.js` naming `./x.ts`), then `compilerOptions.paths` and `baseUrl` from tsconfig.json or jsconfig.json (JSON with comments, following relative `extends`). Packages and `node_modules` are not followed; styles and other assets are included but not read. It never runs code.
+- **Takes:** the take's `edit.json`, plus the import graph of every file its log names as an element's `src`. In development `clipmunk/vite` (a `serve`-only, `enforce: "post"` plugin) and `clipmunk/next` (a webpack `enforce: "post"` loader, dev only) run `tagSources` (`core/source.ts`) on each compiled project module: every `jsxDEV("tag", {…})`, `jsx`/`jsxs` or `createElement` call for a lowercase host tag gets `"data-clipmunk-src": "<file>"`, so components and production builds are untouched. The recorder's `identify` reads the nearest mark into `el.src`. Next 16's default dev server, Turbopack, is not covered (use `next dev --webpack`); a take recorded without marks has only its edit in the manifest.
+- **Sequences:** the sequence file and its clips' files.
 
 ---
 

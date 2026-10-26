@@ -245,6 +245,8 @@ describe("recorder", () => {
       expect(events[1]).toMatchObject({ k: "route", path: "/" });
       const downs = events.filter((event) => event.k === "down");
       expect(downs[0]).toMatchObject({ el: { role: "button", name: "New report" } });
+      // clipmunk/vite marked the app's elements with the file that rendered them.
+      expect(downs[0]!.k === "down" && downs[0]!.el?.src).toMatch(/^src\/[\w/.-]+\.tsx$/);
       const focusOnSearch = events.find((event) => event.k === "focus" && event.el?.role === "searchbox");
       expect(focusOnSearch).toBeDefined();
       // The shortcut in the search box is logged; the one in the password field is not.

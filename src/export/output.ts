@@ -1,7 +1,7 @@
 import { link, mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { EXPORTS_DIR, type Issue } from "../core";
-import { exists, Fault, resolveInside } from "../project";
+import { type ClipRef, exists, Fault, recordExport, resolveInside } from "../project";
 
 /** The steps every export shares: claim an output path that will not overwrite anything,
  * work in a temporary directory beside it, publish only on success, and stop cleanly when
@@ -74,3 +74,14 @@ export function cancellation(signal: AbortSignal | undefined) {
   };
 }
 export type Cancellation = ReturnType<typeof cancellation>;
+
+/** Record a finished export in `.clipmunk/manifest.json`, unless it is part of a larger export
+ * that records itself. A manifest that cannot be written never fails the export. */
+export async function noteExport(
+  context: { root: string; manifest?: false },
+  clip: ClipRef,
+  outputs: readonly string[],
+): Promise<void> {
+  if (context.manifest === false) return;
+  await recordExport(context.root, clip, outputs).catch(() => {});
+}

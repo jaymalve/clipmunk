@@ -39,8 +39,27 @@ await build({
     emptyOutDir: false,
     minify: false,
     target: "node22",
-    lib: { entry: { cli: "src/cli/main.ts" }, formats: ["es"] },
+    lib: {
+      entry: { cli: "src/cli/main.ts", vite: "src/plugins/vite.ts", next: "src/plugins/next.ts" },
+      formats: ["es"],
+    },
     rollupOptions: { external: [/^node:/, "playwright", "zod"], output: { chunkFileNames: "chunks/[name]-[hash].js" } },
+  },
+});
+// The webpack loader behind clipmunk/next, as CommonJS, which every webpack version loads.
+await build({
+  ...shared,
+  build: {
+    outDir: "dist",
+    emptyOutDir: false,
+    minify: false,
+    target: "node22",
+    lib: {
+      entry: { "next-loader": "src/plugins/next-loader.ts" },
+      formats: ["cjs"],
+      fileName: () => "next-loader.cjs",
+    },
+    rollupOptions: { external: [/^node:/, "zod"], output: { exports: "default" } },
   },
 });
 // The standalone Studio the daemon serves: a static app with its own copy of React.

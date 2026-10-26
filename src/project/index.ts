@@ -1,6 +1,8 @@
 export { addRedactSelector, configWarnings, readConfig } from "./config";
 export { wrapRootRender } from "./entry";
 export { HISTORY_DIR, type HistoryState, historyState, saveTakeEditWithHistory, stepTakeHistory } from "./history";
+export { importGraph, importSpecifiers } from "./imports";
+export { type ClipRef, clipKey, clipSources, hashFiles, readManifest, recordExport } from "./manifest";
 export {
   type Context,
   discoverScenes,

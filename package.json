@@ -27,6 +27,14 @@
       "types": "./dist/types/recorder/index.d.ts",
       "import": "./dist/recorder.js"
     },
+    "./vite": {
+      "types": "./dist/types/plugins/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./next": {
+      "types": "./dist/types/plugins/next.d.ts",
+      "import": "./dist/next.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

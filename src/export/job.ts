@@ -38,7 +38,7 @@ import {
 import { makeGif, posterFrame, probeVideo } from "./ffmpeg";
 import type { ExportContext } from "./operations";
 import { exportScene } from "./operations";
-import { CANCELLED, cancellation, claimOutput, even, publish, removeDirectory } from "./output";
+import { CANCELLED, cancellation, claimOutput, even, noteExport, publish, removeDirectory } from "./output";
 import { exportSequence } from "./sequence";
 import { exportTake } from "./take";
 
@@ -199,6 +199,11 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
       await publish(item.file, claim);
       outputs.push({ output: claim.output, ...item.output });
     }
+    await noteExport(
+      context,
+      job.clip,
+      outputs.map((item) => item.output),
+    );
     return ok({ outputs, elapsedMs: Date.now() - started });
   } catch (error) {
     return fail(cancel.cancelled() ? [CANCELLED] : toIssues(error, "export-failed"));
@@ -218,7 +223,7 @@ async function renderVideo(
   context: ExportContext,
   onProgress: (done: number, total: number) => void,
 ): Promise<Result<{ durationMs: number; fps: number }>> {
-  const inner = { root: context.root, signal: context.signal, onProgress };
+  const inner = { root: context.root, signal: context.signal, onProgress, manifest: false as const };
   if (clip.kind === "sequence") return exportSequence({ sequenceId: clip.id, url: options.url, output }, inner);
   const [width, height] = options.size ? options.size.split("x").map(Number) : [];
   let dimensions: { width?: number; height?: number } = width && height ? { width, height } : {};
