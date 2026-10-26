@@ -2,6 +2,7 @@ import { CanvasSource, getFirstEncodableVideoCodec, Mp4OutputFormat, Output, Str
 import {
   buildTimeMap,
   type Caption,
+  type CropPath,
   type CursorPath,
   captionAt,
   type KeyPill,
@@ -10,6 +11,7 @@ import {
   prepareCursor,
   type RedactionTrack,
   redactionTrack,
+  reframePath,
   resolveCaptions,
   resolveZoomTracks,
   type Span,
@@ -17,6 +19,7 @@ import {
   type TakeEvent,
   type TimeMap,
   type ZoomTrack,
+  type ZoomView,
   zoomAt,
 } from "../core";
 import { type Context2D, drawTake } from "./draw";
@@ -69,8 +72,10 @@ export async function createTakeRenderer(options: {
   let captions: Caption[] = [];
   const pills: KeyPill[] = keyPills(events);
   let timeMap: TimeMap = buildTimeMap(take.edit, events, options.speech);
+  let crop: CropPath | undefined;
   const derive = () => {
     timeMap = buildTimeMap(take.edit, events, options.speech);
+    crop = take.edit.frame ? reframePath(events, take.source, innerAspect(take)) : undefined;
     zoomTracks = resolveZoomTracks(take.edit, events, take.source);
     redaction = redactionTrack(events, take.edit.redact);
     captions = resolveCaptions(take.edit, events);
@@ -90,6 +95,7 @@ export async function createTakeRenderer(options: {
       screen.frameAt((timeMs - take.source.screen.offsetMs) / 1000),
       cam && take.source.cam && take.edit.cam.visible ? cam.frameAt((timeMs - take.source.cam.offsetMs) / 1000) : null,
     ]);
+    const cropWindow = crop?.crops ? { x: crop.at(timeMs), width: crop.width } : undefined;
     const state = cursor.at(timeMs);
     const idle = take.edit.cursor.hideWhenIdleMs;
     const idleFor = timeMs - cursor.lastMoveBefore(timeMs);
@@ -97,7 +103,8 @@ export async function createTakeRenderer(options: {
     drawTake(ctx, width, height, take, {
       screen: screenFrame,
       cam: camFrame,
-      view: zoomAt(zoomTracks, timeMs, take.source),
+      view: cropView(zoomAt(zoomTracks, timeMs, take.source), cropWindow),
+      crop: cropWindow,
       cursor: { ...state, opacity },
       clicks: cursor.clicks.map((click) => ({ x: click.x, y: click.y, ageMs: timeMs - click.t })),
       redact: redaction.empty ? [] : redaction.at(timeMs),
@@ -177,4 +184,18 @@ export async function createTakeRenderer(options: {
       cam?.close();
     },
   };
+}
+
+/** The shape of the canvas inside its padding, which a reframing crop must match. */
+function innerAspect(take: Take): number {
+  const { width, height, padding } = take.edit.canvas;
+  const pad = padding * Math.min(width, height);
+  return Math.max(1, width - 2 * pad) / Math.max(1, height - 2 * pad);
+}
+
+/** The zoom's view kept inside the crop: centred on it when not zoomed, and never showing past its edges. */
+function cropView(view: ZoomView, window: { x: number; width: number } | undefined): ZoomView {
+  if (!window) return view;
+  const half = window.width / (2 * view.scale);
+  return { ...view, x: Math.max(window.x + half, Math.min(window.x + window.width - half, view.x)) };
 }

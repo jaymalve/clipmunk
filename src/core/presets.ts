@@ -2,7 +2,16 @@ import { z } from "zod";
 import { EXPORT_FPS } from "./export";
 import { MusicSchema } from "./music";
 import { fail, ok, type Result, zodIssues } from "./result";
-import { AudioSchema, CamSchema, CanvasSchema, CursorSchema, type TakeEdit, TakeEditSchema, ZoomSchema } from "./take";
+import {
+  AudioSchema,
+  CamSchema,
+  CanvasSchema,
+  CursorSchema,
+  RATIOS,
+  type TakeEdit,
+  TakeEditSchema,
+  ZoomSchema,
+} from "./take";
 
 /** A preset is a named partial edit plus export options, kept in clipmunk.config.json and
  * shared through the repository. Applying one merges it over a clip's own edit: sections
@@ -11,7 +20,6 @@ import { AudioSchema, CamSchema, CanvasSchema, CursorSchema, type TakeEdit, Take
  */
 export const PRESET_FIELDS = ["canvas", "zoom", "cursor", "cam", "audio", "music"] as const;
 export type PresetField = (typeof PRESET_FIELDS)[number];
-export const RATIOS = ["16:9", "9:16", "1:1", "4:5"] as const;
 export const EXPORT_FORMATS = ["mp4", "gif", "poster"] as const;
 
 /** Every field of a section optional, and without its default, so a preset holds only what it sets. */

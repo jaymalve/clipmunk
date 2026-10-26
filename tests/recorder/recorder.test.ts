@@ -5,7 +5,7 @@ import path from "node:path";
 import { type Browser, type BrowserContext, chromium, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { keyPills, resolveCaptions, type Take, type TakeEvent, TakeEventSchema } from "../../src/core";
+import { keyPills, reframePath, resolveCaptions, type Take, type TakeEvent, TakeEventSchema } from "../../src/core";
 import { type Daemon, startDaemon } from "../../src/daemon";
 import { exportTake, probeMedia, probeVideo } from "../../src/export";
 import { colourAt } from "../support/media";
@@ -149,6 +149,14 @@ describe("recorder", () => {
     // Clicking the button, then the search box and typing, is one burst with one caption; typing makes no pill.
     expect(resolveCaptions(take.edit, events).map((caption) => caption.text)).toEqual(["Click New report"]);
     expect(keyPills(events)).toEqual([]);
+    // Reframed to 9:16, the clicked controls are inside the crop while they are pressed.
+    const crop = reframePath(events, take.source, 9 / 16);
+    for (const down of events)
+      if (down.k === "down" && down.rect[2] <= crop.width) {
+        const left = crop.at(down.t);
+        expect(down.rect[0]).toBeGreaterThanOrEqual(left - 1e-6);
+        expect(down.rect[0] + down.rect[2]).toBeLessThanOrEqual(left + crop.width + 1e-6);
+      }
 
     const kinds = new Set(events.map((event) => event.k));
     for (const kind of ["resize", "move", "down", "up", "cursor", "focus", "type"]) expect(kinds, kind).toContain(kind);
