@@ -37,7 +37,6 @@ import {
   readSpeech,
   readText,
   resolveInside,
-  saveTakeEdit,
   saveTakeEditWithHistory,
   takeDir,
   toIssues,

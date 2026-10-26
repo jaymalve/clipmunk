@@ -157,7 +157,7 @@ export function useFrameAgent(enabled: boolean, daemonPort: number | undefined, 
     const receive = (event: MessageEvent) => {
       if (!allowed.current.includes(event.origin) || event.source !== window.parent) return;
       const message = event.data as { cm?: number; type?: string; [key: string]: unknown } | null;
-      if (!message || message.cm !== 1) return;
+      if (message?.cm !== 1) return;
       const controls = latest.current;
       switch (message.type) {
         case "seek":

@@ -34,7 +34,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 13 | Switch over to the standalone Studio | Studio | 🔵 [#30](https://github.com/jaymalve/clipmunk/pull/30) |
 | 14 | Library screen | Studio | 🔵 [#31](https://github.com/jaymalve/clipmunk/pull/31) |
 | 15 | Editor screen: timeline, inspector, undo | Studio | 🔵 [#32](https://github.com/jaymalve/clipmunk/pull/32) |
-| 16 | Presets in the Studio | Studio | ⬜ |
+| 16 | Presets in the Studio | Studio | 🔵 [#33](https://github.com/jaymalve/clipmunk/pull/33) |
 | 17 | `clipmunk mcp` | Agent | ⬜ |
 | 18 | Agent chat | Agent | ⬜ |
 | 19 | Take to scene | Agent | ⬜ |
@@ -302,13 +302,15 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** history covers takes, whose edits are `edit.json`; scenes and sequences are files the developer or agent edits and git already versions. Drawing a box is off while the preview is reframed, because the box is in the recording's own pixels.
 
 ### PR 16 · Presets in the Studio
-**Status:** ⬜ · **Branch:** `studio/16-studio-presets` · **Base:** `studio/15-editor`
+**Status:** 🔵 [#33](https://github.com/jaymalve/clipmunk/pull/33) · **Branch:** `studio/16-studio-presets` · **Base:** `studio/15-editor`
 
-- A preset bar above the preview, with the config's presets and a one-line summary of each. Selecting one previews it at once and applies it to the edit on confirm.
-- "Save current as preset": choose a name and the fields to include, then write to `clipmunk.config.json` (PR 3). A config change from disk updates the bar through `/v1/events`.
+- A preset bar above the take editor's preview (`studio/PresetBar.tsx`), with the config's presets and a one-line summary of each. Selecting one previews it at once (the preview take is the edit with the preset applied, like "Preview as") and applies it to the edit on confirm.
+- "Save current as preset": choose a name and the parts to include, then write to `clipmunk.config.json` through `POST /v1/presets` (PR 3), after saving pending edits. A config change from disk updates the bar through `/v1/events`.
 
-**Tests:** `tests/studio`: save, apply and preview; an external config edit appears without a reload.
+**Tests:** `tests/studio`: save (only the new preset differs, keys keep their order, indentation kept), an external config edit appears without a reload, preview within a second without touching `edit.json`, and apply.
 **Done when:** the spec's check passes: "Save current as preset" writes back to the config with a minimal diff, and switching presets re-renders the preview within a second.
+
+**Notes:** the Studio test suite opened each page by loading the library and navigating away at once; the first page's streams could starve the second page's connection to the daemon, which left it blank now and then. Pages now open in one navigation with the daemon link, as `clipmunk dev`'s link is opened, and a failing test prints what its pages showed.
 
 ---
 
@@ -420,6 +422,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 13 opened as #30, stacked on #29: switch-over. For PR 14: the library is `studio/Library.tsx`, used now only by `studio-app/StudioApp.tsx`; job progress for badges comes from `GET /v1/events` (`job` events), and multi-output exports go through `POST /v1/exports` with `{ clip, formats, ratios, variants }`.
 - 2026-10-25 · PR 14 opened as #31, stacked on #30: the library. For PR 15: listen with `onStudioEvent` (`studio-app/events.ts`), not a new `EventSource`; the take editor is still `studio/TakeEditor.tsx`.
 - 2026-10-25 · PR 15 opened as #32, stacked on #31: the editor. For PR 16: the preset bar sits above the preview in `studio/TakeEditor.tsx`; preview a preset by passing `applyPreset(edit, preset)` as the preview take (like "Preview as"), apply it through `change`, and listen for `config` events with `onStudioEvent`-style handling (the take editor lives in `studio/`, so give it its own `EventSource` or pass a listener in).
+- 2026-10-25 · PR 16 opened as #33, stacked on #32: presets in the Studio. The Studio part is done. For PR 17: the MCP server proxies to the daemon (`daemon.json` gives its port and token); the edit endpoints are `PATCH /v1/takes/:id` (with the revision from `GET`), `POST /v1/takes/:id/preset`, undo and redo, and export jobs on `POST /v1/exports`.
 
 ## Environment notes for whoever picks this up
 

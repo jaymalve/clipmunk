@@ -1,8 +1,10 @@
 import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { layoutTake } from "../compositor";
 import {
+  applyPreset,
   buildTimeMap,
   type Issue,
+  type Preset,
   parseEvents,
   RATIOS,
   type Ratio,
@@ -26,6 +28,7 @@ import { type DaemonState, ExportPanel } from "./daemon";
 import { CaptionInspector, ZoomInspector } from "./Inspector";
 import { IssueList } from "./IssueList";
 import { useMusicPreview } from "./music";
+import { PresetBar } from "./PresetBar";
 import { Rail } from "./Rail";
 import { useClipSession } from "./session";
 import { RedactionControls, TakeControls } from "./TakeControls";
@@ -102,10 +105,17 @@ function Editor(props: {
   const session = useClipSession(clock, durationMs, !!renderer);
   // "Preview as" shows the take reframed to another shape without changing its edit.
   const [previewRatio, setPreviewRatio] = useState<Ratio>();
-  const previewTake = useMemo(
-    () => (previewRatio ? { ...take, edit: withRatio(take.edit, previewRatio) } : take),
-    [take, previewRatio],
-  );
+  // A preset chosen in the bar is previewed at once and becomes the edit only when applied.
+  const [previewPreset, setPreviewPreset] = useState<{ name: string; preset: Preset }>();
+  const previewTake = useMemo(() => {
+    let edit = take.edit;
+    if (previewPreset) {
+      const applied = applyPreset(edit, previewPreset.preset);
+      if (applied.ok) edit = applied.data;
+    }
+    if (previewRatio) edit = withRatio(edit, previewRatio);
+    return edit === take.edit ? take : { ...take, edit };
+  }, [take, previewRatio, previewPreset]);
   usePreview(renderer, previewTake, clock);
   useVoice(audio, take, timeMap, clock, session.playing);
   useTakeBridge(renderer, take, durationMs, clock, session.seek);
@@ -295,6 +305,22 @@ function Editor(props: {
         {exporting && (
           <ExportPanel clip={{ takeId: take.id }} daemon={props.daemon} before={save.flush} frame={edit.canvas} />
         )}
+        <PresetBar
+          client={client}
+          takeId={take.id}
+          previewing={previewPreset?.name}
+          onPreview={(preset, name) => setPreviewPreset(preset && name ? { preset, name } : undefined)}
+          onApply={() => {
+            const chosen = previewPreset;
+            setPreviewPreset(undefined);
+            if (chosen)
+              change((current) => {
+                const applied = applyPreset(current, chosen.preset);
+                return applied.ok ? applied.data : current;
+              });
+          }}
+          beforeSave={save.flush}
+        />
         <div className="stage">
           <canvas
             ref={setCanvas}

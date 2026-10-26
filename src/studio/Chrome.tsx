@@ -43,7 +43,7 @@ a { color: inherit; }
 .take video.cam { width: 220px; border-radius: 10px; border: 1px solid #27272a; }
 .take dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; margin: 0; color: #a1a1aa; } .take dd { margin: 0; color: #e4e4e7; }
 .note { color: #a1a1aa; }
-.editor { font: 13px/1.4 system-ui, sans-serif; color: #e4e4e7; height: 100vh; display: grid; grid-template: auto auto minmax(0, 1fr) auto / 190px minmax(0, 1fr) 300px; background: #000; }
+.editor { font: 13px/1.4 system-ui, sans-serif; color: #e4e4e7; height: 100vh; display: grid; grid-template: auto auto auto minmax(0, 1fr) auto / 190px minmax(0, 1fr) 300px; background: #000; }
 .rail { font: 13px/1.4 system-ui, sans-serif; grid-column: 1; grid-row: 1 / -1; overflow: auto; border-right: 1px solid #18181b; padding: 12px 10px; display: grid; align-content: start; gap: 2px; background: #000; height: 100%; box-sizing: border-box; }
 .rail a { color: #d4d4d8; text-decoration: none; padding: 4px 8px; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .rail a[aria-current="page"] { background: #27272a; color: #fff; } .rail a.home { color: #a1a1aa; margin-bottom: 8px; }
@@ -53,10 +53,10 @@ a { color: inherit; }
 .editor header .title:hover, .editor header .title:focus { border-color: #3f3f46; outline: none; }
 .editor .save { color: #71717a; white-space: nowrap; } .editor .save.bad { color: #fca5a5; white-space: normal; max-width: 40vw; }
 .editor > .command { grid-column: 2 / -1; grid-row: 2; margin: 10px 18px 0; }
-.editor .stage { grid-column: 2; grid-row: 3; min-height: 0; display: grid; place-items: center; padding: 18px; position: relative; }
+.editor .stage { grid-column: 2; grid-row: 4; min-height: 0; display: grid; place-items: center; padding: 18px; position: relative; }
 .editor .stage canvas { max-width: 100%; max-height: 100%; min-height: 0; border-radius: 6px; box-shadow: 0 0 0 1px #27272a; }
 .editor .stage .issues, .editor .stage .note { position: absolute; }
-.editor aside { grid-column: 3; grid-row: 3; overflow: auto; border-left: 1px solid #18181b; padding: 6px 16px 16px; }
+.editor aside { grid-column: 3; grid-row: 3 / span 2; overflow: auto; border-left: 1px solid #18181b; padding: 6px 16px 16px; }
 .editor section { padding: 12px 0; border-bottom: 1px solid #18181b; } .editor section:last-child { border: 0; }
 .editor h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #a1a1aa; }
 .field { display: grid; grid-template-columns: 96px minmax(0, 1fr) 44px; gap: 8px; align-items: center; padding: 4px 0; }
@@ -68,7 +68,7 @@ a { color: inherit; }
 .field.tune { grid-template-columns: 1fr 1fr; } .field.tune button { min-width: 0; }
 .musicbox { font: 13px/1.4 system-ui, sans-serif; color: #e4e4e7; background: rgba(24,24,27,.94); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; max-width: 340px; }
 .sequence .musicbox { max-width: 380px; margin: 0; }
-.editor footer { grid-column: 2 / -1; grid-row: 4; padding: 10px 18px 16px; border-top: 1px solid #18181b; display: grid; gap: 10px; }
+.editor footer { grid-column: 2 / -1; grid-row: 5; padding: 10px 18px 16px; border-top: 1px solid #18181b; display: grid; gap: 10px; }
 .transport { display: flex; gap: 10px; align-items: center; } .transport .spacer { flex: 1; } .transport .hint { margin: 0; }
 .tracks { position: relative; display: grid; gap: 3px; }
 .track { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 4px; align-items: center; }
@@ -85,6 +85,13 @@ a { color: inherit; }
 .tracks .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fafafa; pointer-events: none; }
 .swatches { display: flex; gap: 6px; margin: 2px 0 6px 104px; padding: 0; border: 0; } .swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid #3f3f46; padding: 0; cursor: pointer; }
 .swatch[aria-pressed="true"] { outline: 2px solid #fafafa; outline-offset: 1px; }
+.editor .presets { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 18px 0; position: relative; }
+.editor .presets button { font: inherit; color: #e4e4e7; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 4px 10px; cursor: pointer; display: grid; text-align: left; }
+.editor .presets button span { color: #a1a1aa; font-size: 11px; } .editor .presets button[aria-pressed="true"] { border-color: #a5b4fc; background: #1e1b4b; }
+.editor .presets .apply { background: #4f46e5; border-color: #4f46e5; color: #fff; } .editor .presets .spacer { flex: 1; }
+.editor .save-preset { position: absolute; right: 18px; top: 44px; z-index: 5; width: 320px; background: #111114; border: 1px solid #27272a; border-radius: 12px; padding: 12px 14px; box-shadow: 0 16px 40px rgba(0,0,0,.6); }
+.editor .save-preset input[type=text] { grid-column: 2 / -1; font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 4px 6px; }
+.editor .save-preset .parts { border: 0; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; } .editor .save-preset .bad { color: #fca5a5; }
 .editor .preview-as { display: inline-flex; gap: 6px; align-items: center; color: #a1a1aa; }
 .editor .preview-as select { font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 4px 6px; }
 .editor .saved-to { display: flex; gap: 12px; color: #71717a; font-size: 12px; } .editor .saved-to code { color: #a1a1aa; }
