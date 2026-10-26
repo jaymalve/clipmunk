@@ -121,7 +121,7 @@ export async function savePreset(root: string, input: SavePresetInput): Promise<
 }
 
 /** The indentation a JSON file already uses: a tab, or a number of spaces (2 by default). */
-function indentOf(text: string | undefined): string | number {
+export function indentOf(text: string | undefined): string | number {
   const first = text && /\n([ \t]+)\S/.exec(text)?.[1];
   if (!first) return 2;
   return first.startsWith("\t") ? "\t" : first.length;

@@ -134,9 +134,9 @@ describe("take editor", () => {
     await page.getByLabel("Mode").selectOption("off");
     await expect.poll(() => pixel(...at(160, 90)).then((value) => near(value, QUADRANTS.red))).toBe(true);
     await saved((edit) => edit.zoom, { mode: "off" });
-    expect(await page.locator(".timeline .zoom").count()).toBe(0);
+    expect(await page.locator(".track .segment.zoom").count()).toBe(0);
     await page.getByLabel("Mode").selectOption("auto");
-    await expect.poll(() => page.locator(".timeline .zoom").count()).toBe(1);
+    await expect.poll(() => page.locator(".track .segment.zoom").count()).toBe(1);
     expect(await readFile(recordFile("zz-test-edit"), "utf8")).toBe(record);
   }, 60_000);
 

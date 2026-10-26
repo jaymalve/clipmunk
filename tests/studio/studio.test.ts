@@ -177,6 +177,116 @@ describe("the library", () => {
   }, 180_000);
 });
 
+describe("the editor", () => {
+  const editOf = async () =>
+    JSON.parse(await readFile(path.join(root, ".clipmunk/takes", TAKE, "edit.json"), "utf8")).edit;
+
+  it("inspects a zoom, a backdrop and the overlays, saving each to edit.json, and undoes and redoes", async () => {
+    const page = await openStudio(`?clipmunk=1&clipmunk-take=${TAKE}`);
+    await page.getByText(`Changes are saved to .clipmunk/takes/${TAKE}/edit.json`).waitFor();
+    // The rail lists the other clips.
+    await expect.poll(() => page.getByRole("navigation", { name: "Clips" }).textContent()).toContain("Rack focus");
+
+    await page.getByRole("button", { name: "Zoom 1" }).click();
+    await page.getByRole("heading", { name: "Zoom 1" }).waitFor();
+    const scale = page.getByLabel("Scale");
+    await scale.evaluate((element) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, "3");
+      element.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    });
+    await expect.poll(async () => (await editOf()).zoom.mode, { timeout: 10_000 }).toBe("manual");
+    const peak = (edit: any) =>
+      Math.max(
+        ...edit.zoom.tracks.find((track: any) => track.property === "scale").keyframes.map((frame: any) => frame.value),
+      );
+    expect(peak(await editOf())).toBe(3);
+    await page.getByLabel("Easing").selectOption("linear");
+    await expect
+      .poll(async () => (await editOf()).zoom.tracks[0].keyframes.some((frame: any) => frame.easing === "linear"), {
+        timeout: 10_000,
+      })
+      .toBe(true);
+    await page.getByRole("button", { name: "Done" }).click();
+
+    await page.getByRole("button", { name: "Backdrop #ffffff" }).click();
+    await expect.poll(async () => (await editOf()).canvas.background, { timeout: 10_000 }).toBe("#ffffff");
+    await page.getByLabel("Show shortcuts", { exact: true }).click();
+    await expect.poll(async () => (await editOf()).keys.visible, { timeout: 10_000 }).toBe(false);
+
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(async () => (await editOf()).keys.visible, { timeout: 10_000 }).toBe(true);
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(async () => (await editOf()).canvas.background, { timeout: 10_000 }).not.toBe("#ffffff");
+    await page.getByRole("button", { name: "Redo" }).click();
+    await expect.poll(async () => (await editOf()).canvas.background, { timeout: 10_000 }).toBe("#ffffff");
+    // The page shows what the file holds.
+    expect(await page.getByRole("button", { name: "Backdrop #ffffff" }).getAttribute("aria-pressed")).toBe("true");
+  }, 180_000);
+
+  it("trims by dragging the ends of the take, and previews another shape without changing it", async () => {
+    const page = await openStudio(`?clipmunk=1&clipmunk-take=${TAKE}`);
+    const handle = page.getByLabel("Trim start");
+    await handle.waitFor();
+    const lane = await handle.evaluate((element) => {
+      const box = element.parentElement!.getBoundingClientRect();
+      return { x: box.x, y: box.y + box.height / 2, width: box.width };
+    });
+    const start = await handle.boundingBox();
+    await page.mouse.move(start!.x + start!.width / 2, lane.y);
+    await page.mouse.down();
+    await page.mouse.move(lane.x + lane.width * 0.25, lane.y, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(async () => Math.abs((await editOf()).trim.startMs - 1000), { timeout: 10_000 }).toBeLessThan(60);
+    await page.getByRole("button", { name: "Reset" }).click();
+    await expect.poll(async () => (await editOf()).trim.startMs, { timeout: 10_000 }).toBe(0);
+
+    await page.getByLabel("Preview as").selectOption("9:16");
+    const size = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
+        return `${canvas.width}x${canvas.height}`;
+      });
+    await expect.poll(size).toBe("1080x1920");
+    await page.waitForTimeout(800);
+    expect((await editOf()).frame).toBeUndefined();
+  }, 180_000);
+
+  it("picks an element in a scene to hide in recordings", async () => {
+    const configFile = path.join(root, "clipmunk.config.json");
+    const config = await readFile(configFile, "utf8");
+    try {
+      const page = await openStudio("?clipmunk=1&clipmunk-scene=rack-focus");
+      await expect.poll(() => page.locator(".time").textContent(), { timeout: 120_000 }).toBe("0.00s / 1.50s");
+      await page.getByRole("button", { name: "Pick an element to hide" }).click();
+      await page.frameLocator("iframe").first().locator("table").first().click({ force: true });
+      await page.getByText(/Recordings will hide/).waitFor();
+      const redact = JSON.parse(await readFile(configFile, "utf8")).redact as string[];
+      expect(redact.length).toBe(1);
+      expect(redact[0]).toBeTruthy();
+      // Everything else in the file is as it was.
+      const { redact: _before, ...rest } = JSON.parse(config);
+      const { redact: _after, ...restNow } = JSON.parse(await readFile(configFile, "utf8"));
+      expect(restNow).toEqual(rest);
+    } finally {
+      await writeFile(configFile, config);
+    }
+  }, 180_000);
+
+  it("compares a scene in a second shape, side by side", async () => {
+    const page = await openStudio("?clipmunk=1&clipmunk-scene=themed-card");
+    await expect.poll(() => page.locator(".time").textContent(), { timeout: 120_000 }).toBe("0.00s / 1.00s");
+    await page.getByRole("button", { name: "Compare" }).click();
+    const compared = page.frameLocator("iframe[data-clipmunk-compare]");
+    await expect
+      .poll(() =>
+        compared
+          .locator("body")
+          .evaluate(() => `${(window as any).__CLIPMUNK__?.width}x${(window as any).__CLIPMUNK__?.height}`),
+      )
+      .toBe("300x534");
+  }, 180_000);
+});
+
 describe("the Studio's flows", () => {
   it("lists scenes and takes from the daemon", async () => {
     const page = await openStudio();
@@ -237,7 +347,7 @@ describe("the Studio's flows", () => {
         .locator("body")
         .evaluate(() => `${(window as any).__CLIPMUNK__.width}x${(window as any).__CLIPMUNK__.height}`);
     expect(await frameSize()).toBe("400x300");
-    await page.getByLabel("Variant").selectOption({ label: "dark · 9:16" });
+    await page.getByLabel("Preview as").selectOption({ label: "dark · 9:16" });
     await expect.poll(frameSize).toBe("300x534");
     expect(new URL(page.url()).searchParams.get("clipmunk-variant")).toBe("theme:dark,ratio:9x16");
     await page.close();
@@ -295,7 +405,7 @@ describe("the Studio's flows", () => {
     try {
       const page = await openStudio("?clipmunk=1&clipmunk-scene=rack-focus");
       await expect
-        .poll(() => page.locator(".issues").textContent(), { timeout: 20_000 })
+        .poll(() => page.getByRole("alert").first().textContent(), { timeout: 60_000 })
         .toContain("dev server is not answering at http://127.0.0.1:9");
       await page.close();
     } finally {

@@ -1,5 +1,6 @@
-export { configWarnings, readConfig } from "./config";
+export { addRedactSelector, configWarnings, readConfig } from "./config";
 export { wrapRootRender } from "./entry";
+export { HISTORY_DIR, type HistoryState, historyState, saveTakeEditWithHistory, stepTakeHistory } from "./history";
 export {
   type Context,
   discoverScenes,

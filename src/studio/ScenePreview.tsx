@@ -449,6 +449,7 @@ class SceneBoundary extends Component<
 
 /** Every combination of the config's themes and locales with each ratio, as one select. */
 export function VariantSelect(props: {
+  label?: string;
   value: SceneVariant;
   options: { themes: string[]; locales: string[] };
   onChange: (variant: SceneVariant) => void;
@@ -471,7 +472,7 @@ export function VariantSelect(props: {
   const current = formatVariant(props.value);
   return (
     <select
-      aria-label="Variant"
+      aria-label={props.label ?? "Variant"}
       value={current}
       onChange={(event) => {
         const chosen = choices.find((choice) => choice.text === event.currentTarget.value);

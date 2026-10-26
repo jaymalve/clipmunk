@@ -154,6 +154,7 @@ export const STATE_GITIGNORE = `# Clipmunk: media, caches and local state stay o
 exports/
 audio/
 cache/
+history/
 daemon.json
 takes/*/*
 !takes/*/take.json
