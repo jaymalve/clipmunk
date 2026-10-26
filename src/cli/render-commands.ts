@@ -41,9 +41,10 @@ export const exportClip: Command = async (invocation) => {
   if (size === null) return usage("--size must look like 1920x1080.");
   const url = await devUrl(invocation);
   if (!url) return usage(NO_URL);
-  // Formats, ratios or a preset make it a job with several outputs.
-  if (values.format || values.ratio || values.preset) {
-    if (values.output) return usage("--output names one file; a job with --format, --ratio or --preset names its own.");
+  // Formats, ratios, variants or a preset make it a job with several outputs.
+  if (values.format || values.ratio || values.preset || values.variant) {
+    if (values.output)
+      return usage("--output names one file; a job with --format, --ratio, --variant or --preset names its own.");
     const kind = values.sequence ? "sequence" : values.take ? "take" : "scene";
     const list = (value: string | undefined) =>
       value
@@ -57,6 +58,8 @@ export const exportClip: Command = async (invocation) => {
         formats: list(values.format),
         ratios: list(values.ratio),
         preset: values.preset,
+        // "light,dark" is two variants; "theme:dark,locale:de" is one.
+        variants: values.variant?.includes(":") ? [values.variant] : list(values.variant),
         size: values.size,
         fps: number(values.fps),
         posterAtMs: number(values["poster-at"]),

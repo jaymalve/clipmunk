@@ -6,5 +6,8 @@
     "radius": 16
   },
   "redact": [],
-  "presets": {}
+  "presets": {},
+  "variants": {
+    "themes": ["light", "dark"]
+  }
 }

@@ -1,17 +1,10 @@
 import { z } from "zod";
 import { EXPORT_FORMATS, EXPORT_FPS } from "./export";
 import { MusicSchema } from "./music";
+import { partialOf } from "./partial";
+import { RATIOS } from "./ratio";
 import { fail, ok, type Result, zodIssues } from "./result";
-import {
-  AudioSchema,
-  CamSchema,
-  CanvasSchema,
-  CursorSchema,
-  RATIOS,
-  type TakeEdit,
-  TakeEditSchema,
-  ZoomSchema,
-} from "./take";
+import { AudioSchema, CamSchema, CanvasSchema, CursorSchema, type TakeEdit, TakeEditSchema, ZoomSchema } from "./take";
 
 /** A preset is a named partial edit plus export options, kept in clipmunk.config.json and
  * shared through the repository. Applying one merges it over a clip's own edit: sections
@@ -22,16 +15,6 @@ export const PRESET_FIELDS = ["canvas", "zoom", "cursor", "cam", "audio", "music
 export type PresetField = (typeof PRESET_FIELDS)[number];
 
 /** Every field of a section optional, and without its default, so a preset holds only what it sets. */
-function partialOf<Shape extends z.ZodRawShape>(schema: z.ZodObject<Shape>) {
-  const shape = Object.fromEntries(
-    Object.entries(schema.shape).map(([key, field]) => [
-      key,
-      ((field instanceof z.ZodDefault ? field.unwrap() : field) as z.ZodType).optional(),
-    ]),
-  );
-  return z.strictObject(shape) as unknown as z.ZodType<Partial<z.output<z.ZodObject<Shape>>>>;
-}
-
 export const PresetEditSchema = z.strictObject({
   canvas: partialOf(CanvasSchema).optional(),
   zoom: ZoomSchema.refine(

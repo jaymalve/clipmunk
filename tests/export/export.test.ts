@@ -5,6 +5,7 @@ import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { validateRecipe } from "../../src/core";
 import { exportJob, exportScene, probeVideo, snapshotScene } from "../../src/export";
+import { colourAt, near } from "../support/media";
 
 /** Real exports of the example app: headless Chromium, the capture bridge and FFmpeg end to end. */
 const root = path.resolve("examples/vite-app");
@@ -192,8 +193,8 @@ describe("export jobs", () => {
     expect((await listing()).filter((name) => !before.includes(name))).toEqual([]);
 
     expect(
-      await exportJob({ clip: { kind: "scene", id: "rack-focus" }, url, ratios: ["9:16"] }, { root }),
-    ).toMatchObject({ ok: false, issues: [{ code: "ratios-unsupported" }] });
+      await exportJob({ clip: { kind: "scene", id: "rack-focus" }, url, variants: ["sepia"] }, { root }),
+    ).toMatchObject({ ok: false, issues: [{ code: "unknown-variant" }] });
     expect(await exportJob({ clip: { kind: "scene", id: "rack-focus" }, url, preset: "nope" }, { root })).toMatchObject(
       { ok: false, issues: [{ code: "unknown-preset" }] },
     );
@@ -201,6 +202,45 @@ describe("export jobs", () => {
       await exportJob({ clip: { kind: "scene", id: "rack-focus" }, url, formats: ["webm"] }, { root }),
     ).toMatchObject({ ok: false, issues: [{ code: "invalid-export" }] });
   }, 240_000);
+});
+
+describe("scene variants", () => {
+  it("renders light and dark in two shapes: four files with matching timing", async () => {
+    const result = await exportJob(
+      {
+        clip: { kind: "scene", id: "themed-card" },
+        url,
+        variants: ["light", "dark"],
+        ratios: ["16:9", "9:16"],
+        fps: 30,
+      },
+      { root },
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    for (const item of result.data.outputs) out(item.output);
+    expect(result.data.outputs.map((item) => item.output)).toEqual([
+      ".clipmunk/exports/themed-card.16x9.light.mp4",
+      ".clipmunk/exports/themed-card.16x9.dark.mp4",
+      ".clipmunk/exports/themed-card.9x16.light.mp4",
+      ".clipmunk/exports/themed-card.9x16.dark.mp4",
+    ]);
+    const probes = await Promise.all(result.data.outputs.map((item) => probeVideo(item.output, root)));
+    expect(probes.map((probe) => probe.frames)).toEqual([30, 30, 30, 30]);
+    // 16:9 is not in the recipe, so the 400x300 scene is fitted into a 534x300 frame; 9:16 has its own size.
+    expect(probes.map((probe) => `${probe.width}x${probe.height}`)).toEqual([
+      "534x300",
+      "534x300",
+      "300x534",
+      "300x534",
+    ]);
+    // The host's theme provider got the variant: the page behind the card is light in one and dark in the other.
+    const page = (index: number, crop: string) =>
+      colourAt(path.join(root, result.data.outputs[index]!.output), 0.5, crop);
+    expect(near(page(0, "10:10:90:10"), [244, 244, 245], 12)).toBe(true);
+    expect(near(page(1, "10:10:90:10"), [24, 24, 27], 12)).toBe(true);
+    expect(near(page(2, "10:10:10:10"), [244, 244, 245], 12)).toBe(true);
+    expect(near(page(3, "10:10:10:10"), [24, 24, 27], 12)).toBe(true);
+  }, 300_000);
 });
 
 describe("snapshot", () => {

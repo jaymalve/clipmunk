@@ -287,7 +287,7 @@ type Config = {
 
 - **Brand.** `backdrop` is a hex or `rgb()`/`hsl()` colour, `padding` is pixels on the frame's short side, and `radius` is pixels. `applyBrand` turns them into the take edit's `canvas` (padding becomes the edit's fraction of the short side, at most 0.4). Ingest applies the brand once, when it writes `edit.json`, so a later change to the brand never alters an existing take. A config that does not validate is ignored at ingest rather than losing a recording; `clipmunk doctor` reports it. `logo` (a path inside the project) and `outro` are validated and stored but not drawn yet.
 - **Redaction.** Selectors are checked as far as is possible without a browser: balanced brackets, parentheses and quotes, and no `{`, `}` or `;`. The short form is a list of selectors; the long form adds `mode` (how new takes hide them, `blur` by default) and `live`. `redactionOf` reads either. The recorder logs the selectors' boxes (5.4) and, with `live: true`, also blurs the elements in the page while recording, so they never reach `screen.webm`; that is off by default because the developer then sees their own app blurred. Ingest gives the new take's edit one entry per selector, from the config and from every selector the log has boxes for (`applyRedaction`), so a take recorded with redaction keeps it even if the config cannot be read at ingest. Like the brand, this happens once.
-- **Variants** name themes by slug and locales by language tag.
+- **Variants** name themes by slug and locales by language tag. Scenes are rendered in them (6.5).
 
 **Presets** (`core/presets.ts`) are named partial edits, keyed by a slug:
 
@@ -367,6 +367,17 @@ The depth-varying filter uses two tiny alpha-ramp images (one per axis) blended 
 - The scene root carries `data-clipmunk-valid="true|false"`. The capture bridge rejects `seek` while it is false.
 
 ---
+
+### 6.5 Variants
+
+One scene renders in several themes, locales and shapes. Clipmunk never knows how the host does theming or translation: `useSceneVariant()` (from `clipmunk`) returns `{ theme?, locale?, ratio? }`, and the scene component hands it to the host's own providers, such as `<ThemeProvider theme={variant.theme}>`. `ratio` is absent for the scene's authored shape; a component may read it to lay out differently.
+
+- **Where values come from.** Themes and locales are listed in the config's `variants` (5.5b); ratios are 16:9, 9:16, 1:1 and 4:5.
+- **How they reach the page.** In the scene URL: `clipmunk-variant=theme:dark,locale:de,ratio:9x16` (`parseVariant` and `formatVariant` in `core/variants.ts`, which drop anything malformed). The player reads it, provides it to the scene with `SceneVariantProvider`, and keeps it in the address when the variant select changes it, so the exporter opens exactly what the player shows.
+- **Ratios.** A recipe may give a ratio its own frame size and camera: `definition.variants.ratios["9:16"] = { width, height, camera? }`; the camera fields given override the scene's. A ratio the recipe does not list is fitted: the scene renders at its authored size, centred in a frame of that shape (1080 pixels or the authored short side, whichever is smaller, on the short side). Clipmunk never reflows a scene. `variantFrame` computes both, and the capture bridge reports the variant's frame size.
+- **Export.** `exportScene` takes `variant` and opens the scene with it; an export job (12.4a) renders every combination of its `variants` and `ratios` with the ordinary scene exporter, named `<scene>.<ratio>.<variant>.mp4`. A bare variant in a job (`dark`) must be one of the config's themes or locales; `theme:x` and `locale:x` name one directly.
+
+The example app's `themed-card` scene is the reference: it reads the variant, passes `theme` to the app's own `ThemeProvider`, lays out differently for 9:16, and has a 9:16 entry in its recipe.
 
 ## 7. Capture bridge (`bridge`)
 
@@ -808,7 +819,7 @@ A take remains what it is today: screen video plus an event log, edited by compo
 
 ### 19.3 Configuration is JSON
 
-The file, its schema, the brand, redaction and presets are in section 5.5b. Still to come: exports use presets' export options, and scene exports use the variants.
+The file, its schema, the brand, redaction, presets and variants are in section 5.5b; export jobs use presets' export options (12.4a) and scene variants (6.5).
 
 ### 19.4 Edits live beside the recording
 

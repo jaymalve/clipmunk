@@ -8,16 +8,20 @@ import {
   ExportJobSchema,
   type ExportOutput,
   fail,
+  formatVariant,
   ok,
   parseEvents,
+  parseVariant,
   type Ratio,
   type Result,
   ratioCanvas,
   ratioToken,
+  type SceneVariant,
   sceneMoments,
   TAKES_DIR,
   TakeEventSchema,
   takeMoments,
+  variantToken,
   zodIssues,
 } from "../core";
 import { Fault, loadTake, readConfig, readSpeech, readText, resolveInside, resolveStudio, toIssues } from "../project";
@@ -57,8 +61,8 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
   try {
     // A preset's export options fill in what the job leaves out.
     let options: { size?: string; fps?: number; formats?: ExportFormat[]; ratios?: Ratio[] } = {};
+    const config = await readConfig(root);
     if (job.preset) {
-      const config = await readConfig(root);
       if (!config.ok) return config;
       const preset = config.data.config.presets?.[job.preset];
       if (!preset)
@@ -66,22 +70,26 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
       options = preset.export ?? {};
     }
     const formats = [...new Set(job.formats ?? options.formats ?? ["mp4"])];
-    const ratios = job.ratios ?? (job.clip.kind === "take" ? options.ratios : undefined);
+    const ratios = job.ratios ?? (job.clip.kind !== "sequence" ? options.ratios : undefined);
     const size = job.size ?? options.size;
     const fps = (job.fps ?? options.fps) as 30 | 60 | undefined;
-    if (job.variants)
-      throw new Fault("variants-unsupported", "Variants are not supported for this clip yet.", "variants");
-    if (ratios && job.clip.kind !== "take")
+    if (job.variants && job.clip.kind !== "scene")
       throw new Fault(
-        "ratios-unsupported",
-        `Ratios reframe takes. A ${job.clip.kind} is rendered in its own shape.`,
-        "ratios",
+        "variants-unsupported",
+        `Themes and locales are scene variants. A ${job.clip.kind} has only ratios.`,
+        "variants",
       );
+    if (ratios && job.clip.kind === "sequence")
+      throw new Fault("ratios-unsupported", "A sequence is rendered in its own shape.", "ratios");
+    const configured = config.ok ? config.data.config.variants : undefined;
+    const looks = (job.variants ?? [""]).map((text) => lookOf(text, configured));
 
     await mkdir(await resolveInside(root, EXPORTS_DIR), { recursive: true });
     directory = await mkdtemp(path.join(await resolveInside(root, EXPORTS_DIR), ".clipmunk-job-"));
     const relative = path.relative(root, directory).split(path.sep).join("/");
-    const combos: (Ratio | undefined)[] = ratios ? [...new Set(ratios)] : [undefined];
+    const combos = (ratios ? [...new Set(ratios)] : [undefined]).flatMap((ratio) =>
+      looks.map((look) => ({ ratio, look })),
+    );
     const stepsPer = 1 + formats.filter((format) => format !== "mp4").length;
     const total = combos.length * stepsPer * 100;
     let doneSteps = 0;
@@ -89,12 +97,17 @@ export async function exportJob(input: unknown, context: ExportContext): Promise
       context.onProgress?.(Math.round((doneSteps + Math.min(1, fraction)) * 100), total);
 
     const made: { file: string; stem: string; format: ExportFormat; output: Omit<ExportOutput, "output"> }[] = [];
-    for (const ratio of combos) {
+    for (const { ratio, look } of combos) {
       cancel.check();
-      const stem = ratio ? `${job.clip.id}.${ratioToken(ratio)}` : job.clip.id;
+      const token = variantToken(look);
+      const stem = [job.clip.id, ratio && ratioToken(ratio), token].filter(Boolean).join(".");
       const video = `${relative}/${stem}.mp4`;
-      const rendered = await renderVideo(job.clip, video, { url: job.url, size, fps, ratio }, context, (done, all) =>
-        report(done / Math.max(1, all)),
+      const rendered = await renderVideo(
+        job.clip,
+        video,
+        { url: job.url, size, fps, ratio, look },
+        context,
+        (done, all) => report(done / Math.max(1, all)),
       );
       if (!rendered.ok) return rendered;
       doneSteps++;
@@ -193,7 +206,7 @@ const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 async function renderVideo(
   clip: { kind: "scene" | "take" | "sequence"; id: string },
   output: string,
-  options: { url: string; size?: string; fps?: 30 | 60; ratio?: Ratio },
+  options: { url: string; size?: string; fps?: 30 | 60; ratio?: Ratio; look: SceneVariant },
   context: ExportContext,
   onProgress: (done: number, total: number) => void,
 ): Promise<Result<{ durationMs: number; fps: number }>> {
@@ -218,8 +231,17 @@ async function renderVideo(
       },
       inner,
     );
+  // A scene's ratio is a variant: its own frame size when the recipe has one, otherwise fitted.
+  const variant = formatVariant({ ...options.look, ...(options.ratio ? { ratio: options.ratio } : {}) });
   return exportScene(
-    { sceneId: clip.id, url: options.url, output, ...dimensions, ...(options.fps ? { fps: options.fps } : {}) },
+    {
+      sceneId: clip.id,
+      url: options.url,
+      output,
+      ...dimensions,
+      ...(options.fps ? { fps: options.fps } : {}),
+      ...(variant ? { variant } : {}),
+    },
     inner,
   );
 }
@@ -246,4 +268,21 @@ async function keyMoment(
     return studio.ok && studio.data.scene ? (sceneMoments(studio.data.scene.definition)[0] ?? 0) : 0;
   }
   return 0;
+}
+
+/** A job's variant: "theme:dark,locale:de", or a bare value from the config's themes or locales. */
+function lookOf(text: string, configured: { themes?: string[]; locales?: string[] } | undefined): SceneVariant {
+  if (!text) return {};
+  if (text.includes(":")) {
+    const { ratio: _ratio, ...look } = parseVariant(text);
+    if (!look.theme && !look.locale) throw new Fault("invalid-variant", `"${text}" is not a theme or a locale.`, text);
+    return look;
+  }
+  if (configured?.themes?.includes(text)) return { theme: text };
+  if (configured?.locales?.includes(text)) return { locale: text };
+  throw new Fault(
+    "unknown-variant",
+    `"${text}" is not one of the themes or locales in clipmunk.config.json. Write theme:${text} or locale:${text} to use it anyway.`,
+    text,
+  );
 }

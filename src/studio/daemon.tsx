@@ -44,7 +44,7 @@ type JobState =
 
 /** Export from the studio. With a daemon it runs the render and shows progress; without one it shows the command. */
 /** `clip` is `{ sceneId }` or `{ takeId }`; `before` runs first (the take editor saves pending edits). */
-export type ExportClip = { sceneId: string } | { takeId: string } | { sequenceId: string };
+export type ExportClip = { sceneId: string; variant?: string } | { takeId: string } | { sequenceId: string };
 /** `frame` is the clip's own size; with it the panel offers a choice of output resolution. */
 export function ExportPanel({
   clip,
@@ -64,7 +64,7 @@ export function ExportPanel({
   const size = sizes.find((candidate) => candidate.label === sizeLabel) ?? sizes[0];
   const flag =
     "sceneId" in clip
-      ? `--scene ${clip.sceneId}`
+      ? `--scene ${clip.sceneId}${clip.variant ? ` --variant ${clip.variant}` : ""}`
       : "takeId" in clip
         ? `--take ${clip.takeId}`
         : `--sequence ${clip.sequenceId}`;

@@ -12,15 +12,21 @@ import { flushSync } from "react-dom";
 import { CAPTURE_SELECTOR, installBridge } from "../bridge";
 import {
   type AudioClip,
+  formatVariant,
   type Issue,
   type Music,
   motionDuration,
+  parseVariant,
+  RATIOS,
   type SceneDefinition,
+  type SceneVariant,
   type Sound,
   sceneMoments,
+  VARIANT_PARAM,
   validateDefinition,
+  variantFrame,
 } from "../core";
-import { createClock, Scene } from "../react";
+import { createClock, Scene, SceneVariantProvider } from "../react";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
 import { IssueList } from "./IssueList";
@@ -76,8 +82,34 @@ export function ScenePreview({
   const durationMs = current?.motion ? motionDuration(current.motion) : 0;
   const valid = !!current && result.ok && issues.length === 0 && !failure;
   const session = useClipSession(clock, durationMs, valid);
-  const width = current?.width ?? 1400,
-    height = current?.height ?? 980;
+  // The variant comes from the page address, so the exporter opens the same one.
+  const [variant, setVariant] = useState<SceneVariant>(() =>
+    parseVariant(new URLSearchParams(location.search).get(VARIANT_PARAM)),
+  );
+  const chooseVariant = (next: SceneVariant) => {
+    setVariant(next);
+    const url = new URL(location.href);
+    const text = formatVariant(next);
+    if (text) url.searchParams.set(VARIANT_PARAM, text);
+    else url.searchParams.delete(VARIANT_PARAM);
+    history.replaceState(history.state, "", url);
+  };
+  const frame = current ? variantFrame(current, variant.ratio) : undefined;
+  const width = frame?.width ?? 1400,
+    height = frame?.height ?? 980;
+  const [variantOptions, setVariantOptions] = useState<{ themes: string[]; locales: string[] }>({
+    themes: [],
+    locales: [],
+  });
+  useEffect(() => {
+    if (!daemon?.client) return;
+    void daemon.client
+      .get<{ config: { variants?: { themes?: string[]; locales?: string[] } } }>("/v1/config")
+      .then((result) => {
+        const variants = result.ok ? result.data.config.variants : undefined;
+        setVariantOptions({ themes: variants?.themes ?? [], locales: variants?.locales ?? [] });
+      });
+  }, [daemon?.client]);
   const [exporting, setExporting] = useState(false);
   // The recipe file is the source of truth; this mirrors it until the dev server reloads the module.
   const [music, setMusic] = useState(recipeMusic);
@@ -189,20 +221,34 @@ export function ScenePreview({
               transformOrigin: "0 0",
             }}
           >
-            <SceneBoundary resetKey={definition} onError={setFailure}>
-              <Scene
-                camera={current.scene.camera}
-                focus={current.scene.focus}
-                nodes={current.scene.nodes}
-                motion={current.motion}
-                clock={clock}
-                quality={session.playing ? "preview" : "full"}
-                onDiagnostics={setRenderIssues}
-                style={{ width, height }}
-              >
-                {children}
-              </Scene>
-            </SceneBoundary>
+            <div
+              style={{
+                position: "absolute",
+                left: frame!.scene.left,
+                top: frame!.scene.top,
+                width: frame!.scene.width,
+                height: frame!.scene.height,
+                transform: frame!.scene.scale === 1 ? undefined : `scale(${frame!.scene.scale})`,
+                transformOrigin: "0 0",
+              }}
+            >
+              <SceneBoundary resetKey={definition} onError={setFailure}>
+                <SceneVariantProvider value={variant}>
+                  <Scene
+                    camera={frame!.camera ? { ...current.scene.camera, ...frame!.camera } : current.scene.camera}
+                    focus={current.scene.focus}
+                    nodes={current.scene.nodes}
+                    motion={current.motion}
+                    clock={clock}
+                    quality={session.playing ? "preview" : "full"}
+                    onDiagnostics={setRenderIssues}
+                    style={{ width: frame!.scene.width, height: frame!.scene.height }}
+                  >
+                    {children}
+                  </Scene>
+                </SceneVariantProvider>
+              </SceneBoundary>
+            </div>
           </div>
         )}
       </div>
@@ -216,7 +262,13 @@ export function ScenePreview({
           </IssueList>
         )}
         {!current && issues.length === 0 && <p className="empty">No scene to show.</p>}
-        {exporting && sceneId && <ExportPanel clip={{ sceneId }} daemon={daemon} frame={{ width, height }} />}
+        {exporting && sceneId && (
+          <ExportPanel
+            clip={{ sceneId, ...(formatVariant(variant) ? { variant: formatVariant(variant) } : {}) }}
+            daemon={daemon}
+            frame={{ width, height }}
+          />
+        )}
         {narration.state.phase === "error" && (
           <div className="issues" role="alert">
             {narration.state.message}
@@ -249,6 +301,9 @@ export function ScenePreview({
           narration={narration}
           onMusic={sceneId && daemon?.client && durationMs > 0 ? () => setChoosingMusic((value) => !value) : undefined}
           hasMusic={!!music}
+          variant={variant}
+          variantOptions={variantOptions}
+          onVariant={chooseVariant}
         />
       </Chrome>
     </div>
@@ -268,6 +323,9 @@ function Controls(props: {
   narration?: ReturnType<typeof useNarration>;
   onMusic?: () => void;
   hasMusic?: boolean;
+  variant: SceneVariant;
+  variantOptions: { themes: string[]; locales: string[] };
+  onVariant: (variant: SceneVariant) => void;
 }) {
   const { clock, durationMs, disabled } = props;
   // Only this small component re-renders per frame; the scene itself is updated imperatively.
@@ -323,6 +381,7 @@ function Controls(props: {
           {props.hasMusic ? "Music ♪" : "Music"}
         </button>
       )}
+      <VariantSelect value={props.variant} options={props.variantOptions} onChange={props.onVariant} />
       {props.onExport && (
         <button type="button" onClick={props.onExport} disabled={disabled}>
           Export
@@ -353,4 +412,45 @@ class SceneBoundary extends Component<
   render() {
     return this.state.error ? null : this.props.children;
   }
+}
+
+/** Every combination of the config's themes and locales with each ratio, as one select. */
+function VariantSelect(props: {
+  value: SceneVariant;
+  options: { themes: string[]; locales: string[] };
+  onChange: (variant: SceneVariant) => void;
+}) {
+  const themes = [undefined, ...props.options.themes],
+    locales = [undefined, ...props.options.locales],
+    ratios = [undefined, ...RATIOS];
+  const choices: { text: string; label: string; variant: SceneVariant }[] = [];
+  for (const theme of themes)
+    for (const locale of locales)
+      for (const ratio of ratios) {
+        const variant: SceneVariant = {
+          ...(theme ? { theme } : {}),
+          ...(locale ? { locale } : {}),
+          ...(ratio ? { ratio } : {}),
+        };
+        const label = [theme, locale, ratio].filter(Boolean).join(" · ") || "Default";
+        choices.push({ text: formatVariant(variant), label, variant });
+      }
+  const current = formatVariant(props.value);
+  return (
+    <select
+      aria-label="Variant"
+      value={current}
+      onChange={(event) => {
+        const chosen = choices.find((choice) => choice.text === event.currentTarget.value);
+        if (chosen) props.onChange(chosen.variant);
+      }}
+    >
+      {!choices.some((choice) => choice.text === current) && <option value={current}>{current}</option>}
+      {choices.map((choice) => (
+        <option key={choice.text} value={choice.text}>
+          {choice.label}
+        </option>
+      ))}
+    </select>
+  );
 }

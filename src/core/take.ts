@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { KeyframeSchema } from "./motion";
 import { MusicSchema } from "./music";
+import { RATIOS } from "./ratio";
 import { ClipIdSchema } from "./recipe";
 import { fail, type Issue, ok, type Result, zodIssues } from "./result";
 
@@ -224,10 +225,6 @@ export const PaceSchema = z.strictObject({
   typing: z.strictObject({ on: z.boolean().default(false), speed: finite.min(1).max(8).default(2) }).prefault({}),
 });
 export type Pace = z.output<typeof PaceSchema>;
-
-/** Output shapes a take can be reframed to. */
-export const RATIOS = ["16:9", "9:16", "1:1", "4:5"] as const;
-export type Ratio = (typeof RATIOS)[number];
 
 export const TakeEditSchema = z.strictObject({
   trim: z.strictObject({ startMs: ms, endMs: ms }),
