@@ -3,10 +3,12 @@ import { writeFile } from "node:fs/promises";
 import {
   ADAPTERS,
   type Adapter,
+  type ClipFreshness,
   CONFIG_FILE,
   DAEMON_FILE,
   DAEMON_HASH,
   DaemonFileSchema,
+  describeStale,
   encodeWav,
   formatGuide,
   getGuide,
@@ -27,6 +29,7 @@ import { ffmpegVersion, launchBrowser, MISSING_FFMPEG } from "../export";
 import { clipmunkTools, MCP_INSTRUCTIONS, serveMcp } from "../mcp";
 import {
   applyPresetToTake,
+  clipFreshness,
   configWarnings,
   initProject,
   listPresets,
@@ -206,6 +209,40 @@ export const takes: Command = async ({ context, print }) =>
       : ["  No takes yet. Run clipmunk dev, open its link, then press Alt+Shift+R in your app."];
     return withIssues(lines, data.issues);
   });
+
+/** Exported clips whose sources changed since their export, or since `--base` (for CI). */
+export const stale: Command = async ({ values, context, print }) => {
+  const base = typeof values.base === "string" ? values.base : undefined;
+  let clips: ClipFreshness[];
+  try {
+    clips = await clipFreshness(context.root, base ? { base } : {});
+  } catch (error) {
+    return print({ ok: false, issues: [{ code: "invalid-base", message: (error as Error).message }] }, String);
+  }
+  const outOfDate = clips.filter((clip) => clip.stale);
+  return print(
+    { ok: true, data: { base: base ?? null, summary: describeStale(clips) ?? null, clips: outOfDate } },
+    (data) => {
+      if (!clips.length) return "Nothing exported yet, so nothing can be out of date. Export a clip first.";
+      if (!data.clips.length)
+        return `All ${plural(clips.length, "exported clip")} are up to date${base ? ` with ${base}` : ""}.`;
+      const lines = [data.summary!, ""];
+      for (const clip of data.clips) {
+        lines.push(`  ${clip.clip.kind} ${clip.clip.id}`);
+        for (const change of clip.changes)
+          lines.push(`    ${change.change.padEnd(8)} ${change.file}${change.commit ? ` (${change.commit})` : ""}`);
+      }
+      const takes = data.clips.filter((clip) => clip.clip.kind === "take");
+      lines.push(
+        "",
+        takes.length
+          ? "Re-export the scenes (clipmunk export --scene <id>); takes are recordings, so record them again."
+          : "Re-export them with clipmunk export --scene <id> (or --sequence <id>).",
+      );
+      return lines.join("\n");
+    },
+  );
+};
 
 export const sync: Command = async ({ context, print }) =>
   print(await syncProject(context), (data) => {

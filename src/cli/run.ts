@@ -16,6 +16,7 @@ const HELP = `clipmunk <command> [options]
   guide                                    Print the scene authoring guide
   scenes                                   List scenes and validation issues
   takes                                    List recorded takes
+  stale [--base <git ref>]                 List exported clips whose source files changed since (or since the ref)
   sync                                     Regenerate the scene catalog (Next.js, generic React)
   open [--scene <id>] [--url <origin>]     Open the studio in your browser
   snapshot --scene <id> [--time <ms>]      Save a thumbnail into the recipe
@@ -42,6 +43,7 @@ const COMMANDS: Record<string, Command> = {
   guide: commands.guide,
   scenes: commands.scenes,
   takes: commands.takes,
+  stale: commands.stale,
   sequences: commands.sequences,
   sync: commands.sync,
   open: commands.open,

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
+import { describeStale } from "../core";
 import { exportJob, exportScene, exportSequence, exportTake, ffmpegVersion, previewFrame } from "../export";
 import {
   addRedactSelector,
@@ -20,6 +21,7 @@ import {
 import { applyPresetToScene, audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
 import type { Chat } from "./chat";
 import type { Events, StudioEvent } from "./events";
+import type { Freshness } from "./freshness";
 import { deny, readBody, readJson, reply, send, serveFile } from "./http";
 import type { Jobs } from "./jobs";
 import {
@@ -55,6 +57,7 @@ export type Call = {
   jobs: Jobs;
   events: Events;
   chat: Chat;
+  freshness: Freshness;
   /** The daemon's own address and token, for pages it opens on itself (previews of takes). */
   self: { origin: string; port: number; token: string };
   version: string;
@@ -81,13 +84,30 @@ const status: Handler = async ({ response, method, id, context, version }) => {
   return handled(send(response, 200, { ok: true, data }));
 };
 
-const scenes: Handler = async ({ request, response, url, method, id, action, context, events }) => {
+/** A clip's staleness, for lists: absent until the clip is exported. */
+async function freshnessOf(freshness: Freshness) {
+  const clips = await freshness.clips();
+  return (kind: string, id: string) => {
+    const found = clips.find((clip) => clip.clip.kind === kind && clip.clip.id === id);
+    return found ? { freshness: { stale: found.stale, changes: found.changes, exportedAt: found.exportedAt } } : {};
+  };
+}
+
+/** Every exported clip's staleness, and the sentence the Studio's banner shows. */
+const stale: Handler = async ({ response, method, id, freshness }) => {
+  if (id || method !== "GET") return false;
+  const clips = await freshness.clips();
+  return handled(send(response, 200, { ok: true, data: { clips, summary: describeStale(clips) ?? null } }));
+};
+
+const scenes: Handler = async ({ request, response, url, method, id, action, context, events, freshness }) => {
   if (!id && method === "GET") {
     const catalog = await discoverScenes(context);
+    const of = await freshnessOf(freshness);
     // ?detail=1 adds what the Studio shows: the definition, its snapshot, music and sound.
     const list = url.searchParams.has("detail")
-      ? catalog.scenes
-      : catalog.scenes.map(({ id, title, description }) => ({ id, title, description }));
+      ? catalog.scenes.map((scene) => ({ ...scene, ...of("scene", scene.id) }))
+      : catalog.scenes.map(({ id, title, description }) => ({ id, title, description, ...of("scene", id) }));
     return handled(send(response, 200, { ok: true, data: { scenes: list, issues: catalog.issues } }));
   }
   if (!id) return false;
@@ -129,9 +149,27 @@ const sequences: Handler = async ({ request, response, method, id, context, even
   return false;
 };
 
-const takes: Handler = async ({ request, response, url, method, id, action, name, context, log, events }) => {
+const takes: Handler = async ({
+  request,
+  response,
+  url,
+  method,
+  id,
+  action,
+  name,
+  context,
+  log,
+  events,
+  freshness,
+}) => {
   if (!id) {
-    if (method === "GET") return handled(reply(response, await listTakes(context)));
+    if (method === "GET") {
+      const listed = await listTakes(context);
+      if (!listed.ok) return handled(reply(response, listed));
+      const of = await freshnessOf(freshness);
+      const list = listed.data.takes.map((take) => ({ ...take, ...of("take", take.id) }));
+      return handled(reply(response, { ...listed, data: { ...listed.data, takes: list } }));
+    }
     if (method === "POST") return handled(reply(response, await createTake(await readJson(request), context), true));
     return false;
   }
@@ -360,4 +398,5 @@ export const ROUTES: Record<string, Handler> = {
   exports,
   jobs: jobRoutes,
   chat: chatRoutes,
+  stale,
 };

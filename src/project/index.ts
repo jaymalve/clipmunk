@@ -27,4 +27,5 @@ export {
 export { deleteSequence, listSequences, readSequence, writeSequence } from "./sequences";
 export { exists, Fault, listFiles, readText, resolveInside, sha256, toIssues, writeText } from "./services";
 export { readSpeech, readWav, SPEECH_FILE } from "./speech";
+export { clipFreshness, type FreshnessOptions } from "./stale";
 export { loadTake, saveTakeEdit, takeDir } from "./takes";

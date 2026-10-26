@@ -39,7 +39,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 18 | Agent chat | Agent | 🔵 [#35](https://github.com/jaymalve/clipmunk/pull/35) |
 | 19 | Take to scene | Agent | 🔵 [#36](https://github.com/jaymalve/clipmunk/pull/36) |
 | 20 | Source map and export manifest | Freshness | 🔵 [#37](https://github.com/jaymalve/clipmunk/pull/37) |
-| 21 | Stale detection | Freshness | ⬜ |
+| 21 | Stale detection | Freshness | 🔵 [#38](https://github.com/jaymalve/clipmunk/pull/38) |
 | 22 | GitHub Action and posting to a PR | Freshness | ⬜ |
 
 Why this order: the engine pieces come first and need no new UI, so the CLI and agents can use them at once and the new Studio is built once, with them already in place. The Studio comes before the agent work because chat lives in it. Freshness comes last because it builds on exports, variants and the manifest.
@@ -376,7 +376,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** the tagger works on compiled modules (`jsxDEV("div", {` and friends), so it needs no parser and one function serves Vite, webpack and every JSX compiler; it is `core/source.ts`, which the plugins import alone (each bundle is under 3 KB). Next 16 dev defaults to Turbopack, where webpack loaders do not see compiled code, so `clipmunk/next` tags only with `next dev --webpack`; it also sets an empty `turbopack` key so Next 16 does not refuse a config with a webpack hook. The installed check covers the Vite plugin in dev, both production builds (no `data-clipmunk`), and the manifest of the installed CLI's export; the example app uses the plugin, and the recorder test sees `el.src`. Takes record their `edit.json` and the import graphs of their elements' files; sequences their file and clips. Tests restore the example's manifest in the Vitest global setup. `init` says how to add the plugin.
 
 ### PR 21 · Stale detection
-**Status:** ⬜ · **Branch:** `studio/21-stale` · **Base:** `studio/20-manifest`
+**Status:** 🔵 [#38](https://github.com/jaymalve/clipmunk/pull/38) · **Branch:** `studio/21-stale` · **Base:** `studio/20-manifest`
 
 - `core` and `project`: a clip is stale when a manifest file's current hash differs, or the file is gone. `clipmunk stale [--base <git ref>] [--json]` lists stale clips and the changed files. With `--base`, it compares against that ref's files through `git show`, so CI can ask what a PR changed.
 - Daemon: staleness in `GET /v1/scenes` and `GET /v1/takes`, and an event when it changes, by watching manifest-listed files.
@@ -385,6 +385,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 
 **Tests:** editing `PlanCards` in the example app marks the plans scene stale and nothing else; re-export clears it.
 **Done when:** the spec's check passes for scenes, and stale takes are flagged.
+**Notes:** the example app has no `PlanCards` file; its `PlanCard` lives in `components/theme.tsx`, which only the `themed-card` scene imports, so the Studio test edits that file, sees the banner, the badge and `freshness` on `GET /v1/scenes` for that scene alone, presses Re-export and sees it clear. `compareSources`, `sourceLabel` and `describeStale` are in `core/manifest.ts`; `clipFreshness` (`project/stale.ts`) adds `--base` through `git show <ref>:./<file>` and the last commit per changed file (none for an uncommitted change). The daemon polls stats once a second (`daemon/freshness.ts`) rather than watching, and serves `GET /v1/stale` for the banner. "Record again" opens the app at `/?clipmunk-record=1` with the daemon link, which opens the recorder. The scanner does not yet notice a new import added to a file (that file's own hash changes, so the clip is stale anyway).
 
 ### PR 22 · GitHub Action and posting to a PR
 **Status:** ⬜ · **Branch:** `studio/22-action` · **Base:** `studio/21-stale`
@@ -432,6 +433,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 18 opened as #35, stacked on #34: the agent chat. For PR 19: "Make a scene from this take" can post through `POST /v1/chat` with a clip chip; new MCP tools go in `clipmunkTools`, and `formatChatMessage` is where chips become text for the agent.
 - 2026-10-25 · PR 19 opened as #36, stacked on #35: take to scene. For PR 20: scenes' sources come from scanning imports (`project/entry.ts` has the scanner style to follow); exports go through `export/job.ts`, which is where the manifest should be written once per job.
 - 2026-10-25 · PR 20 opened as #37, stacked on #36: sources and the manifest. For PR 21: `readManifest`, `clipSources` and `hashFiles` (project/manifest.ts) give what was recorded and what is there now; a clip is stale when any hash differs, a file is gone, or `clipSources` now names a file the entry lacks.
+- 2026-10-25 · PR 21 opened as #38, stacked on #37: stale detection. For PR 22: `clipmunk stale --base <ref> --json` gives `{ summary, clips: [{ clip, changes: [{ file, change, commit }], outputs }] }`; the comment can start from `describeStale`, re-export stale scenes and sequences with `clipmunk export --scene <id> --format …` from the outputs' extensions, and list stale takes to record again.
 
 ## Environment notes for whoever picks this up
 
