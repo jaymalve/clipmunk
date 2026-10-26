@@ -1,4 +1,4 @@
-import type { Result, Take, TakeTrack } from "../core";
+import { type Result, redactionOf, type Take, type TakeTrack } from "../core";
 import type { DaemonClient, DaemonStatus } from "./daemon";
 import { createEventLog } from "./events";
 
@@ -73,9 +73,19 @@ function preparePage() {
   const hideCursor = document.createElement("style");
   hideCursor.setAttribute("data-clipmunk-recorder", "cursor");
   hideCursor.textContent = "body, body * { cursor: none !important; }";
+  const mask = document.createElement("style");
+  mask.setAttribute("data-clipmunk-recorder", "redact");
   return {
     background,
     hideCursor: () => document.head.append(hideCursor),
+    /** Blur these elements in the page itself, so they never reach the screen video. One rule per
+     * selector: a selector the browser cannot parse drops only its own rule.
+     */
+    mask(selectors: readonly string[]) {
+      if (!selectors.length) return;
+      mask.textContent = selectors.map((selector) => `${selector} { filter: blur(12px) !important; }`).join("\n");
+      document.head.append(mask);
+    },
     /** Repaint on every frame for `ms` milliseconds. */
     pulse(ms: number) {
       const until = performance.now() + ms;
@@ -98,6 +108,7 @@ function preparePage() {
     restore() {
       shim.remove();
       hideCursor.remove();
+      mask.remove();
       body.style.isolation = previousIsolation;
     },
   };
@@ -171,11 +182,13 @@ async function measureLatency(stream: MediaStream): Promise<number> {
 type Note = (text: string) => void;
 type Page = ReturnType<typeof preparePage>;
 
-/** The project's redaction selectors. A config the daemon cannot read means none, noted in the take's log. */
-async function redactionSelectors(client: DaemonClient): Promise<{ selectors: string[]; problem?: string }> {
-  const config = await client.get<{ config: { redact?: string[] } }>("/v1/config");
-  if (config.ok) return { selectors: config.data.config.redact ?? [] };
-  return { selectors: [], problem: config.issues[0]?.message };
+/** The project's redaction settings. A config the daemon cannot read means none, noted in the take's log. */
+async function redactionSettings(
+  client: DaemonClient,
+): Promise<{ selectors: string[]; live: boolean; problem?: string }> {
+  const config = await client.get<{ config: Parameters<typeof redactionOf>[0] }>("/v1/config");
+  if (config.ok) return redactionOf(config.data.config);
+  return { selectors: [], live: false, problem: config.issues[0]?.message };
 }
 
 /** Saving needs the daemon and FFmpeg on its side. Find out before recording, not after. */
@@ -443,7 +456,7 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
     step("Checking the daemon…");
     const problem = await daemonProblem(client);
     if (problem) return set({ phase: "error", message: problem });
-    const redact = await redactionSelectors(client);
+    const redact = await redactionSettings(client);
     const streams: MediaStream[] = [];
     let page: Page | undefined;
     const cleanup = () => {
@@ -463,6 +476,7 @@ export function createRecorder(client: DaemonClient, ignore: (event: Event) => b
       const latencyMs = await measureLatency(display);
       const { takeId, note } = await openTake(client, page.background, options, latencyMs);
       if (redact.problem) note(`config not read, recording without redaction: ${redact.problem}`);
+      if (redact.live) page.mask(redact.selectors);
       // Recording on with nowhere to put it would only lose more; a fault stops the take and says why.
       const onFault = () => void stopActive?.();
       const capture = beginCapture({

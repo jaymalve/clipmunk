@@ -195,6 +195,8 @@ type Take = {
     cursor: { visible: boolean; size: number; smoothing: number; clickEffect: "ripple" | "none"; hideWhenIdleMs?: number };
     cam:    { visible: boolean; shape: "circle" | "rounded"; corner: "tl" | "tr" | "bl" | "br"; size: number; mirror: boolean; tracks?: Track[] };
     audio:  { muted: boolean; gain: number; normalize: boolean };
+    redact: ({ sel: string; mode: "blur" | "block" }                                  // follows the log's redact boxes
+           | { rect: [x, y, w, h]; fromMs: number; toMs: number; mode: "blur" | "block" })[];  // a hand-drawn box
   };
 };
 ```
@@ -270,7 +272,8 @@ A scene (`recipe.music`), a take (`edit.music`) and a sequence (`music`) can eac
 type Config = {
   version: 1;
   brand?: { backdrop?: string; padding?: number; radius?: number; logo?: string; outro?: boolean };
-  redact?: string[];                                   // CSS selectors
+  redact?: string[]                                    // CSS selectors, or:
+         | { selectors: string[]; mode?: "blur" | "block"; live?: boolean };
   presets?: Record<string, Preset>;                    // named partial edits, below
   variants?: { themes?: string[]; locales?: string[] };
 };
@@ -279,7 +282,7 @@ type Config = {
 `clipmunk.config.json` at the project root. It is JSON so Clipmunk reads it without running project code, and so the daemon can write it. Every field is optional and a missing file is the empty config. `core/config.ts` holds the schema; `project/config.ts` reads it, and every issue's path names the file and the field (`clipmunk.config.json: brand.backdrop`).
 
 - **Brand.** `backdrop` is a hex or `rgb()`/`hsl()` colour, `padding` is pixels on the frame's short side, and `radius` is pixels. `applyBrand` turns them into the take edit's `canvas` (padding becomes the edit's fraction of the short side, at most 0.4). Ingest applies the brand once, when it writes `edit.json`, so a later change to the brand never alters an existing take. A config that does not validate is ignored at ingest rather than losing a recording; `clipmunk doctor` reports it. `logo` (a path inside the project) and `outro` are validated and stored but not drawn yet.
-- **Redaction selectors** are checked as far as is possible without a browser: balanced brackets, parentheses and quotes, and no `{`, `}` or `;`.
+- **Redaction.** Selectors are checked as far as is possible without a browser: balanced brackets, parentheses and quotes, and no `{`, `}` or `;`. The short form is a list of selectors; the long form adds `mode` (how new takes hide them, `blur` by default) and `live`. `redactionOf` reads either. The recorder logs the selectors' boxes (5.4) and, with `live: true`, also blurs the elements in the page while recording, so they never reach `screen.webm`; that is off by default because the developer then sees their own app blurred. Ingest gives the new take's edit one entry per selector, from the config and from every selector the log has boxes for (`applyRedaction`), so a take recorded with redaction keeps it even if the config cannot be read at ingest. Like the brand, this happens once.
 - **Variants** name themes by slug and locales by language tag.
 
 **Presets** (`core/presets.ts`) are named partial edits, keyed by a slug:
@@ -396,6 +399,7 @@ Runs in the developer's own tab, in Chromium. Verified in spikes on Chromium 153
 4. **Cursor.** Chrome draws the native cursor into tab capture and has no capture option to turn it off. The recorder applies `cursor: none !important` to everything in `body` while recording, and the HUD draws a stand-in cursor on `<html>` so the developer can still see where they point. The recording is cursor-free.
 5. **Camera and microphone.** One `getUserMedia` stream recorded by one `MediaRecorder`, so picture and voice stay in sync. If the camera is off, the microphone is recorded alone.
 6. **Events.** Listeners on `window` in the capture phase write the event log (5.4). Events that originate in the HUD are skipped. To log the cursor shape an element asks for, the recorder switches its own `cursor: none` rule off for the instant of the style read; nothing is painted in between.
+7. **Live redaction.** With `redact.live` in the config (5.5b), a style sheet blurs the redaction selectors' elements while recording, one rule per selector so a selector the browser cannot parse drops only its own rule. Their boxes are logged either way, so the export hides them as well.
 
 ### 8.2 Clocks
 
@@ -424,7 +428,7 @@ Take ids read as a timestamp (`take-20261005-142233`), so listings sort by time.
 
 ### 8.5 Ingest (daemon)
 
-Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit with the project's brand applied (the edit first, so a listed take always has one). `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
+Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c copy` to remux each file (fast, lossless), probes dimensions, extracts the voice track to 48 kHz mono WAV (`audio.wav`, from the camera file when it carries audio, otherwise from the microphone file), rewrites `events.jsonl` keeping only lines that match the event schema, and writes `take.json` and an `edit.json` holding the default edit with the project's brand and redaction applied (the edit first, so a listed take always has one). `source.durationMs` is the recorder's own clock, not the container's, because a static page produces no frames near the end. Tab capture has a variable frame rate by nature (it emits frames only when the page repaints); the compositor looks frames up by time, so no re-encode is needed.
 
 ---
 
@@ -440,9 +444,10 @@ Raw `MediaRecorder` files have no duration or seek index. Ingest runs `ffmpeg -c
 
 1. Canvas background (`edit.canvas.background`).
 2. The screen frame over `source.background`, inset by `padding`, with rounded corners and a shadow, moved by the zoom at that time.
-3. Click ripples, in screen space.
-4. The synthetic cursor, in screen space, so it grows with the zoom. Arrow, hand and text-beam shapes are vector paths.
-5. The camera bubble, in canvas space: a circle or rounded square in a chosen corner, cover-cropped and optionally mirrored.
+3. Redacted areas (9.6), drawn on the screen frame so they move and zoom with it.
+4. Click ripples, in screen space.
+5. The synthetic cursor, in screen space, so it grows with the zoom. Arrow, hand and text-beam shapes are vector paths.
+6. The camera bubble, in canvas space: a circle or rounded square in a chosen corner, cover-cropped and optionally mirrored.
 
 Pixel-valued settings (corner radius, cursor size, margins) are authored against the edit's canvas size and scaled for any other output size, so a half-size export looks the same.
 
@@ -465,6 +470,16 @@ The view is clamped so it never shows anything outside the recording; a property
 ### 9.5 Audio
 
 The preview plays the extracted voice track alongside the clock. Export never handles audio in the page: FFmpeg receives the voice file with its offset, the trim, the gain and the loudness flag, and writes AAC into the final MP4.
+
+### 9.6 Redaction
+
+`redactionTrack(events, edit.redact)` in `core/redact.ts` is pure: it gives the boxes to hide at any time, in source CSS pixels.
+
+- **Selector entries** follow the log's `redact` events. Each event carries every box of its selector and holds until the next one; an empty list means the element is gone.
+- **No frame shows it.** The picture and the log can disagree by a frame or two, so around every change both the old and the new boxes are covered for 150 ms either side (which also covers the time before the first event), and every logged box is grown by 4 px on each side.
+- **Box entries** are drawn exactly as given, from `fromMs` until `toMs`, for anything a selector does not cover. The Studio will draw them by hand; for now they are written in `edit.json`.
+
+`drawTake` hides each box on the screen frame, under the cursor. `block` fills it with a solid colour. `blur` redraws the part of the recording the blur reaches, clipped to the box, with a Gaussian blur of a quarter of the box's short side and at least 6 source pixels, so text of any size in the box is unreadable. Every export path draws through `drawTake`, so MP4 has it now and GIF and poster will too. The take editor lists the entries, each with blur or block.
 
 ## 10. Studio (`studio`)
 
@@ -743,7 +758,7 @@ A take remains what it is today: screen video plus an event log, edited by compo
 
 ### 19.3 Configuration is JSON
 
-The file, its schema, the brand and presets are in section 5.5b. Still to come: the recorder and compositor use the redaction selectors, exports use presets' export options, and scene exports use the variants.
+The file, its schema, the brand, redaction and presets are in section 5.5b. Still to come: exports use presets' export options, and scene exports use the variants.
 
 ### 19.4 Edits live beside the recording
 

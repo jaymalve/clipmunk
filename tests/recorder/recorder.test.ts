@@ -102,7 +102,9 @@ describe("recorder", () => {
   it("records the tab without the HUD or cursor and logs interactions without their content", async () => {
     const button = page.getByRole("button", { name: "New report" });
     const box = (await button.boundingBox())!;
+    let recordedFor = 0;
     const { take, events, dir } = await record({ camera: false, microphone: false }, async () => {
+      const started = Date.now();
       // The page is prepared for capture only while recording.
       expect(
         await page.evaluate(() => [
@@ -118,6 +120,7 @@ describe("recorder", () => {
       await page.getByRole("searchbox").click();
       await page.keyboard.type("secret", { delay: 40 });
       await page.waitForTimeout(600);
+      recordedFor = Date.now() - started;
     });
 
     expect(
@@ -139,7 +142,8 @@ describe("recorder", () => {
     expect(Math.abs(take.source.screen.height - viewport.height)).toBeLessThanOrEqual(2);
     expect(take.source.cam).toBeUndefined();
     expect(take.source.audio).toBeUndefined();
-    expect(take.source.durationMs).toBeGreaterThan(1500);
+    // At least as long as the steps above took: the take runs from Record to Stop.
+    expect(take.source.durationMs).toBeGreaterThan(recordedFor);
     expect(take.source.screen.latencyMs).toBeLessThan(1000);
     expect(take.edit.trim).toEqual({ startMs: 0, endMs: take.source.durationMs });
 
@@ -164,6 +168,39 @@ describe("recorder", () => {
     );
     expect(Math.min(...bar)).toBeGreaterThan(200);
     expect(existsSync(path.join(dir, "screen.raw.webm"))).toBe(false);
+  }, 120_000);
+
+  it("blurs redacted elements in the page while recording when the config asks, and gives the take their entries", async () => {
+    const configFile = path.join(root, "clipmunk.config.json");
+    const config = await readFile(configFile, "utf8");
+    await writeFile(
+      configFile,
+      JSON.stringify({ ...JSON.parse(config), redact: { selectors: [".zz-live"], mode: "block", live: true } }),
+    );
+    try {
+      await page.evaluate(() => {
+        const box = document.createElement("div");
+        box.id = "zz-live-fixture";
+        box.className = "zz-live";
+        box.textContent = "Card 4242 4242";
+        box.style.cssText = "position:fixed;left:40px;top:200px;z-index:5;background:#fff;padding:8px";
+        document.body.append(box);
+      });
+      const filter = () => page.evaluate(() => getComputedStyle(document.getElementById("zz-live-fixture")!).filter);
+      expect(await filter()).toBe("none");
+      let during = "";
+      const { take, events } = await record({ camera: false, microphone: false }, async () => {
+        during = await filter();
+        await page.waitForTimeout(300);
+      });
+      expect(during).toBe("blur(12px)");
+      expect(await filter()).toBe("none"); // the page is itself again once the recording stops
+      expect(events.some((event) => event.k === "redact" && event.sel === ".zz-live")).toBe(true);
+      expect(take.edit.redact).toEqual([{ sel: ".zz-live", mode: "block" }]);
+    } finally {
+      await writeFile(configFile, config);
+      await page.evaluate(() => document.getElementById("zz-live-fixture")?.remove());
+    }
   }, 120_000);
 
   it("logs which control was used, the route, shortcuts and redacted boxes, and nothing typed", async () => {

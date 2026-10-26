@@ -2,6 +2,7 @@ import { appendFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   applyBrand,
+  applyRedaction,
   CreateTakeSchema,
   defaultEdit,
   EDIT_FILE,
@@ -209,11 +210,19 @@ export async function finalizeTake(id: string, input: unknown, context: Context)
         events: { file: "events.jsonl", count: events.length },
       },
     });
-    // The brand applies once, here; a later change to the config leaves this take as it is.
-    // A broken config must not lose a recording, so it is ignored (clipmunk doctor reports it).
+    // The brand and redaction apply once, here; a later change to the config leaves this take as
+    // it is. A broken config must not lose a recording, so it is ignored (clipmunk doctor reports
+    // it), and the selectors the recording logged boxes for are hidden either way.
     const config = await readConfig(root);
-    const brand = config.ok ? config.data.config.brand : undefined;
-    const edit: TakeEditFile = { version: 1, edit: applyBrand(defaultEdit(durationMs), brand) };
+    const settings = config.ok ? config.data.config : undefined;
+    const logged = events.flatMap((line) => {
+      const event = TakeEventSchema.parse(JSON.parse(line));
+      return event.k === "redact" ? [event.sel] : [];
+    });
+    const edit: TakeEditFile = {
+      version: 1,
+      edit: applyRedaction(applyBrand(defaultEdit(durationMs), settings?.brand), settings, logged),
+    };
     // The edit first: a take is listed once take.json exists, and must then have its edit.
     await writeText(root, `${dir}/${EDIT_FILE}`, `${JSON.stringify(edit, null, 2)}\n`);
     await writeText(root, `${dir}/${TAKE_FILE}`, `${JSON.stringify(take, null, 2)}\n`);

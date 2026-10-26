@@ -47,10 +47,14 @@ beforeAll(async () => {
   process.env.CLIPMUNK_FFMPEG ??= ffmpeg;
   root = await mkdtemp(path.join(os.tmpdir(), "clipmunk-daemon-"));
   await writeFile(path.join(root, "package.json"), "{}");
-  // A brand, which a new take must start from.
+  // A brand and redaction, which a new take must start from.
   await writeFile(
     path.join(root, "clipmunk.config.json"),
-    JSON.stringify({ version: 1, brand: { backdrop: "#2B2117", padding: 108, radius: 14 } }),
+    JSON.stringify({
+      version: 1,
+      brand: { backdrop: "#2B2117", padding: 108, radius: 14 },
+      redact: { selectors: [".client-email"], mode: "block" },
+    }),
   );
   // Stand-ins for MediaRecorder output: VP8 video, and VP8 + Opus for the camera.
   const make = (name: string, args: string[]) =>
@@ -181,6 +185,8 @@ describe("recording a take", () => {
       { t: 400, k: "down", x: 100, y: 80, button: 0, rect: [60, 60, 120, 40] },
       { t: 480, k: "up", x: 100, y: 80, button: 0 },
       { t: 900, k: "type", rect: [60, 200, 300, 36] },
+      // A selector the config no longer lists, still hidden because the recording logged it.
+      { t: 950, k: "redact", sel: "[data-secret]", rects: [[10, 10, 50, 20]] },
     ];
     const lines = `${events.map((event) => JSON.stringify(event)).join("\n")}\n{"t":950,"k":"type","rect":[0,0,1,1],"key":"p"}\nnot json\n`;
     expect((await call(`/v1/takes/${id}/media/events?seq=0`, { method: "PUT", raw: Buffer.from(lines) })).status).toBe(
@@ -208,13 +214,18 @@ describe("recording a take", () => {
       screen: { file: "screen.webm", latencyMs: 35, width: 320, height: 200 },
       cam: { file: "cam.webm", offsetMs: 12, width: 160, height: 120, hasAudio: true },
       audio: { file: "audio.wav", offsetMs: 12 },
-      events: { file: "events.jsonl", count: 5 }, // the line carrying a key and the junk line are dropped
+      events: { file: "events.jsonl", count: 6 }, // the line carrying a key and the junk line are dropped
     });
     expect(take.data.edit).toMatchObject({
       trim: { startMs: 0, endMs: 2000 },
       zoom: { mode: "auto" },
       // From the brand: 108 px on a 1080 px short side.
       canvas: { width: 1920, height: 1080, background: "#2B2117", padding: 0.1, radius: 14 },
+      // From the config, and from the log.
+      redact: [
+        { sel: ".client-email", mode: "block" },
+        { sel: "[data-secret]", mode: "block" },
+      ],
     });
     // Changing the brand afterwards leaves the take as it was recorded.
     const config = path.join(root, "clipmunk.config.json");

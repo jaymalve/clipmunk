@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PresetSchema } from "./presets";
 import { ClipIdSchema } from "./recipe";
 import { fail, ok, type Result, zodIssues } from "./result";
-import type { TakeEdit } from "./take";
+import { type RedactMode, RedactModeSchema, type TakeEdit } from "./take";
 
 /** Project-wide settings in `clipmunk.config.json` at the project root. It is JSON, not code,
  * so Clipmunk reads it without running anything, and the daemon can write it (presets).
@@ -54,6 +54,15 @@ const ProjectPathSchema = z
     "Use a path inside the project, such as ./brand/logo.svg.",
   );
 
+const SelectorsSchema = z.array(SelectorSchema).max(100);
+const RedactionSchema = z.strictObject({
+  selectors: SelectorsSchema,
+  /** How new takes hide them. Each take can change it in its own edit. */
+  mode: RedactModeSchema.optional(),
+  /** Also blur them in the page while recording, so they never reach the screen video. */
+  live: z.boolean().optional(),
+});
+
 export const BrandSchema = z.strictObject({
   /** Colour behind a take's recording. */
   backdrop: ColourSchema.optional(),
@@ -74,8 +83,8 @@ const LocaleSchema = z
 export const ConfigSchema = z.strictObject({
   version: z.literal(1),
   brand: BrandSchema.optional(),
-  /** Elements to hide in recordings. */
-  redact: z.array(SelectorSchema).max(100).optional(),
+  /** Elements to hide in recordings: a list of selectors, or the selectors with how to hide them. */
+  redact: z.union([SelectorsSchema, RedactionSchema]).optional(),
   /** Named partial edits with export options, keyed by a slug (core/presets.ts). */
   presets: z.record(ClipIdSchema, PresetSchema).optional(),
   /** The themes and locales scenes can be rendered in. */
@@ -117,6 +126,34 @@ export function applyBrand(edit: TakeEdit, brand: Brand | undefined): TakeEdit {
       ...(brand.radius !== undefined ? { radius: brand.radius } : {}),
     },
   };
+}
+
+/** The config's redaction settings, whichever way they are written. */
+export function redactionOf(config: Pick<Config, "redact"> | undefined): {
+  selectors: string[];
+  mode: RedactMode;
+  live: boolean;
+} {
+  const redact = config?.redact;
+  if (!redact) return { selectors: [], mode: "blur", live: false };
+  if (Array.isArray(redact)) return { selectors: redact, mode: "blur", live: false };
+  return { selectors: redact.selectors, mode: redact.mode ?? "blur", live: redact.live ?? false };
+}
+
+/** A new take's edit with one redaction entry per selector, ahead of any it already has: the
+ * config's selectors, and every selector the recording logged boxes for, so a take recorded
+ * with redaction keeps it even when the config cannot be read at ingest. Like the brand, it is
+ * applied once, when the take is saved.
+ */
+export function applyRedaction(
+  edit: TakeEdit,
+  config: Pick<Config, "redact"> | undefined,
+  logged: Iterable<string> = [],
+): TakeEdit {
+  const { selectors, mode } = redactionOf(config);
+  const known = new Set(edit.redact.flatMap((entry) => ("sel" in entry ? [entry.sel] : [])));
+  const added = [...new Set([...selectors, ...logged])].filter((sel) => !known.has(sel)).map((sel) => ({ sel, mode }));
+  return added.length ? { ...edit, redact: [...added, ...edit.redact] } : edit;
 }
 
 /** What `clipmunk init` writes when the project has no config yet. */
