@@ -8,6 +8,7 @@ export * from "./guide";
 export * from "./moments";
 export * from "./motion";
 export * from "./music";
+export * from "./presets";
 export * from "./project";
 export * from "./recipe";
 export * from "./result";

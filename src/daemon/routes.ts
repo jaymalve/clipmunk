@@ -1,8 +1,19 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { exportScene, exportSequence, exportTake, ffmpegVersion } from "../export";
-import { deleteSequence, discoverScenes, listSequences, readConfig, readSequence, writeSequence } from "../project";
-import { audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
+import {
+  applyPresetToTake,
+  deleteSequence,
+  discoverScenes,
+  listPresets,
+  listSequences,
+  readConfig,
+  readSequence,
+  type SavePresetInput,
+  savePreset,
+  writeSequence,
+} from "../project";
+import { applyPresetToScene, audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
 import { deny, readBody, readJson, reply, send, serveFile } from "./http";
 import type { Jobs } from "./jobs";
 import {
@@ -63,6 +74,10 @@ const scenes: Handler = async ({ request, response, url, method, id, action, con
     const body = (await readJson(request)) as { music?: unknown };
     return handled(reply(response, await setSceneMusic(id, body.music, context)));
   }
+  if (action === "preset" && method === "POST") {
+    const body = (await readJson(request)) as { name?: unknown };
+    return handled(reply(response, await applyPresetToScene(id, String(body.name ?? ""), context)));
+  }
   return false;
 };
 
@@ -107,6 +122,10 @@ const takes: Handler = async ({ request, response, url, method, id, action, name
   if (action === "finalize" && method === "POST") {
     log(`ingesting ${id}`);
     return handled(reply(response, await finalizeTake(id, await readJson(request), context)));
+  }
+  if (action === "preset" && method === "POST") {
+    const body = (await readJson(request)) as { name?: unknown };
+    return handled(reply(response, await applyPresetToTake(context.root, id, String(body.name ?? ""))));
   }
   if (action === "files" && name && method === "GET") {
     return handled(await serveFile(request, response, await takeFile(id, name, context)));
@@ -161,9 +180,21 @@ const config: Handler = async ({ response, method, id, context }) => {
   return handled(reply(response, result.ok ? { ok: true, data: result.data } : result));
 };
 
+/** List presets, or save one: `{ name, preset }` or `{ name, fromTake, fields }`, with `replace` to overwrite. */
+const presets: Handler = async ({ request, response, method, id, context }) => {
+  if (id) return false;
+  if (method === "GET") return handled(reply(response, await listPresets(context.root)));
+  if (method === "POST") {
+    const body = (await readJson(request)) as SavePresetInput;
+    return handled(reply(response, await savePreset(context.root, body), true));
+  }
+  return false;
+};
+
 export const ROUTES: Record<string, Handler> = {
   status,
   config,
+  presets,
   scenes,
   audio,
   sequences,

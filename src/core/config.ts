@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PresetSchema } from "./presets";
 import { ClipIdSchema } from "./recipe";
 import { fail, ok, type Result, zodIssues } from "./result";
 import type { TakeEdit } from "./take";
@@ -75,8 +76,8 @@ export const ConfigSchema = z.strictObject({
   brand: BrandSchema.optional(),
   /** Elements to hide in recordings. */
   redact: z.array(SelectorSchema).max(100).optional(),
-  /** Named partial edits, keyed by a slug. Their contents are checked where they are applied. */
-  presets: z.record(ClipIdSchema, z.record(z.string(), z.unknown())).optional(),
+  /** Named partial edits with export options, keyed by a slug (core/presets.ts). */
+  presets: z.record(ClipIdSchema, PresetSchema).optional(),
   /** The themes and locales scenes can be rendered in. */
   variants: z
     .strictObject({

@@ -255,7 +255,7 @@ type Config = {
   version: 1;
   brand?: { backdrop?: string; padding?: number; radius?: number; logo?: string; outro?: boolean };
   redact?: string[];                                   // CSS selectors
-  presets?: Record<string, object>;                    // named partial edits, filled in by section 19's plan
+  presets?: Record<string, Preset>;                    // named partial edits, below
   variants?: { themes?: string[]; locales?: string[] };
 };
 ```
@@ -264,7 +264,23 @@ type Config = {
 
 - **Brand.** `backdrop` is a hex or `rgb()`/`hsl()` colour, `padding` is pixels on the frame's short side, and `radius` is pixels. `applyBrand` turns them into the take edit's `canvas` (padding becomes the edit's fraction of the short side, at most 0.4). Ingest applies the brand once, when it writes `edit.json`, so a later change to the brand never alters an existing take. A config that does not validate is ignored at ingest rather than losing a recording; `clipmunk doctor` reports it. `logo` (a path inside the project) and `outro` are validated and stored but not drawn yet.
 - **Redaction selectors** are checked as far as is possible without a browser: balanced brackets, parentheses and quotes, and no `{`, `}` or `;`.
-- **Presets** are objects keyed by a slug; their contents are checked where they are applied. **Variants** name themes by slug and locales by language tag.
+- **Variants** name themes by slug and locales by language tag.
+
+**Presets** (`core/presets.ts`) are named partial edits, keyed by a slug:
+
+```ts
+type Preset = {
+  title?: string; description?: string;
+  edit?: { canvas?: Partial<Canvas>; zoom?: Zoom; cursor?: Partial<Cursor>; cam?: Partial<Cam>; audio?: Partial<Audio> };
+  music?: Music | null;
+  export?: { size?: "WxH"; fps?: number; formats?: ("mp4" | "gif" | "poster")[]; ratios?: ("16:9" | "9:16" | "1:1" | "4:5")[] };
+};
+```
+
+- `applyPreset(edit, preset)` is a pure merge: each section merges field by field, `zoom` and `music` are replaced whole, `music: null` removes music, and the trim is never touched because it belongs to one recording. Sections hold only what they set: their defaults are stripped from the schema, so a preset never carries a whole section by accident. A preset's zoom must be `auto` or `off`, because manual keyframes are positions in one recording.
+- `presetFromEdit(edit, fields)` copies the chosen sections of an edit into a preset ("save current as preset"). It leaves out the music seed, so each clip that uses the preset keeps its own tune, and refuses manual zooms.
+- `project/presets.ts` lists, applies and saves. Applying to a take reads the preset from the config and saves through the usual revision check. A scene carries no take edit, so a preset gives a scene only its music (`applyPresetToScene` in `daemon/audio.ts`). Saving rewrites `clipmunk.config.json` with every other key in its place and the file's own indentation (a tab or a number of spaces), so the diff is the preset alone; a preset of the same name is replaced only when asked, and keeps its place. A config that does not validate is never written.
+- `export` options are validated and stored; exports use them from section 19's PR 9 on.
 
 ### 5.6 Results and errors
 
@@ -491,6 +507,8 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 |---|---|
 | `GET /v1/status` | Version, project id, capabilities (FFmpeg and Chromium present) |
 | `GET /v1/config` | The validated `clipmunk.config.json` and whether it exists, or its issues |
+| `GET /v1/presets`, `POST /v1/presets` | List presets with a one-line summary; save one (`{ name, preset }` or `{ name, fromTake, fields }`, `replace` to overwrite) |
+| `POST /v1/takes/:id/preset`, `POST /v1/scenes/:id/preset` | Apply a preset by `{ name }` to a take's edit, or a preset's music to a scene |
 | `GET /v1/takes`, `GET /v1/takes/:id` | List and read takes |
 | `POST /v1/takes` | Create a take, returns its id |
 | `PUT /v1/takes/:id/media/:track?seq=n` | Append an uploaded chunk |
@@ -611,6 +629,7 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | `clipmunk open [--scene id \| --take id] --url <origin>` | Open the studio in the browser |
 | `clipmunk snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |
 | `clipmunk zoom <take> [--write]` | List a take's zoom segments, or store them as manual keyframes |
+| `clipmunk preset list \| apply <name> --take id \| --scene id \| save <name> --take id --fields <parts> [--title] [--replace]` | List, apply or save presets in `clipmunk.config.json` |
 | `clipmunk sequences [--json]` | List sequences and their validation issues |
 | `clipmunk music <style> [--seed] [--seconds] [--output]` | Write a WAV sample of the generated music |
 | `clipmunk export --scene id \| --take id \| --sequence id [--fps] [--size] [--output] [--draft] [--workers]` | Render an MP4. A sequence takes its size and frame rate from its file. |
@@ -708,7 +727,7 @@ A take remains what it is today: screen video plus an event log, edited by compo
 
 ### 19.3 Configuration is JSON
 
-The file, its schema and the brand are in section 5.5b. Still to come: presets are applied and saved by the daemon, which writes the file directly ("Save current as preset"); the recorder and compositor use the redaction selectors; scene exports use the variants. A preset is a partial edit plus export options, merged over a clip's own edit.
+The file, its schema, the brand and presets are in section 5.5b. Still to come: the recorder and compositor use the redaction selectors, exports use presets' export options, and scene exports use the variants.
 
 ### 19.4 Edits live beside the recording
 

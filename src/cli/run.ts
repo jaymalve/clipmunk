@@ -25,6 +25,9 @@ const HELP = `clipmunk <command> [options]
   music <${MUSIC_STYLES.join("|")}> [--seed n] [--seconds n] [--output file.wav]
                                            Write a sample of Clipmunk's generated music, to hear a style
   zoom <take> [--write]                    Show a take's automatic zooms, or store them for hand editing
+  preset list                              List the presets in clipmunk.config.json
+  preset apply <name> --take <id> | --scene <id>
+  preset save <name> --take <id> --fields canvas,zoom,cursor,cam,audio,music [--title "..."] [--replace]
   doctor                                   Check Node, FFmpeg, Chromium and the project
 
   Every command accepts --json. --url is your dev server origin and is remembered.
@@ -40,6 +43,7 @@ const COMMANDS: Record<string, Command> = {
   sync: commands.sync,
   open: commands.open,
   zoom: commands.zoom,
+  preset: commands.preset,
   music: commands.music,
   doctor: commands.doctor,
   snapshot,

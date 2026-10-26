@@ -227,6 +227,7 @@ describe("recording a take", () => {
     });
     await writeFile(config, JSON.stringify({ version: 1, brand: { backdrop: "beige" } }));
     expect((await call("/v1/config")).json.issues[0].path).toBe("clipmunk.config.json: brand.backdrop");
+    await writeFile(config, JSON.stringify({ version: 1 }));
     const log = await readFile(path.join(root, `.clipmunk/takes/${id}/events.jsonl`), "utf8");
     expect(log).not.toContain('"key"');
     expect(existsSync(path.join(root, `.clipmunk/takes/${id}/screen.raw.webm`))).toBe(false);
@@ -276,6 +277,20 @@ describe("recording a take", () => {
       body: { edit: { ...edit, trim: { startMs: 0, endMs: 99999 } }, revision: saved.json.data.revision },
     });
     expect(invalid.status).toBe(400);
+
+    // Presets: save one from this take, list it, apply it.
+    const preset = { name: "big-cursor", fromTake: id, fields: ["cursor"] };
+    expect((await call("/v1/presets", { method: "POST", body: preset })).status).toBe(201);
+    expect((await call("/v1/presets", { method: "POST", body: preset })).status).toBe(409);
+    expect((await call("/v1/presets")).json.data.presets).toMatchObject([{ name: "big-cursor" }]);
+    const reset = await call(`/v1/takes/${id}`, {
+      method: "PATCH",
+      body: { edit: { ...edit, cursor: { size: 1 } }, revision: (await call(`/v1/takes/${id}`)).json.data.revision },
+    });
+    expect(reset.json.data.take.edit.cursor.size).toBe(1);
+    const applied = await call(`/v1/takes/${id}/preset`, { method: "POST", body: { name: "big-cursor" } });
+    expect(applied.json.data.take.edit.cursor.size).toBe(2);
+    expect((await call(`/v1/takes/${id}/preset`, { method: "POST", body: { name: "nope" } })).status).toBe(404);
 
     expect((await call(`/v1/takes/${id}`, { method: "DELETE" })).status).toBe(200);
     expect(existsSync(path.join(root, `.clipmunk/takes/${id}`))).toBe(false);

@@ -2,6 +2,7 @@ import { CONFIG_FILE, STARTER_CONFIG } from "./config";
 import { EXPORT_FPS } from "./export";
 import { EASINGS, MotionSchema, SceneTrackSchema } from "./motion";
 import { MUSIC_STYLES } from "./music";
+import { PRESET_FIELDS } from "./presets";
 import { HANDOFF_FILE, PACKAGE_NAME, SCENE_PARAM, SCENES_DIR, STUDIO_PARAM } from "./project";
 import { type SceneRecipe, SceneRecipeSchema } from "./recipe";
 import { DEFAULT_CAMERA, DEFAULT_FOCUS, DEFAULT_TRANSFORM, SCENE_BACKGROUND } from "./scene";
@@ -165,6 +166,7 @@ export function getGuide() {
         '{ version: 1, brand?: { backdrop?, padding?, radius?, logo?, outro? }, redact?: ["<css selector>"], presets?: { <name>: {...} }, variants?: { themes?: ["light", "dark"], locales?: ["en", "de"] } }. Unknown keys are rejected.',
       brand:
         "backdrop is the colour behind a take's recording, padding the space around it in pixels on the frame's short side, radius its corner radius in pixels. A take gets the brand when it is recorded; changing the brand later leaves existing takes as they are. logo and outro are stored for a later version and not drawn yet.",
+      presets: `presets: { <name>: { title?, description?, edit?: { canvas?, zoom?, cursor?, cam?, audio? }, music?: {...} | null, export?: { size?: "1920x1080", fps?, formats?: ["mp4" | "gif" | "poster"], ratios?: ["16:9" | "9:16" | "1:1" | "4:5"] } } }. A preset is a partial edit: applying it to a take merges each section field by field, replaces zoom and music whole, and leaves the trim alone; music: null removes music. Zoom must be auto or off, because manual keyframes are positions in one recording. A scene takes only a preset's music. export is stored now and used by later versions. Apply with clipmunk preset apply <name> --take <id>; save one from a take with clipmunk preset save <name> --take <id> --fields ${PRESET_FIELDS.join(",")}.`,
       example: STARTER_CONFIG,
     },
     defaults: {
@@ -195,6 +197,8 @@ export function getGuide() {
       [`clipmunk export --scene <id> [--url <origin>] [--fps ${EXPORT_FPS.join("|")}] [--size WxH] [--output file.mp4] [--draft] [--workers n]`]:
         "Render an MP4. Needs FFmpeg and Playwright's Chromium. Never overwrites a file.",
       "clipmunk takes": "List recorded takes.",
+      "clipmunk preset list | apply <name> --take <id> | --scene <id> | save <name> --take <id> --fields <parts>":
+        "List, apply or save the presets in clipmunk.config.json.",
       "clipmunk zoom <take> [--write]":
         "Show a take's automatic zooms, or store them as editable keyframes in the take's edit.json.",
       "clipmunk export --take <id> [--fps 30|60] [--size WxH] [--output file.mp4]":
@@ -266,6 +270,7 @@ export function formatGuide(guide: Guide = getGuide()): string {
     guide.config.what,
     guide.config.shape,
     guide.config.brand,
+    guide.config.presets,
     JSON.stringify(guide.config.example, null, 2),
   );
   lines.push("", "## Defaults", JSON.stringify(guide.defaults, null, 2), "", "## Tracks");

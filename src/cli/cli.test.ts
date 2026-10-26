@@ -134,4 +134,42 @@ describe("clipmunk cli", () => {
     expect(opened.out).toContain("Nothing is answering there yet");
     expect((await clipmunk(cwd, "sync")).out).toContain("Vite discovers scenes automatically");
   });
+
+  it("lists, saves and applies presets", async () => {
+    const id = "take-20261005-142233";
+    const cwd = await host({
+      [`.clipmunk/takes/${id}/take.json`]: JSON.stringify({
+        version: 1,
+        id,
+        title: "Demo",
+        createdAt: "2026-10-05T14:22:33.000Z",
+        source: {
+          width: 1280,
+          height: 720,
+          dpr: 2,
+          durationMs: 5000,
+          background: "#fff",
+          screen: { file: "screen.webm", offsetMs: 0, latencyMs: 40, width: 2560, height: 1440 },
+          events: { file: "events.jsonl", count: 0 },
+        },
+      }),
+    });
+    expect((await clipmunk(cwd, "preset", "list")).out).toContain("No presets yet.");
+    expect(await clipmunk(cwd, "preset", "save", "plain", "--take", id)).toMatchObject({ code: 1 });
+    expect((await clipmunk(cwd, "preset", "save", "plain", "--take", id, "--fields", "cursor,glow")).err).toContain(
+      "--fields takes",
+    );
+    const saved = await clipmunk(cwd, "preset", "save", "plain", "--take", id, "--fields", "zoom,music");
+    expect(saved).toMatchObject({
+      code: 0,
+      out: "Saved preset plain (no music · zoom up to 2.2x) in clipmunk.config.json.",
+    });
+    expect((await clipmunk(cwd, "preset", "list")).out).toContain("plain");
+    expect(await clipmunk(cwd, "preset", "apply", "plain", "--take", id)).toMatchObject({ code: 0 });
+    expect(JSON.parse(await readFile(path.join(cwd, `.clipmunk/takes/${id}/edit.json`), "utf8")).edit.zoom.mode).toBe(
+      "auto",
+    );
+    expect((await clipmunk(cwd, "preset", "apply", "loud", "--take", id)).err).toContain('No preset named "loud"');
+    expect((await clipmunk(cwd, "preset", "apply", "plain")).err).toContain("--take <id> or --scene <id>");
+  });
 });

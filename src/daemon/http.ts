@@ -17,10 +17,12 @@ export const STATUS: Record<string, number> = {
   "unknown-scene": 404,
   "unknown-job": 404,
   "unknown-sequence": 404,
+  "unknown-preset": 404,
   "out-of-order": 409,
   "stale-revision": 409,
   "not-recording": 409,
   "output-exists": 409,
+  "preset-exists": 409,
   "chunk-too-large": 413,
 };
 const TYPES: Record<string, string> = {
