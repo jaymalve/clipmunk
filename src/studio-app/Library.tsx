@@ -3,6 +3,7 @@ import {
   type CatalogScene,
   type ClipFreshness,
   DAEMON_HASH,
+  exportFormatsOf,
   type Issue,
   motionDuration,
   RATIOS,
@@ -97,14 +98,6 @@ function useStale(client: DaemonClient) {
   return stale;
 }
 
-/** The formats a clip was last exported in, to export it again the same way. */
-const formatsOf = (outputs: string[]) => {
-  const formats = new Set(
-    outputs.map((output) => (output.endsWith(".gif") ? "gif" : output.endsWith(".png") ? "poster" : "mp4")),
-  );
-  return [...formats];
-};
-
 export function ClipLibrary({
   daemon,
   scenes,
@@ -123,6 +116,7 @@ export function ClipLibrary({
   const [query, setQuery] = useState("");
   const [exporting, setExporting] = useState<Clip>();
   const [newScene, setNewScene] = useState(false);
+  const [posting, setPosting] = useState(false);
   const rendering = useRendering(client);
   const stale = useStale(client);
   const freshnessOf = (clip: Clip) =>
@@ -130,7 +124,7 @@ export function ClipLibrary({
   const reexport = (clip: Clip, freshness: ClipFreshness) =>
     void client.post("/v1/exports", {
       clip: { kind: clip.kind, id: clip.id },
-      formats: formatsOf(freshness.outputs),
+      formats: exportFormatsOf(freshness.outputs),
       ...(clip.kind === "scene" && daemon.status.devUrl ? { url: daemon.status.devUrl } : {}),
     });
   // A stale take is a recording of the old UI: it is recorded again in the app, with the recorder open.
@@ -206,6 +200,9 @@ export function ClipLibrary({
         <header className="top">
           <h1>{daemon.status.project}</h1>
           <span className="spacer" />
+          <button type="button" onClick={() => setPosting(true)}>
+            Post to PR
+          </button>
           <button type="button" onClick={() => setNewScene(true)}>
             New scene
           </button>
@@ -282,6 +279,7 @@ export function ClipLibrary({
         />
       )}
       {newScene && <NewSceneDialog onClose={() => setNewScene(false)} />}
+      {posting && <PostToPr client={client} onClose={() => setPosting(false)} />}
     </Chrome>
   );
 }
@@ -368,6 +366,59 @@ function Thumb({ clip, client }: { clip: Clip; client: DaemonClient }) {
   return <span className="none">{clip.kind === "scene" ? "No snapshot yet" : "Sequence"}</span>;
 }
 
+/** The PR comment the GitHub Action would write, shown first and posted only on the button,
+ * through the developer's own `gh`: nothing else in Clipmunk leaves the machine. */
+function PostToPr({ client, onClose }: { client: DaemonClient; onClose: () => void }) {
+  const [preview, setPreview] = useState<{ number: number; url: string; comment: string }>();
+  const [problem, setProblem] = useState<string>();
+  const [posted, setPosted] = useState<{ url: string; updated: boolean }>();
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    void client.get<{ number: number; url: string; comment: string }>("/v1/pr").then((result) => {
+      if (result.ok) setPreview(result.data);
+      else setProblem(result.issues[0]?.message);
+    });
+  }, [client]);
+  const post = async () => {
+    setSending(true);
+    const result = await client.post<{ url: string; updated: boolean }>("/v1/pr/comment", {});
+    setSending(false);
+    if (result.ok) setPosted(result.data);
+    else setProblem(result.issues[0]?.message);
+  };
+  return (
+    <div className="dialog" role="dialog" aria-label="Post to PR">
+      <h2>Post to PR{preview ? ` #${preview.number}` : ""}</h2>
+      {!preview && !problem && <p className="note">Looking for this branch's pull request…</p>}
+      {problem && <p className="bad">{problem}</p>}
+      {preview && !posted && (
+        <>
+          <p>This comment goes to the pull request, posted with your gh CLI. Nothing is sent until you press Post.</p>
+          <textarea readOnly value={preview.comment} rows={10} aria-label="Comment" />
+        </>
+      )}
+      {posted && (
+        <p role="status">
+          {posted.updated ? "Updated the comment" : "Posted the comment"}:{" "}
+          <a href={posted.url} target="_blank" rel="noreferrer">
+            {posted.url}
+          </a>
+        </p>
+      )}
+      <div className="row">
+        {preview && !posted && (
+          <button type="button" className="primary" disabled={sending} onClick={() => void post()}>
+            {sending ? "Posting…" : `Post to #${preview.number}`}
+          </button>
+        )}
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Clipmunk never writes scenes itself: the developer's coding agent does, from this prompt. */
 function NewSceneDialog({ onClose }: { onClose: () => void }) {
   const prompt =
@@ -408,7 +459,7 @@ export const STYLES = `
 .card .actions { display: flex; gap: 8px; margin: 8px 12px 12px; align-items: center; }
 .clips .primary { background: #f4f4f5; color: #09090b; border-color: #f4f4f5; }
 .clips a.button { font: inherit; border: 1px solid #27272a; border-radius: 8px; padding: 6px 12px; text-decoration: none; }
-.badge.stale { background: #f59e0b; color: #1c1917; }
+.badge.stale { background: #f59e0b; color: #1c1917; } .dialog .bad { color: #fca5a5; } .dialog a { color: #a5b4fc; word-break: break-all; }
 .stale-banner { background: #1c1917; border: 1px solid #78350f; color: #fde68a; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
 .dialog, .queue { position: fixed; right: 24px; bottom: 24px; width: 380px; background: #111114; border: 1px solid #27272a; border-radius: 14px; padding: 16px 18px; font: 14px/1.45 system-ui, sans-serif; color: #e4e4e7; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 .dialog h2, .queue h2 { margin: 0 0 8px; font-size: 16px; } .dialog textarea { width: 100%; box-sizing: border-box; font: 13px ui-monospace, monospace; background: #09090b; color: #e4e4e7; border: 1px solid #27272a; border-radius: 8px; padding: 8px; }

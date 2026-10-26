@@ -155,6 +155,7 @@ exports/
 audio/
 cache/
 history/
+ci/
 chat/
 daemon.json
 takes/*/*

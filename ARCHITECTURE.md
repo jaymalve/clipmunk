@@ -643,6 +643,7 @@ Started by `clipmunk dev`. It binds `127.0.0.1` only and writes `.clipmunk/daemo
 | `DELETE /v1/jobs/:id` | Cancel a job |
 | `GET /v1/takes/:id/frame?at=ms` | A still of the recording itself (the raw screen, on the recording's clock) as a PNG, cached in `.clipmunk/cache/frames` |
 | `GET /v1/stale` | Every exported clip's staleness (`{ clip, stale, changes, exportedAt, outputs }`) and the banner's sentence; `GET /v1/scenes` and `GET /v1/takes` carry the same as `freshness` per clip |
+| `GET /v1/pr`, `POST /v1/pr/comment` | Preview this branch's pull request comment; post it (or update it) with the developer's `gh` (12.8) |
 | `GET /v1/chat` | The chat with the agent, and whether an agent is listening |
 | `POST /v1/chat` | A developer's message, with its context chips |
 | `GET /v1/chat/next?timeoutMs=&agent=` | Long poll: the next undelivered message (the agent's `wait_for_chat`) |
@@ -768,6 +769,12 @@ A clip is out of date when a file its last export recorded hashes differently no
 
 The daemon keeps the answer current (`daemon/freshness.ts`): once a second it stats the manifest and every file it lists, recomputes when one moved and emits a `stale` event when a clip's staleness changed. Polling a few dozen files is cheaper than a recursive watch of the project (which would include `node_modules`) and survives editors that replace files. The Studio library shows the sentence as a banner, an "Out of date" badge and the changed files on each stale card, "Re-export" for a stale scene or sequence (a job in the formats it was last exported in) and "Record again" for a stale take, which opens the app with the recorder ready. `list_clips` tells the agent the same.
 
+### 12.8 Pull requests
+
+`action.yml` at the repository root is a composite GitHub Action (`uses: jaymalve/clipmunk@v<version>` on `pull_request`, after a checkout with `fetch-depth: 0`). It installs the app, Chromium and FFmpeg, fetches the base branch, starts the dev server from its `dev-command` input, and runs `clipmunk ci export --base origin/<base>` (`cli/ci.ts`): every clip the pull request made stale (12.7 with `--base`) that can be rendered (scenes and sequences) is exported again in the formats its last export had, and the new files are copied to `.clipmunk/ci/media` (ignored by git) with what happened in `result.json`. A failed export is reported, not fatal. The files are uploaded as a workflow artifact; then `clipmunk ci comment` prints the comment (`formatPrComment` in `core/comment.ts`): the stale sentence, a table of each stale clip, what changed (with commits) and what happened to its video (exported again with a download link, could not be, or "record it again" for a take), and the comment is posted, or the earlier one with the `<!-- clipmunk:pr-comment -->` marker is updated, through `gh api`. GitHub cannot attach a video to a comment, so videos are linked through the artifact; with the `media-branch` input the posters and GIFs are also committed to that branch under `pr-<number>/` and shown inline. This repository runs the action on its example app (`.github/workflows/clipmunk.yml`), whose manifest is committed.
+
+"Post to PR" in the Studio library writes the same comment for the current branch's pull request (found with `gh pr view`) through the developer's own `gh`, signed in as them (`daemon/pr.ts`). It previews the comment first and posts only on the button; it is the only thing Clipmunk sends off the machine.
+
 ---
 
 ## 13. Project setup (`project`)
@@ -801,6 +808,7 @@ Entry-file edits are made by a small dependency-free scanner (`project/entry.ts`
 | `clipmunk scenes [--json]` | List validated scenes |
 | `clipmunk takes [--json]` | List takes |
 | `clipmunk stale [--base <ref>] [--json]` | List exported clips whose sources changed since their export, or since a git ref (12.7) |
+| `clipmunk ci export --base <ref> [--url]`, `clipmunk ci comment` | In CI: export the clips a pull request made stale again, then print its comment (12.8) |
 | `clipmunk sync` | Regenerate the static scene catalog |
 | `clipmunk open [--scene id \| --take id] --url <origin>` | Open the studio in the browser |
 | `clipmunk snapshot --scene id --url <origin> [--time ms]` | Save a thumbnail into the recipe |

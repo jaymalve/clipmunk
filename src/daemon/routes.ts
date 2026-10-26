@@ -24,6 +24,7 @@ import type { Events, StudioEvent } from "./events";
 import type { Freshness } from "./freshness";
 import { deny, readBody, readJson, reply, send, serveFile } from "./http";
 import type { Jobs } from "./jobs";
+import { postPrComment, previewPrComment } from "./pr";
 import {
   appendChunk,
   appendLog,
@@ -92,6 +93,13 @@ async function freshnessOf(freshness: Freshness) {
     return found ? { freshness: { stale: found.stale, changes: found.changes, exportedAt: found.exportedAt } } : {};
   };
 }
+
+/** The comment for this branch's pull request: `GET` previews it, `POST comment` posts it with `gh`. */
+const pr: Handler = async ({ response, method, id, context }) => {
+  if (!id && method === "GET") return handled(reply(response, await previewPrComment(context.root)));
+  if (id === "comment" && method === "POST") return handled(reply(response, await postPrComment(context.root)));
+  return false;
+};
 
 /** Every exported clip's staleness, and the sentence the Studio's banner shows. */
 const stale: Handler = async ({ response, method, id, freshness }) => {
@@ -399,4 +407,5 @@ export const ROUTES: Record<string, Handler> = {
   jobs: jobRoutes,
   chat: chatRoutes,
   stale,
+  pr,
 };

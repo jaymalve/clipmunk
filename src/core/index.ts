@@ -2,6 +2,7 @@ export * from "./audio";
 export * from "./autozoom";
 export * from "./captions";
 export * from "./catalog";
+export * from "./comment";
 export * from "./config";
 export * from "./cursor";
 export * from "./export";

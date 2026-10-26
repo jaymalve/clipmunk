@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "clips": {
+    "scene:rack-focus": {
+      "files": {
+        "src/clipmunk/scenes/rack-focus.scene.json": "f1c5d784c3f3a69ab1bcfef451b1347fbaab472478c513ad0b778e0fc4d36e22",
+        "src/clipmunk/scenes/rack-focus.tsx": "d66303d97f0becea09165fd23be8b514cf552906d55cb0a1dad8b6132a58c26b",
+        "src/components/dashboard.tsx": "a2aae8d4bed58e01e0acce847c827737b7256a94caae38178d403c5c418eab9c"
+      },
+      "exportedAt": "2026-10-25T06:28:03.971Z",
+      "outputs": [
+        ".clipmunk/exports/rack-focus.png"
+      ]
+    },
+    "scene:themed-card": {
+      "files": {
+        "src/clipmunk/scenes/themed-card.scene.json": "93742e47f008cb952f130eaad2b682039bceb1eb54aa60892e6eef5eadfda493",
+        "src/clipmunk/scenes/themed-card.tsx": "2047173fa4c71793e6eedec92519c856927e11d83d5c44df23f9e144b01d51c0",
+        "src/components/theme.tsx": "1e047b09f92b0ebd2b063d21bc4bbc59956d23f87b245d9a0eac613b463a8ac8"
+      },
+      "exportedAt": "2026-10-25T06:27:59.468Z",
+      "outputs": [
+        ".clipmunk/exports/themed-card.png"
+      ]
+    }
+  }
+}

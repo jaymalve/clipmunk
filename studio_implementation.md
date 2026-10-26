@@ -40,7 +40,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 19 | Take to scene | Agent | 🔵 [#36](https://github.com/jaymalve/clipmunk/pull/36) |
 | 20 | Source map and export manifest | Freshness | 🔵 [#37](https://github.com/jaymalve/clipmunk/pull/37) |
 | 21 | Stale detection | Freshness | 🔵 [#38](https://github.com/jaymalve/clipmunk/pull/38) |
-| 22 | GitHub Action and posting to a PR | Freshness | ⬜ |
+| 22 | GitHub Action and posting to a PR | Freshness | 🔵 [#39](https://github.com/jaymalve/clipmunk/pull/39) |
 
 Why this order: the engine pieces come first and need no new UI, so the CLI and agents can use them at once and the new Studio is built once, with them already in place. The Studio comes before the agent work because chat lives in it. Freshness comes last because it builds on exports, variants and the manifest.
 
@@ -388,7 +388,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** the example app has no `PlanCards` file; its `PlanCard` lives in `components/theme.tsx`, which only the `themed-card` scene imports, so the Studio test edits that file, sees the banner, the badge and `freshness` on `GET /v1/scenes` for that scene alone, presses Re-export and sees it clear. `compareSources`, `sourceLabel` and `describeStale` are in `core/manifest.ts`; `clipFreshness` (`project/stale.ts`) adds `--base` through `git show <ref>:./<file>` and the last commit per changed file (none for an uncommitted change). The daemon polls stats once a second (`daemon/freshness.ts`) rather than watching, and serves `GET /v1/stale` for the banner. "Record again" opens the app at `/?clipmunk-record=1` with the daemon link, which opens the recorder. The scanner does not yet notice a new import added to a file (that file's own hash changes, so the clip is stale anyway).
 
 ### PR 22 · GitHub Action and posting to a PR
-**Status:** ⬜ · **Branch:** `studio/22-action` · **Base:** `studio/21-stale`
+**Status:** 🔵 [#39](https://github.com/jaymalve/clipmunk/pull/39) · **Branch:** `studio/22-action` · **Base:** `studio/21-stale`
 
 - `action.yml` at the repository root, a composite action used as `jaymalve/clipmunk@v<version>`. On `pull_request` it installs, starts the host dev server with a command from the action's input, runs `clipmunk stale --base` against the base branch, re-exports stale scenes, uploads the files as workflow artifacts, and posts or updates one comment listing each clip, what changed, and stale takes to record again.
 - How media reaches the comment (artifact links, commits to a branch, or something else) is decided at the start of this PR with the owner, because GitHub's API cannot attach a video to a comment. Record the decision under Decisions.
@@ -396,6 +396,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 
 **Tests:** the comment formatter and the stale step on a fixture repository; a run on a real PR in this repository.
 **Done when:** the spec's check passes: a PR touching a filmed component gets a clip comment with no manual step.
+**Notes:** `clipmunk ci export --base <ref>` and `clipmunk ci comment` (`cli/ci.ts`) do the work, so `action.yml` is only setup, upload and posting; the comment is `formatPrComment` (`core/comment.ts`), shared with "Post to PR" (`daemon/pr.ts`, `GET /v1/pr` to preview and `POST /v1/pr/comment` to post through the developer's `gh`, `CLIPMUNK_GH` in tests). `.github/workflows/clipmunk.yml` runs the action on the example app, whose manifest (posters of `themed-card` and `rack-focus`) is now committed; it skips fork PRs, whose token cannot comment. `.clipmunk/ci/` is ignored by git. The media decision is under Decisions; it was made without the owner, as asked, and is easy to change: the comment format takes any `mediaUrl`.
 
 ---
 
@@ -408,6 +409,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25: configuration is `clipmunk.config.json`, not TypeScript.
 - 2026-10-25: REST and server-sent events, no WebSocket unless a feature needs one.
 - 2026-10-25: `redact` in the config is a list of selectors or `{ selectors, mode?, live? }`, so live masking and a default mode fit without a second key.
+- 2026-10-25: the PR comment links videos through the workflow run's artifact, which needs no write access and works in private repositories; posters and GIFs are shown inline only when the `media-branch` input is set, which commits them to that branch under `pr-<number>/`. Decided without the owner (they asked for the remaining PRs without waiting); revisit if inline video matters more than repository hygiene.
 
 ## Log
 
@@ -434,6 +436,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 19 opened as #36, stacked on #35: take to scene. For PR 20: scenes' sources come from scanning imports (`project/entry.ts` has the scanner style to follow); exports go through `export/job.ts`, which is where the manifest should be written once per job.
 - 2026-10-25 · PR 20 opened as #37, stacked on #36: sources and the manifest. For PR 21: `readManifest`, `clipSources` and `hashFiles` (project/manifest.ts) give what was recorded and what is there now; a clip is stale when any hash differs, a file is gone, or `clipSources` now names a file the entry lacks.
 - 2026-10-25 · PR 21 opened as #38, stacked on #37: stale detection. For PR 22: `clipmunk stale --base <ref> --json` gives `{ summary, clips: [{ clip, changes: [{ file, change, commit }], outputs }] }`; the comment can start from `describeStale`, re-export stale scenes and sequences with `clipmunk export --scene <id> --format …` from the outputs' extensions, and list stale takes to record again.
+- 2026-10-25 · PR 22 opened as #39, stacked on #38: the GitHub Action and Post to PR. The plan's 22 PRs are all open; what is left is review and the first real run of the workflow on a PR that touches the example app.
 
 ## Environment notes for whoever picks this up
 
