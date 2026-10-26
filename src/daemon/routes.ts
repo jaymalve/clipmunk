@@ -18,6 +18,7 @@ import {
   writeSequence,
 } from "../project";
 import { applyPresetToScene, audioFile, removeNarration, setSceneMusic, storeNarration } from "./audio";
+import type { Chat } from "./chat";
 import type { Events, StudioEvent } from "./events";
 import { deny, readBody, readJson, reply, send, serveFile } from "./http";
 import type { Jobs } from "./jobs";
@@ -52,6 +53,7 @@ export type Call = {
   context: { root: string };
   jobs: Jobs;
   events: Events;
+  chat: Chat;
   /** The daemon's own address and token, for pages it opens on itself (previews of takes). */
   self: { origin: string; port: number; token: string };
   version: string;
@@ -304,6 +306,36 @@ const preview: Handler = async ({ response, url, method, id, context, self }) =>
   return true;
 };
 
+/** The chat with the agent: `GET` the history, `POST` a message (the Studio), `GET next` waits for
+ * one (the agent's `wait_for_chat`), `POST reply` answers, `POST <message>/keep|undo` a proposal.
+ */
+const chatRoutes: Handler = async ({ request, response, url, method, id, action, chat, events }) => {
+  if (!id && method === "GET") return handled(send(response, 200, { ok: true, data: await chat.list() }));
+  if (!id && method === "POST") return handled(reply(response, await chat.post(await readJson(request))));
+  if (id === "next" && !action && method === "GET") {
+    const gone = new AbortController();
+    response.on("close", () => gone.abort());
+    const message = await chat.next(
+      Number(url.searchParams.get("timeoutMs")) || 60_000,
+      url.searchParams.get("agent") ?? "",
+      gone.signal,
+    );
+    if (gone.signal.aborted) {
+      if (message) await chat.undeliver(message.id);
+      return true;
+    }
+    return handled(send(response, 200, { ok: true, data: { message: message ?? null } }));
+  }
+  if (id === "reply" && !action && method === "POST")
+    return handled(reply(response, await chat.reply(await readJson(request))));
+  if (id && (action === "keep" || action === "undo") && method === "POST") {
+    const result = await chat[action](id);
+    if (result.ok) events.emit({ type: "edit", kind: "take", id: result.data.message.proposal!.takeId });
+    return handled(reply(response, result));
+  }
+  return false;
+};
+
 export const ROUTES: Record<string, Handler> = {
   preview,
   events: eventStream,
@@ -316,4 +348,5 @@ export const ROUTES: Record<string, Handler> = {
   takes,
   exports,
   jobs: jobRoutes,
+  chat: chatRoutes,
 };

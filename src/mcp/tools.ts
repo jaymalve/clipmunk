@@ -127,6 +127,31 @@ async function readTake(client: Client, id: string) {
   return { ...data, events };
 }
 
+type ChatContext =
+  | { kind: "clip"; clip: { kind: string; id: string } }
+  | { kind: "time"; ms: number }
+  | { kind: "element"; sel: string; name?: string; role?: string }
+  | { kind: "component"; file: string };
+type ChatMessage = { id: string; text: string; context?: ChatContext[] };
+
+/** A developer's chat message as the agent reads it: the words, then what they pointed at. */
+export function formatChatMessage(message: ChatMessage): string {
+  const lines = [`The developer says (message ${message.id}):`, message.text];
+  const context = message.context ?? [];
+  if (context.length) lines.push("", "About:");
+  for (const item of context) {
+    if (item.kind === "clip")
+      lines.push(`  ${item.clip.kind} ${item.clip.id}${item.clip.kind === "take" ? " (get_take to read it)" : ""}`);
+    // For a take, on the recording's clock, like the times get_take shows.
+    else if (item.kind === "time") lines.push(`  the moment at ${(item.ms / 1000).toFixed(2)} s`);
+    else if (item.kind === "element")
+      lines.push(`  the element ${item.sel}${item.name ? ` "${item.name}"` : ""}${item.role ? ` (${item.role})` : ""}`);
+    else lines.push(`  the component ${item.file}`);
+  }
+  lines.push("", "Answer with reply_chat, then call wait_for_chat again.");
+  return lines.join("\n");
+}
+
 export function clipmunkTools(root: string): Tool[] {
   const client = daemonClient(root);
   return [
@@ -305,8 +330,61 @@ export function clipmunkTools(root: string): Tool[] {
         return text(`Done:\n${json(last.data)}`);
       },
     },
+    {
+      name: "wait_for_chat",
+      description:
+        "Wait for the developer's next message in the Clipmunk Studio chat. Blocks until one arrives or timeoutMs passes (then call it again). The message comes with what they pointed at: a clip, a moment, an element. Answer with reply_chat. When asked to watch the Clipmunk chat, keep calling this in a loop.",
+      inputSchema: {
+        type: "object",
+        properties: { timeoutMs: { type: "number", description: "How long to wait, up to 240000. Default 45000." } },
+      },
+      async call(args, session) {
+        const timeoutMs = Math.min(Math.max(Number(args.timeoutMs) || 45_000, 1000), 240_000);
+        const query = new URLSearchParams({ timeoutMs: String(timeoutMs), agent: session.client ?? "" });
+        const { message } = unwrap(await client.get<{ message: ChatMessage | null }>(`/v1/chat/next?${query}`));
+        if (!message) return text("No message yet. Call wait_for_chat again to keep listening.");
+        return text(formatChatMessage(message));
+      },
+    },
+    {
+      name: "reply_chat",
+      description:
+        'Answer the developer in the Studio chat. To suggest a change to a take, add a proposal: {"takeId","patch","note"} where patch is a JSON merge patch over the take\'s edit, as for edit_take. A proposal is not applied: the developer sees it as a diff with Keep and Undo. followUps are up to four short next steps they can send with one click.',
+      inputSchema: {
+        type: "object",
+        properties: {
+          text: string("Your answer, in plain sentences."),
+          proposal: {
+            type: "object",
+            description: "An edit to propose, not applied until the developer keeps it.",
+            properties: {
+              takeId: string("The take to change."),
+              patch: { type: "object", description: "A JSON merge patch over the take's edit." },
+              note: string("What it does, in a few words."),
+            },
+            required: ["takeId", "patch"],
+          },
+          followUps: { type: "array", items: { type: "string" }, description: "Suggested next messages." },
+        },
+        required: ["text"],
+      },
+      async call(args) {
+        const sent = unwrap(
+          await client.post<{ id: string; proposal?: { takeId: string } }>("/v1/chat/reply", {
+            text: args.text,
+            ...(args.proposal ? { proposal: args.proposal } : {}),
+            ...(args.followUps ? { followUps: args.followUps } : {}),
+          }),
+        );
+        return text(
+          sent.proposal
+            ? `Sent, with a proposal for take ${sent.proposal.takeId} the developer can keep or undo. Call wait_for_chat for their answer.`
+            : "Sent. Call wait_for_chat for their answer.",
+        );
+      },
+    },
   ];
 }
 
 export const MCP_INSTRUCTIONS =
-  "Clipmunk makes product videos from this app: takes (screen recordings with an edit) and scenes (the app's components animated in 3D). list_clips first; get_take shows what happened in a take and its edit; change it with edit_take (a JSON merge patch) and check the result with preview before you export. The daemon must be running (npx clipmunk dev).";
+  "Clipmunk makes product videos from this app: takes (screen recordings with an edit) and scenes (the app's components animated in 3D). list_clips first; get_take shows what happened in a take and its edit; change it with edit_take (a JSON merge patch) and check the result with preview before you export. The daemon must be running (npx clipmunk dev). When asked to watch the Clipmunk chat, loop on wait_for_chat and answer each message with reply_chat; propose edits there rather than applying them.";

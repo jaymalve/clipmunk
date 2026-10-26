@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { type CatalogScene, type Issue, SCENE_PARAM, SEQUENCE_PARAM, TAKE_PARAM } from "../core";
 import { Chrome } from "../studio/Chrome";
 import { type DaemonConnection, useDaemon } from "../studio/daemon";
+import { onStudioEvent } from "../studio/events";
 import { studioHref } from "../studio/links";
 import { SequenceEditor } from "../studio/SequenceEditor";
 import { TakeEditor } from "../studio/TakeEditor";
-import { onStudioEvent } from "./events";
 import { FramedScene } from "./FramedScene";
 import { ClipLibrary } from "./Library";
 

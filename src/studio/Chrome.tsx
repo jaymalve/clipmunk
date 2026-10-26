@@ -92,6 +92,22 @@ a { color: inherit; }
 .editor .save-preset { position: absolute; right: 18px; top: 44px; z-index: 5; width: 320px; background: #111114; border: 1px solid #27272a; border-radius: 12px; padding: 12px 14px; box-shadow: 0 16px 40px rgba(0,0,0,.6); }
 .editor .save-preset input[type=text] { grid-column: 2 / -1; font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 4px 6px; }
 .editor .save-preset .parts { border: 0; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; } .editor .save-preset .bad { color: #fca5a5; }
+.chat { font: 13px/1.4 system-ui, sans-serif; color: #e4e4e7; width: 360px; max-height: min(70vh, 640px); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; background: #111114; border: 1px solid #27272a; border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.6); overflow: hidden; }
+.editor .chat { position: fixed; right: 16px; bottom: 16px; z-index: 20; }
+.chat header { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #18181b; } .chat header .agent { flex: 1; color: #a1a1aa; font-size: 12px; }
+.chat button { font: inherit; color: #e4e4e7; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 3px 9px; cursor: pointer; } .chat button:disabled { opacity: .5; cursor: default; }
+.chat header button { border: 0; background: none; font-size: 16px; padding: 0 4px; } .chat .apply { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+.chat .connect { padding: 8px 12px; margin: 0; border-bottom: 1px solid #18181b; } .chat code { color: #e4e4e7; }
+.chat .messages { list-style: none; margin: 0; padding: 8px 12px; overflow: auto; display: grid; align-content: start; gap: 8px; }
+.chat .messages li { padding: 6px 10px; border-radius: 10px; background: #18181b; max-width: 92%; } .chat .messages li.developer { justify-self: end; background: #1e1b4b; }
+.chat .messages p { margin: 0; white-space: pre-wrap; } .chat .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chat .chip { font-size: 11px; color: #c7d2fe; background: #27272a; border-radius: 999px; padding: 1px 8px; display: inline-flex; gap: 4px; align-items: center; } .chat .chip button { border: 0; background: none; padding: 0; color: #a1a1aa; }
+.chat .chips .add { font-size: 11px; border-radius: 999px; padding: 1px 8px; color: #a1a1aa; }
+.chat .proposal { margin-top: 6px; border-top: 1px solid #27272a; padding-top: 6px; } .chat .proposal pre { margin: 4px 0; font-size: 11px; white-space: pre-wrap; color: #d4d4d8; max-height: 160px; overflow: auto; }
+.chat .row { display: flex; gap: 6px; align-items: center; } .chat .spacer { flex: 1; } .chat .bad { color: #fca5a5; }
+.chat .follow-ups { border: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.chat form { display: grid; gap: 6px; padding: 8px 12px; border-top: 1px solid #18181b; } .chat form .chips { margin: 0; }
+.chat textarea { font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 8px; resize: vertical; }
 .editor .preview-as { display: inline-flex; gap: 6px; align-items: center; color: #a1a1aa; }
 .editor .preview-as select { font: inherit; color: inherit; background: #18181b; border: 1px solid #27272a; border-radius: 7px; padding: 4px 6px; }
 .editor .saved-to { display: flex; gap: 12px; color: #71717a; font-size: 12px; } .editor .saved-to code { color: #a1a1aa; }

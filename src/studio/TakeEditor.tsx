@@ -4,6 +4,7 @@ import {
   applyPreset,
   buildTimeMap,
   type Issue,
+  mergePatch,
   type Preset,
   parseEvents,
   RATIOS,
@@ -13,6 +14,7 @@ import {
   type Span,
   type Take,
   type TakeEdit,
+  TakeEditSchema,
   type TakeEvent,
   TakeEventSchema,
   takeMoments,
@@ -23,6 +25,7 @@ import {
 import { createClock } from "../react";
 import type { DaemonClient } from "../recorder";
 import { SaveStatus, useAutosave } from "./autosave";
+import { type ChatContext, ChatPanel, type ChatProposal } from "./Chat";
 import { Chrome } from "./Chrome";
 import { type DaemonState, ExportPanel } from "./daemon";
 import { CaptionInspector, ZoomInspector } from "./Inspector";
@@ -107,15 +110,23 @@ function Editor(props: {
   const [previewRatio, setPreviewRatio] = useState<Ratio>();
   // A preset chosen in the bar is previewed at once and becomes the edit only when applied.
   const [previewPreset, setPreviewPreset] = useState<{ name: string; preset: Preset }>();
+  // So is an edit the agent proposed in the chat, until it is kept.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chips, setChips] = useState<ChatContext[]>([]);
+  const [previewProposal, setPreviewProposal] = useState<{ message: string; proposal: ChatProposal }>();
   const previewTake = useMemo(() => {
     let edit = take.edit;
+    if (previewProposal) {
+      const proposed = TakeEditSchema.safeParse(mergePatch(edit, previewProposal.proposal.patch));
+      if (proposed.success) edit = proposed.data;
+    }
     if (previewPreset) {
       const applied = applyPreset(edit, previewPreset.preset);
       if (applied.ok) edit = applied.data;
     }
     if (previewRatio) edit = withRatio(edit, previewRatio);
     return edit === take.edit ? take : { ...take, edit };
-  }, [take, previewRatio, previewPreset]);
+  }, [take, previewRatio, previewPreset, previewProposal]);
   usePreview(renderer, previewTake, clock);
   useVoice(audio, take, timeMap, clock, session.playing);
   useTakeBridge(renderer, take, durationMs, clock, session.seek);
@@ -169,6 +180,15 @@ function Editor(props: {
     save.adopt(result.data.take);
     setTake(result.data.take);
     setHistory({ canUndo: result.data.canUndo, canRedo: result.data.canRedo });
+  };
+  /** Read the take back from disk after something else saved it (a kept proposal). */
+  const reload = async () => {
+    const result = await client.get<{ take: Take; revision: string }>(`/v1/takes/${take.id}`);
+    if (!result.ok) return;
+    revision.current = result.data.revision;
+    save.adopt(result.data.take);
+    setTake(result.data.take);
+    refreshHistory();
   };
   const stepRef = useRef(step);
   stepRef.current = step;
@@ -298,6 +318,9 @@ function Editor(props: {
           <button type="button" onClick={() => setExporting((value) => !value)} disabled={!renderer}>
             Export
           </button>
+          <button type="button" aria-pressed={chatOpen} onClick={() => setChatOpen((value) => !value)}>
+            Chat
+          </button>
           <button type="button" onClick={remove}>
             Delete
           </button>
@@ -424,6 +447,24 @@ function Editor(props: {
             </span>
           </div>
         </footer>
+        {chatOpen && (
+          <ChatPanel
+            client={client}
+            clip={{ kind: "take", id: take.id }}
+            chips={chips}
+            onChips={setChips}
+            moment={() => timeMap.toTake(clock.get())}
+            edit={{ takeId: take.id, value: take.edit }}
+            previewing={previewProposal?.message}
+            onPreview={setPreviewProposal}
+            beforeKeep={save.flush}
+            onApplied={() => void reload()}
+            onClose={() => {
+              setChatOpen(false);
+              setPreviewProposal(undefined);
+            }}
+          />
+        )}
         {/* biome-ignore lint/a11y/useMediaCaption: the speaker's own voice, played with the preview; it has no captions */}
         {source.audio && <audio ref={audio} src={file(source.audio.file)} preload="auto" />}
       </div>

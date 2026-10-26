@@ -36,7 +36,7 @@ Status: ⬜ to do · 🟡 in progress · 🔵 in review · ✅ merged
 | 15 | Editor screen: timeline, inspector, undo | Studio | 🔵 [#32](https://github.com/jaymalve/clipmunk/pull/32) |
 | 16 | Presets in the Studio | Studio | 🔵 [#33](https://github.com/jaymalve/clipmunk/pull/33) |
 | 17 | `clipmunk mcp` | Agent | 🔵 [#34](https://github.com/jaymalve/clipmunk/pull/34) |
-| 18 | Agent chat | Agent | ⬜ |
+| 18 | Agent chat | Agent | 🔵 [#35](https://github.com/jaymalve/clipmunk/pull/35) |
 | 19 | Take to scene | Agent | ⬜ |
 | 20 | Source map and export manifest | Freshness | ⬜ |
 | 21 | Stale detection | Freshness | ⬜ |
@@ -338,7 +338,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 **Notes:** an export requested with no browser origin (the MCP server, a script) now renders from the project's dev server, as one from the Studio does.
 
 ### PR 18 · Agent chat
-**Status:** ⬜ · **Branch:** `studio/18-chat` · **Base:** `studio/17-mcp`
+**Status:** 🔵 [#35](https://github.com/jaymalve/clipmunk/pull/35) · **Branch:** `studio/18-chat` · **Base:** `studio/17-mcp`
 
 - Daemon: chat messages and proposals in `.clipmunk/chat/` (ignored by git), so a reload or a broken host loses nothing. Routes to post a message and list the history; events on `/v1/events`.
 - MCP: `wait_for_chat(timeoutMs)` blocks until a message arrives (long poll) and returns it with its context. `reply_chat(text, proposal?)` answers; a proposal is an edit patch that is not yet applied.
@@ -347,6 +347,7 @@ While the engine PRs land, the current in-app Studio keeps working. New features
 
 **Tests:** a scripted MCP client plays the agent: wait, receive, propose, Keep and Undo from the Studio; history survives a daemon restart.
 **Done when:** the spec's check passes: with Claude Code waiting, a developer can trim, zoom and caption a take from the chat with no copy and paste.
+**Notes:** `daemon/chat.ts` keeps the conversation in `.clipmunk/chat/messages.json` and the waiters in the daemon; `GET /v1/chat/next` is the long poll (a cancelled call puts its message back), `POST /v1/chat/reply` checks a proposal applies before the developer sees it, and Keep and Undo go through `saveTakeEditWithHistory` and `stepTakeHistory`. The MCP server passes the client's name from `initialize` to the tools, so the panel names the agent. The panel (`studio/Chat.tsx`) is in the take editor (chips: the take and the playhead; Preview applies the patch to the preview like a preset) and the scene player (chips: the scene, the time, a picked element). The shared event stream moved to `studio/events.ts` so `studio/` can use it; the preset bar now does. `wait_for_chat` waits 45 s by default (some clients time tools out at 60 s) and at most 240 s.
 
 ### PR 19 · Take to scene
 **Status:** ⬜ · **Branch:** `studio/19-take-to-scene` · **Base:** `studio/18-chat`
@@ -426,6 +427,7 @@ Decisions made while working through this plan, with the date. The architecture-
 - 2026-10-25 · PR 15 opened as #32, stacked on #31: the editor. For PR 16: the preset bar sits above the preview in `studio/TakeEditor.tsx`; preview a preset by passing `applyPreset(edit, preset)` as the preview take (like "Preview as"), apply it through `change`, and listen for `config` events with `onStudioEvent`-style handling (the take editor lives in `studio/`, so give it its own `EventSource` or pass a listener in).
 - 2026-10-25 · PR 16 opened as #33, stacked on #32: presets in the Studio. The Studio part is done. For PR 17: the MCP server proxies to the daemon (`daemon.json` gives its port and token); the edit endpoints are `PATCH /v1/takes/:id` (with the revision from `GET`), `POST /v1/takes/:id/preset`, undo and redo, and export jobs on `POST /v1/exports`.
 - 2026-10-25 · PR 17 opened as #34, stacked on #33: `clipmunk mcp`. For PR 18: add tools to `clipmunkTools` in `src/mcp/tools.ts`; a blocking `wait_for_chat` should long-poll a daemon route rather than hold state in the MCP process, which can be restarted by the agent's client at any time.
+- 2026-10-25 · PR 18 opened as #35, stacked on #34: the agent chat. For PR 19: "Make a scene from this take" can post through `POST /v1/chat` with a clip chip; new MCP tools go in `clipmunkTools`, and `formatChatMessage` is where chips become text for the agent.
 
 ## Environment notes for whoever picks this up
 

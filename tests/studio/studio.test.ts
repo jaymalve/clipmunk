@@ -17,6 +17,7 @@ const TAKE = "zz-studio-take";
 // The editor and preset tests change their takes; each group gets its own.
 const EDITED = "zz-studio-edited";
 const PRESET_TAKE = "zz-studio-preset";
+const CHAT_TAKE = "zz-studio-chat";
 const projectFile = path.join(root, ".clipmunk/project.json");
 let server: ViteDevServer, daemon: Daemon, browser: Browser, origin: string, studioDir: string, project: string;
 const made: string[] = [];
@@ -30,7 +31,7 @@ beforeAll(async () => {
   project = await readFile(projectFile, "utf8");
   studioDir = await mkdtemp(path.join(os.tmpdir(), "clipmunk-studio-"));
   await buildStudioApp(studioDir);
-  for (const id of [TAKE, EDITED, PRESET_TAKE]) await makeTake(root, id, { cam: false });
+  for (const id of [TAKE, EDITED, PRESET_TAKE, CHAT_TAKE]) await makeTake(root, id, { cam: false });
   server = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, logLevel: "error" });
   await server.listen();
   origin = `http://127.0.0.1:${(server.httpServer!.address() as { port: number }).port}`;
@@ -43,8 +44,10 @@ afterAll(async () => {
   await daemon?.close();
   await server?.close();
   await writeFile(projectFile, project);
-  for (const id of [TAKE, EDITED, PRESET_TAKE])
+  for (const id of [TAKE, EDITED, PRESET_TAKE, CHAT_TAKE])
     await rm(path.join(root, ".clipmunk/takes", id), { recursive: true, force: true });
+  await rm(path.join(root, ".clipmunk/chat"), { recursive: true, force: true });
+  await rm(path.join(root, ".clipmunk/history", `${CHAT_TAKE}.json`), { force: true });
   await rm(studioDir, { recursive: true, force: true });
   for (const file of made) await rm(path.join(root, file), { force: true });
 });
@@ -371,6 +374,69 @@ describe("presets in the editor", () => {
     } finally {
       await writeFile(configFile, config);
     }
+  }, 180_000);
+});
+
+describe("the chat with the agent", () => {
+  const editOf = async () =>
+    JSON.parse(await readFile(path.join(root, ".clipmunk/takes", CHAT_TAKE, "edit.json"), "utf8")).edit;
+  // The agent's side, as wait_for_chat and reply_chat call it.
+  const api = (route: string, body?: unknown) =>
+    fetch(`${daemon.origin}${route}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { authorization: `Bearer ${daemon.token}`, "content-type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }).then((response) => response.json() as Promise<any>);
+
+  it("sends a message with its context, shows the agent's proposal, previews, keeps and undoes it", async () => {
+    const page = await openStudio(`?clipmunk=1&clipmunk-take=${CHAT_TAKE}`);
+    await page.getByText(`Changes are saved to .clipmunk/takes/${CHAT_TAKE}/edit.json`).waitFor();
+    await page.getByRole("button", { name: "Chat", exact: true }).click();
+    const chat = page.getByRole("dialog", { name: "Chat with your agent" });
+    await chat.getByText("No agent is listening").waitFor();
+    await chat.getByText("Watch the Clipmunk chat").waitFor();
+
+    const waiting = api(`/v1/chat/next?timeoutMs=60000&agent=${encodeURIComponent("Test agent")}`);
+    await chat.getByText("Test agent is listening").waitFor({ timeout: 10_000 });
+    await chat.getByRole("button", { name: "+ This moment" }).click();
+    await chat.getByLabel("Message to your agent").fill("Make the backdrop red");
+    await chat.getByRole("button", { name: "Send" }).click();
+    const { message } = (await waiting).data;
+    expect(message.text).toBe("Make the backdrop red");
+    expect(message.context[0]).toEqual({ kind: "clip", clip: { kind: "take", id: CHAT_TAKE } });
+    expect(message.context[1]).toMatchObject({ kind: "time" });
+
+    const backdrop = (await editOf()).canvas.background;
+    const replied = await api("/v1/chat/reply", {
+      text: "Here is a red backdrop.",
+      proposal: { takeId: CHAT_TAKE, patch: { canvas: { background: "#ff0000" } }, note: "red backdrop" },
+      followUps: ["Now zoom in more"],
+    });
+    expect(replied.ok).toBe(true);
+    await chat.getByText("Here is a red backdrop.").waitFor({ timeout: 10_000 });
+    expect(await chat.locator("[data-proposal-changes]").textContent()).toContain("canvas.background");
+
+    const corner = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelector("[data-clipmunk-chrome]")!.shadowRoot!.querySelector("canvas")!;
+        return [...canvas.getContext("2d")!.getImageData(4, 4, 1, 1).data.slice(0, 3)];
+      });
+    await chat.getByRole("button", { name: "Preview" }).click();
+    await expect.poll(corner, { timeout: 5_000 }).toEqual([255, 0, 0]);
+    expect((await editOf()).canvas.background).toBe(backdrop);
+
+    await chat.getByRole("button", { name: "Keep", exact: true }).click();
+    await expect.poll(async () => (await editOf()).canvas.background, { timeout: 10_000 }).toBe("#ff0000");
+    await chat.getByText("Kept").waitFor();
+    await chat.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(async () => (await editOf()).canvas.background, { timeout: 10_000 }).toBe(backdrop);
+    // The editor shows what the file holds again.
+    await expect.poll(corner, { timeout: 5_000 }).not.toEqual([255, 0, 0]);
+
+    // A suggested follow-up is one click.
+    const next = api("/v1/chat/next?timeoutMs=60000&agent=Test%20agent");
+    await chat.getByRole("button", { name: "Now zoom in more" }).click();
+    expect((await next).data.message.text).toBe("Now zoom in more");
   }, 180_000);
 });
 
