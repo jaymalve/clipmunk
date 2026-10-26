@@ -13,7 +13,7 @@
   --bg-3: #282828;
   --fg: #f4f4f4;
   --fg-2: rgba(244, 244, 244, 0.66);
-  --fg-3: rgba(244, 244, 244, 0.42);
+  --fg-3: rgba(244, 244, 244, 0.55);
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.14);
   --line-3: rgba(255, 255, 255, 0.24);
@@ -42,6 +42,9 @@ html {
   scroll-behavior: smooth;
   scroll-padding-top: 80px;
   color-scheme: dark;
+  scrollbar-color: var(--bg-3) var(--bg);
+  caret-color: var(--munk);
+  accent-color: var(--munk);
 }
 
 body {
@@ -260,7 +263,7 @@ ol {
   transform-origin: center;
   transition:
     opacity 0.2s ease,
-    transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1);
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .prompt__tick {
@@ -386,13 +389,6 @@ kbd {
 }
 
 /* ── Text ────────────────────────────────────────────────── */
-
-.grad {
-  background: linear-gradient(100deg, #fff 0%, color-mix(in srgb, var(--munk) 55%, #fff) 40%, var(--munk) 85%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 
 .munk {
   color: var(--munk);

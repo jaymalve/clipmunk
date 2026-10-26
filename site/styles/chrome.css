@@ -32,7 +32,7 @@
 .nav__mark {
   width: 26px;
   color: var(--munk);
-  transition: transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav__brand:hover .nav__mark {
